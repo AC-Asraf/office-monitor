@@ -208,6 +208,11 @@ const migrations = [
   // Threshold alerts dismissed column
   `ALTER TABLE threshold_alerts ADD COLUMN dismissed_at DATETIME DEFAULT NULL`,
   `ALTER TABLE threshold_alerts ADD COLUMN dismissed_by TEXT DEFAULT NULL`,
+  // Device notes column
+  `ALTER TABLE monitors ADD COLUMN notes TEXT DEFAULT NULL`,
+  // Health score columns
+  `ALTER TABLE monitors ADD COLUMN health_score INTEGER DEFAULT 100`,
+  `ALTER TABLE monitors ADD COLUMN last_health_update DATETIME DEFAULT NULL`,
 ];
 
 migrations.forEach(sql => {
@@ -380,6 +385,61 @@ db.exec(`
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP
   );
 `);
+
+// Create device templates table
+db.exec(`
+  CREATE TABLE IF NOT EXISTS device_templates (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    name TEXT NOT NULL,
+    type TEXT DEFAULT 'ping',
+    device_type TEXT,
+    default_interval INTEGER DEFAULT 30,
+    icon TEXT,
+    color TEXT,
+    snmp_enabled INTEGER DEFAULT 0,
+    snmp_community TEXT DEFAULT 'public',
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+  );
+`);
+
+// Create saved filters table
+db.exec(`
+  CREATE TABLE IF NOT EXISTS saved_filters (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id INTEGER,
+    name TEXT NOT NULL,
+    filter_config TEXT NOT NULL,
+    is_global INTEGER DEFAULT 0,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+  );
+`);
+
+// Create floor zones table
+db.exec(`
+  CREATE TABLE IF NOT EXISTS floor_zones (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    floor TEXT NOT NULL,
+    name TEXT NOT NULL,
+    color TEXT DEFAULT '#3B82F6',
+    opacity REAL DEFAULT 0.2,
+    points TEXT NOT NULL,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+  );
+`);
+
+// Insert default device templates
+const defaultTemplates = [
+  { name: 'Access Point', type: 'ping', device_type: 'accessPoints', icon: '📡', color: '#3B82F6' },
+  { name: 'Network Printer', type: 'ping', device_type: 'printers', icon: '🖨️', color: '#8B5CF6', snmp_enabled: 1 },
+  { name: 'Network Switch', type: 'ping', device_type: 'switch', icon: '🔌', color: '#22C55E' },
+  { name: 'Server', type: 'ping', device_type: 'server', icon: '🖥️', color: '#F59E0B' },
+  { name: 'Router', type: 'ping', device_type: 'router', icon: '📶', color: '#EF4444' },
+  { name: 'IP Camera', type: 'ping', device_type: 'camera', icon: '📹', color: '#06B6D4' },
+  { name: 'Web Service', type: 'http', device_type: 'service', icon: '🌐', color: '#EC4899' }
+];
+const insertTemplate = db.prepare('INSERT OR IGNORE INTO device_templates (name, type, device_type, icon, color, snmp_enabled) VALUES (?, ?, ?, ?, ?, ?)');
+defaultTemplates.forEach(t => insertTemplate.run(t.name, t.type, t.device_type, t.icon, t.color, t.snmp_enabled || 0));
 
 // Insert default tags
 const defaultTags = [
@@ -3252,6 +3312,437 @@ app.get('/api/export/uptime', authMiddleware, (req, res) => {
   res.setHeader('Content-Type', 'text/csv');
   res.setHeader('Content-Disposition', `attachment; filename=uptime-report-${new Date().toISOString().split('T')[0]}.csv`);
   res.send(csv);
+});
+
+// ==================== BULK IMPORT ====================
+
+// Bulk import devices from CSV
+app.post('/api/monitors/bulk-import', authMiddleware, (req, res) => {
+  if (req.user.role !== 'admin') {
+    return res.status(403).json({ success: false, error: 'Admin access required' });
+  }
+
+  const { devices } = req.body;
+  if (!Array.isArray(devices) || devices.length === 0) {
+    return res.status(400).json({ success: false, error: 'No devices provided' });
+  }
+
+  const insertStmt = db.prepare(`
+    INSERT INTO monitors (name, type, hostname, url, floor, device_type, active, interval, notes)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `);
+
+  let imported = 0;
+  let failed = 0;
+  const errors = [];
+
+  devices.forEach((device, idx) => {
+    try {
+      if (!device.name || (!device.hostname && !device.url)) {
+        throw new Error('Name and hostname/url required');
+      }
+      insertStmt.run(
+        device.name,
+        device.type || 'ping',
+        device.hostname || null,
+        device.url || null,
+        device.floor || null,
+        device.device_type || 'accessPoints',
+        device.active !== false ? 1 : 0,
+        device.interval || 30,
+        device.notes || null
+      );
+      imported++;
+    } catch (e) {
+      failed++;
+      errors.push({ row: idx + 1, name: device.name, error: e.message });
+    }
+  });
+
+  logActivity(req, 'bulk_import', 'monitors', null, null, `Imported ${imported} devices, ${failed} failed`);
+
+  res.json({ success: true, imported, failed, errors });
+});
+
+// ==================== DEVICE TEMPLATES ====================
+
+// Get all device templates
+app.get('/api/device-templates', (req, res) => {
+  const templates = db.prepare('SELECT * FROM device_templates ORDER BY name').all();
+  res.json({ success: true, templates });
+});
+
+// Create device template
+app.post('/api/device-templates', authMiddleware, (req, res) => {
+  if (req.user.role !== 'admin') {
+    return res.status(403).json({ success: false, error: 'Admin access required' });
+  }
+
+  const { name, type, device_type, default_interval, icon, color, snmp_enabled, snmp_community } = req.body;
+
+  const result = db.prepare(`
+    INSERT INTO device_templates (name, type, device_type, default_interval, icon, color, snmp_enabled, snmp_community)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+  `).run(name, type || 'ping', device_type, default_interval || 30, icon, color, snmp_enabled ? 1 : 0, snmp_community || 'public');
+
+  res.json({ success: true, id: result.lastInsertRowid });
+});
+
+// Delete device template
+app.delete('/api/device-templates/:id', authMiddleware, (req, res) => {
+  if (req.user.role !== 'admin') {
+    return res.status(403).json({ success: false, error: 'Admin access required' });
+  }
+
+  db.prepare('DELETE FROM device_templates WHERE id = ?').run(req.params.id);
+  res.json({ success: true });
+});
+
+// ==================== SAVED FILTERS ====================
+
+// Get saved filters
+app.get('/api/saved-filters', authMiddleware, (req, res) => {
+  const filters = db.prepare(`
+    SELECT * FROM saved_filters
+    WHERE user_id = ? OR is_global = 1
+    ORDER BY is_global DESC, name
+  `).all(req.user.id);
+  res.json({ success: true, filters });
+});
+
+// Create saved filter
+app.post('/api/saved-filters', authMiddleware, (req, res) => {
+  const { name, filter_config, is_global } = req.body;
+
+  // Only admins can create global filters
+  const global = is_global && req.user.role === 'admin' ? 1 : 0;
+
+  const result = db.prepare(`
+    INSERT INTO saved_filters (user_id, name, filter_config, is_global)
+    VALUES (?, ?, ?, ?)
+  `).run(req.user.id, name, JSON.stringify(filter_config), global);
+
+  res.json({ success: true, id: result.lastInsertRowid });
+});
+
+// Delete saved filter
+app.delete('/api/saved-filters/:id', authMiddleware, (req, res) => {
+  const filter = db.prepare('SELECT * FROM saved_filters WHERE id = ?').get(req.params.id);
+
+  if (!filter) {
+    return res.status(404).json({ success: false, error: 'Filter not found' });
+  }
+
+  // Can only delete own filters or global filters if admin
+  if (filter.user_id !== req.user.id && !(filter.is_global && req.user.role === 'admin')) {
+    return res.status(403).json({ success: false, error: 'Access denied' });
+  }
+
+  db.prepare('DELETE FROM saved_filters WHERE id = ?').run(req.params.id);
+  res.json({ success: true });
+});
+
+// ==================== FLOOR ZONES ====================
+
+// Get floor zones
+app.get('/api/floor-zones', (req, res) => {
+  const floor = req.query.floor;
+  let zones;
+  if (floor) {
+    zones = db.prepare('SELECT * FROM floor_zones WHERE floor = ?').all(floor);
+  } else {
+    zones = db.prepare('SELECT * FROM floor_zones').all();
+  }
+  res.json({ success: true, zones });
+});
+
+// Create floor zone
+app.post('/api/floor-zones', authMiddleware, (req, res) => {
+  if (req.user.role !== 'admin') {
+    return res.status(403).json({ success: false, error: 'Admin access required' });
+  }
+
+  const { floor, name, color, opacity, points } = req.body;
+
+  const result = db.prepare(`
+    INSERT INTO floor_zones (floor, name, color, opacity, points)
+    VALUES (?, ?, ?, ?, ?)
+  `).run(floor, name, color || '#3B82F6', opacity || 0.2, JSON.stringify(points));
+
+  logActivity(req, 'create', 'floor_zone', result.lastInsertRowid, name);
+  res.json({ success: true, id: result.lastInsertRowid });
+});
+
+// Update floor zone
+app.put('/api/floor-zones/:id', authMiddleware, (req, res) => {
+  if (req.user.role !== 'admin') {
+    return res.status(403).json({ success: false, error: 'Admin access required' });
+  }
+
+  const { name, color, opacity, points } = req.body;
+
+  db.prepare(`
+    UPDATE floor_zones SET name = ?, color = ?, opacity = ?, points = ?
+    WHERE id = ?
+  `).run(name, color, opacity, JSON.stringify(points), req.params.id);
+
+  res.json({ success: true });
+});
+
+// Delete floor zone
+app.delete('/api/floor-zones/:id', authMiddleware, (req, res) => {
+  if (req.user.role !== 'admin') {
+    return res.status(403).json({ success: false, error: 'Admin access required' });
+  }
+
+  db.prepare('DELETE FROM floor_zones WHERE id = ?').run(req.params.id);
+  res.json({ success: true });
+});
+
+// ==================== DEVICE NOTES ====================
+
+// Update device notes
+app.patch('/api/monitors/:id/notes', authMiddleware, (req, res) => {
+  const { notes } = req.body;
+
+  db.prepare('UPDATE monitors SET notes = ? WHERE id = ?').run(notes, req.params.id);
+  logActivity(req, 'update_notes', 'monitor', req.params.id);
+
+  res.json({ success: true });
+});
+
+// ==================== HEALTH SCORES ====================
+
+// Calculate and update health scores for all monitors
+function calculateHealthScores() {
+  const monitors = db.prepare('SELECT id, name FROM monitors WHERE active = 1').all();
+  const now = Date.now();
+  const dayAgo = now - 24 * 60 * 60 * 1000;
+
+  monitors.forEach(monitor => {
+    // Get heartbeats from last 24 hours
+    const heartbeats = db.prepare(`
+      SELECT status, time FROM heartbeats
+      WHERE monitor_id = ? AND time > datetime(?, 'unixepoch')
+      ORDER BY time DESC
+    `).all(monitor.id, Math.floor(dayAgo / 1000));
+
+    if (heartbeats.length === 0) {
+      return; // No data, keep current score
+    }
+
+    // Calculate uptime percentage
+    const upCount = heartbeats.filter(h => h.status === 1).length;
+    const uptimePercent = (upCount / heartbeats.length) * 100;
+
+    // Calculate score (0-100)
+    // 100% uptime = 100 score
+    // Each 1% downtime reduces score by 5 points (so 80% uptime = 0 score)
+    let score = Math.max(0, Math.min(100, Math.round(uptimePercent * 1.25 - 25)));
+
+    // Bonus for consistent uptime (no recent incidents)
+    const recentIncidents = db.prepare(`
+      SELECT COUNT(*) as count FROM incidents
+      WHERE monitor_id = ? AND started_at > datetime('now', '-7 days')
+    `).get(monitor.id).count;
+
+    if (recentIncidents === 0 && uptimePercent > 99) {
+      score = Math.min(100, score + 10);
+    }
+
+    db.prepare('UPDATE monitors SET health_score = ?, last_health_update = datetime("now") WHERE id = ?')
+      .run(score, monitor.id);
+  });
+}
+
+// Get health scores
+app.get('/api/health-scores', (req, res) => {
+  const scores = db.prepare(`
+    SELECT id, name, floor, device_type, health_score, last_health_update
+    FROM monitors WHERE active = 1
+    ORDER BY health_score ASC
+  `).all();
+  res.json({ success: true, scores });
+});
+
+// Recalculate health scores
+app.post('/api/health-scores/recalculate', authMiddleware, (req, res) => {
+  calculateHealthScores();
+  res.json({ success: true, message: 'Health scores recalculated' });
+});
+
+// Run health score calculation every hour
+setInterval(calculateHealthScores, 60 * 60 * 1000);
+
+// ==================== UPTIME HISTORY ====================
+
+// Get uptime history for a monitor
+app.get('/api/monitors/:id/uptime-history', (req, res) => {
+  const hours = parseInt(req.query.hours) || 24;
+  const monitorId = req.params.id;
+
+  // Get hourly uptime data
+  const history = db.prepare(`
+    SELECT
+      strftime('%Y-%m-%d %H:00', time) as hour,
+      COUNT(*) as total,
+      SUM(CASE WHEN status = 1 THEN 1 ELSE 0 END) as up,
+      AVG(ping) as avg_ping
+    FROM heartbeats
+    WHERE monitor_id = ? AND time > datetime('now', '-' || ? || ' hours')
+    GROUP BY strftime('%Y-%m-%d %H:00', time)
+    ORDER BY hour DESC
+  `).all(monitorId, hours);
+
+  res.json({ success: true, history });
+});
+
+// ==================== AUTO-DISCOVERY ====================
+
+// Scan network for devices
+app.post('/api/auto-discover', authMiddleware, async (req, res) => {
+  if (req.user.role !== 'admin') {
+    return res.status(403).json({ success: false, error: 'Admin access required' });
+  }
+
+  const { subnet, startIp, endIp } = req.body;
+
+  // Default to common office subnet
+  const baseSubnet = subnet || '192.168.1';
+  const start = startIp || 1;
+  const end = Math.min(endIp || 254, 254);
+
+  const discovered = [];
+  const existingIps = new Set(
+    db.prepare('SELECT hostname FROM monitors WHERE hostname IS NOT NULL').all().map(m => m.hostname)
+  );
+
+  // Scan IPs in parallel (batches of 20)
+  const batchSize = 20;
+  for (let i = start; i <= end; i += batchSize) {
+    const batch = [];
+    for (let j = i; j < Math.min(i + batchSize, end + 1); j++) {
+      const ip = `${baseSubnet}.${j}`;
+      if (!existingIps.has(ip)) {
+        batch.push(
+          ping.promise.probe(ip, { timeout: 2 })
+            .then(result => {
+              if (result.alive) {
+                return { ip, alive: true, time: result.time };
+              }
+              return null;
+            })
+            .catch(() => null)
+        );
+      }
+    }
+
+    const results = await Promise.all(batch);
+    results.filter(r => r !== null).forEach(r => discovered.push(r));
+  }
+
+  logActivity(req, 'auto_discover', 'network', null, null, `Scanned ${baseSubnet}.${start}-${end}, found ${discovered.length} devices`);
+
+  res.json({
+    success: true,
+    discovered,
+    scanned: end - start + 1,
+    existing: existingIps.size
+  });
+});
+
+// Add discovered devices
+app.post('/api/auto-discover/add', authMiddleware, (req, res) => {
+  if (req.user.role !== 'admin') {
+    return res.status(403).json({ success: false, error: 'Admin access required' });
+  }
+
+  const { devices } = req.body;
+
+  const insertStmt = db.prepare(`
+    INSERT INTO monitors (name, type, hostname, floor, device_type, active, interval)
+    VALUES (?, 'ping', ?, ?, 'accessPoints', 1, 30)
+  `);
+
+  let added = 0;
+  devices.forEach(device => {
+    try {
+      insertStmt.run(device.name || `Device ${device.ip}`, device.ip, device.floor || '1st Floor');
+      added++;
+    } catch (e) {
+      // Skip duplicates
+    }
+  });
+
+  logActivity(req, 'add_discovered', 'monitors', null, null, `Added ${added} discovered devices`);
+  res.json({ success: true, added });
+});
+
+// ==================== BULK ACTIONS ====================
+
+// Bulk update monitors
+app.post('/api/monitors/bulk-action', authMiddleware, (req, res) => {
+  if (req.user.role !== 'admin') {
+    return res.status(403).json({ success: false, error: 'Admin access required' });
+  }
+
+  const { action, ids, data } = req.body;
+
+  if (!Array.isArray(ids) || ids.length === 0) {
+    return res.status(400).json({ success: false, error: 'No devices selected' });
+  }
+
+  let affected = 0;
+  const placeholders = ids.map(() => '?').join(',');
+
+  switch (action) {
+    case 'delete':
+      const deleteResult = db.prepare(`DELETE FROM monitors WHERE id IN (${placeholders})`).run(...ids);
+      affected = deleteResult.changes;
+      break;
+
+    case 'activate':
+      const activateResult = db.prepare(`UPDATE monitors SET active = 1 WHERE id IN (${placeholders})`).run(...ids);
+      affected = activateResult.changes;
+      break;
+
+    case 'deactivate':
+      const deactivateResult = db.prepare(`UPDATE monitors SET active = 0 WHERE id IN (${placeholders})`).run(...ids);
+      affected = deactivateResult.changes;
+      break;
+
+    case 'maintenance_on':
+      const maintOnResult = db.prepare(`UPDATE monitors SET maintenance = 1, maintenance_note = ? WHERE id IN (${placeholders})`).run(data?.note || 'Bulk maintenance', ...ids);
+      affected = maintOnResult.changes;
+      break;
+
+    case 'maintenance_off':
+      const maintOffResult = db.prepare(`UPDATE monitors SET maintenance = 0, maintenance_note = NULL, maintenance_until = NULL WHERE id IN (${placeholders})`).run(...ids);
+      affected = maintOffResult.changes;
+      break;
+
+    case 'move_floor':
+      if (!data?.floor) {
+        return res.status(400).json({ success: false, error: 'Floor not specified' });
+      }
+      const moveResult = db.prepare(`UPDATE monitors SET floor = ? WHERE id IN (${placeholders})`).run(data.floor, ...ids);
+      affected = moveResult.changes;
+      break;
+
+    case 'set_interval':
+      if (!data?.interval) {
+        return res.status(400).json({ success: false, error: 'Interval not specified' });
+      }
+      const intervalResult = db.prepare(`UPDATE monitors SET interval = ? WHERE id IN (${placeholders})`).run(data.interval, ...ids);
+      affected = intervalResult.changes;
+      break;
+
+    default:
+      return res.status(400).json({ success: false, error: 'Unknown action' });
+  }
+
+  logActivity(req, `bulk_${action}`, 'monitors', null, null, `${affected} devices affected`);
+  res.json({ success: true, affected });
 });
 
 // Serve manifest.json for PWA

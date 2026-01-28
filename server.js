@@ -5,8 +5,10 @@ const Database = require('better-sqlite3');
 const ping = require('ping');
 const path = require('path');
 const https = require('https');
+const http = require('http');
 const crypto = require('crypto');
 const snmp = require('net-snmp');
+const WebSocket = require('ws');
 
 // Create HTTPS agent that ignores self-signed certificates
 const httpsAgent = new https.Agent({ rejectUnauthorized: false });
@@ -818,7 +820,7 @@ async function runMonitorCheck(monitor) {
             await sendSlackAlert(monitor, 0, retryResult.message);
 
             // Create incident
-            db.prepare(`
+            const incidentResult = db.prepare(`
               INSERT INTO incidents (monitor_id, device_name, device_type, floor, started_at)
               VALUES (?, ?, ?, ?, datetime('now'))
             `).run(monitor.id, monitor.name, monitor.device_type, monitor.floor);
@@ -829,6 +831,10 @@ async function runMonitorCheck(monitor) {
             // Trigger webhooks
             triggerWebhooks('device_down', { monitor, message: retryResult.message });
 
+            // Broadcast via WebSocket
+            broadcastStatusUpdate(monitor, 'down', 'monitor');
+            broadcastIncident({ id: incidentResult.lastInsertRowid, device_name: monitor.name, floor: monitor.floor }, 'created');
+
             monitorStatus.set(monitor.id, {
               status: 0,
               lastChange: new Date(),
@@ -837,6 +843,10 @@ async function runMonitorCheck(monitor) {
           } else {
             // Recovered during retry period - no alert needed
             console.log(`${monitor.name} recovered during retry period, no alert sent`);
+
+            // Broadcast via WebSocket
+            broadcastStatusUpdate(monitor, 'up', 'monitor');
+
             monitorStatus.set(monitor.id, {
               status: 1,
               lastChange: prevStatus?.lastChange || new Date(),
@@ -855,6 +865,9 @@ async function runMonitorCheck(monitor) {
       pendingDownAlerts.delete(monitor.id); // Cancel any pending retry
       await sendSlackAlert(monitor, status, message);
 
+      // Broadcast via WebSocket
+      broadcastStatusUpdate(monitor, 'up', 'monitor');
+
       // Close any open incidents for this monitor
       const openIncident = db.prepare('SELECT * FROM incidents WHERE monitor_id = ? AND ended_at IS NULL').get(monitor.id);
       if (openIncident) {
@@ -869,6 +882,9 @@ async function runMonitorCheck(monitor) {
 
         // Trigger webhooks
         triggerWebhooks('device_up', { monitor, downtime: durationSeconds });
+
+        // Broadcast incident resolved via WebSocket
+        broadcastIncident({ id: openIncident.id, device_name: monitor.name, floor: monitor.floor, duration: durationSeconds }, 'resolved');
       }
     }
   }
@@ -1984,6 +2000,22 @@ app.get('/api/monitors/:id', (req, res) => {
     return res.status(404).json({ success: false, error: 'Monitor not found' });
   }
   res.json({ success: true, monitor });
+});
+
+// Ping a host (quick action)
+app.get('/api/monitors/ping/:host', authMiddleware, async (req, res) => {
+  try {
+    const host = decodeURIComponent(req.params.host);
+    const result = await ping.promise.probe(host, { timeout: 5 });
+    res.json({
+      success: true,
+      host: host,
+      alive: result.alive,
+      time: result.time
+    });
+  } catch (error) {
+    res.json({ success: false, error: error.message });
+  }
 });
 
 // Update a monitor (admin only, or requires approval)
@@ -3227,12 +3259,82 @@ app.get('/manifest.json', (req, res) => {
   res.sendFile(path.join(__dirname, 'manifest.json'));
 });
 
+// ==================== WEBSOCKET SERVER ====================
+
+// Create HTTP server and WebSocket server
+const server = http.createServer(app);
+const wss = new WebSocket.Server({ server });
+
+// Track connected clients
+const wsClients = new Set();
+
+wss.on('connection', (ws) => {
+  wsClients.add(ws);
+  console.log(`WebSocket client connected. Total: ${wsClients.size}`);
+
+  // Send initial connection acknowledgment
+  ws.send(JSON.stringify({ type: 'connected', message: 'WebSocket connected' }));
+
+  ws.on('close', () => {
+    wsClients.delete(ws);
+    console.log(`WebSocket client disconnected. Total: ${wsClients.size}`);
+  });
+
+  ws.on('error', (error) => {
+    console.error('WebSocket error:', error);
+    wsClients.delete(ws);
+  });
+});
+
+// Broadcast message to all connected clients
+function broadcast(type, data) {
+  const message = JSON.stringify({ type, data, timestamp: new Date().toISOString() });
+  wsClients.forEach((client) => {
+    if (client.readyState === WebSocket.OPEN) {
+      client.send(message);
+    }
+  });
+}
+
+// Broadcast device status update
+function broadcastStatusUpdate(device, status, source = 'monitor') {
+  broadcast('status_update', {
+    deviceId: device.id,
+    deviceName: device.name,
+    floor: device.floor,
+    status: status,
+    source: source,
+    ping: device.ping || null
+  });
+}
+
+// Broadcast new notification
+function broadcastNotification(notification) {
+  broadcast('notification', notification);
+}
+
+// Broadcast incident update
+function broadcastIncident(incident, action) {
+  broadcast('incident', { ...incident, action });
+}
+
+// Broadcast threshold alert
+function broadcastAlert(alert) {
+  broadcast('alert', alert);
+}
+
+// Send heartbeat every 30 seconds to keep connections alive
+setInterval(() => {
+  broadcast('heartbeat', { time: new Date().toISOString() });
+}, 30000);
+
 // Start server
-app.listen(PORT, () => {
+server.listen(PORT, () => {
   const monitorCount = db.prepare('SELECT COUNT(*) as count FROM monitors').get().count;
   console.log(`\n🖥️  Office Monitor running on port ${PORT}`);
   console.log(`📊 Monitors: ${monitorCount}`);
   console.log(`⏱️  Check interval: ${CHECK_INTERVAL / 1000}s`);
   console.log(`🔔 Slack: ${SLACK_WEBHOOK_URL ? 'Configured' : 'Not configured'}`);
-  console.log(`📹 Poly Lens: ${POLY_LENS_CLIENT_ID ? 'Configured' : 'Not configured'}\n`);
+  console.log(`📹 Poly Lens: ${POLY_LENS_CLIENT_ID ? 'Configured' : 'Not configured'}`);
+  console.log(`🔌 WebSocket: Enabled\n`);
 });

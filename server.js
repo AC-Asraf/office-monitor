@@ -230,6 +230,165 @@ db.exec(`
   CREATE INDEX IF NOT EXISTS idx_threshold_alerts_monitor ON threshold_alerts(monitor_id, alert_type, resolved_at);
 `);
 
+// Create activity log table (tracks all user actions)
+db.exec(`
+  CREATE TABLE IF NOT EXISTS activity_log (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id INTEGER,
+    username TEXT,
+    action TEXT NOT NULL,
+    entity_type TEXT,
+    entity_id TEXT,
+    entity_name TEXT,
+    details TEXT,
+    ip_address TEXT,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+  );
+  CREATE INDEX IF NOT EXISTS idx_activity_log_created ON activity_log(created_at);
+  CREATE INDEX IF NOT EXISTS idx_activity_log_user ON activity_log(username);
+`);
+
+// Create incidents table (tracks device outages)
+db.exec(`
+  CREATE TABLE IF NOT EXISTS incidents (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    monitor_id INTEGER,
+    poly_device_id TEXT,
+    device_name TEXT NOT NULL,
+    device_type TEXT,
+    floor TEXT,
+    started_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    ended_at DATETIME,
+    duration_seconds INTEGER,
+    resolution_notes TEXT,
+    acknowledged_by TEXT,
+    acknowledged_at DATETIME
+  );
+  CREATE INDEX IF NOT EXISTS idx_incidents_started ON incidents(started_at);
+  CREATE INDEX IF NOT EXISTS idx_incidents_monitor ON incidents(monitor_id);
+`);
+
+// Create device tags table
+db.exec(`
+  CREATE TABLE IF NOT EXISTS device_tags (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    name TEXT UNIQUE NOT NULL,
+    color TEXT DEFAULT '#3B82F6',
+    priority INTEGER DEFAULT 0,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+  );
+`);
+
+// Create monitor_tags junction table
+db.exec(`
+  CREATE TABLE IF NOT EXISTS monitor_tags (
+    monitor_id INTEGER NOT NULL,
+    tag_id INTEGER NOT NULL,
+    PRIMARY KEY (monitor_id, tag_id),
+    FOREIGN KEY (monitor_id) REFERENCES monitors(id) ON DELETE CASCADE,
+    FOREIGN KEY (tag_id) REFERENCES device_tags(id) ON DELETE CASCADE
+  );
+`);
+
+// Create custom alert rules table
+db.exec(`
+  CREATE TABLE IF NOT EXISTS alert_rules (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    monitor_id INTEGER,
+    tag_id INTEGER,
+    rule_type TEXT NOT NULL,
+    condition TEXT NOT NULL,
+    threshold INTEGER,
+    retry_count INTEGER DEFAULT 3,
+    notify_slack INTEGER DEFAULT 1,
+    notify_webhook TEXT,
+    enabled INTEGER DEFAULT 1,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (monitor_id) REFERENCES monitors(id) ON DELETE CASCADE,
+    FOREIGN KEY (tag_id) REFERENCES device_tags(id) ON DELETE CASCADE
+  );
+`);
+
+// Create webhooks table
+db.exec(`
+  CREATE TABLE IF NOT EXISTS webhooks (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    name TEXT NOT NULL,
+    url TEXT NOT NULL,
+    type TEXT DEFAULT 'generic',
+    events TEXT DEFAULT 'all',
+    headers TEXT,
+    enabled INTEGER DEFAULT 1,
+    last_triggered DATETIME,
+    last_status INTEGER,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+  );
+`);
+
+// Create scheduled reports table
+db.exec(`
+  CREATE TABLE IF NOT EXISTS scheduled_reports (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    name TEXT NOT NULL,
+    schedule TEXT NOT NULL,
+    report_type TEXT DEFAULT 'summary',
+    recipients TEXT,
+    slack_channel TEXT,
+    include_floors TEXT,
+    include_device_types TEXT,
+    last_sent DATETIME,
+    enabled INTEGER DEFAULT 1,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+  );
+`);
+
+// Create user_notifications table (for notification center UI)
+db.exec(`
+  CREATE TABLE IF NOT EXISTS user_notifications (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    type TEXT NOT NULL,
+    title TEXT NOT NULL,
+    message TEXT,
+    severity TEXT DEFAULT 'info',
+    entity_type TEXT,
+    entity_id TEXT,
+    read_at DATETIME,
+    dismissed_at DATETIME,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+  )
+`);
+try { db.exec('CREATE INDEX IF NOT EXISTS idx_user_notifications_created ON user_notifications(created_at)'); } catch(e) {}
+
+// Create API health monitors table
+db.exec(`
+  CREATE TABLE IF NOT EXISTS api_monitors (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    name TEXT NOT NULL,
+    url TEXT NOT NULL,
+    method TEXT DEFAULT 'GET',
+    headers TEXT,
+    body TEXT,
+    expected_status INTEGER DEFAULT 200,
+    timeout INTEGER DEFAULT 10000,
+    interval INTEGER DEFAULT 60000,
+    enabled INTEGER DEFAULT 1,
+    last_check DATETIME,
+    last_status TEXT,
+    last_response_time INTEGER,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+  );
+`);
+
+// Insert default tags
+const defaultTags = [
+  { name: 'Critical', color: '#EF4444', priority: 100 },
+  { name: 'VIP Room', color: '#8B5CF6', priority: 90 },
+  { name: 'Meeting Room', color: '#3B82F6', priority: 50 },
+  { name: 'Common Area', color: '#22C55E', priority: 30 }
+];
+const insertTag = db.prepare('INSERT OR IGNORE INTO device_tags (name, color, priority) VALUES (?, ?, ?)');
+defaultTags.forEach(t => insertTag.run(t.name, t.color, t.priority));
+
 // Initialize default settings from environment variables
 const defaultSettings = {
   slack_webhook_url: process.env.SLACK_WEBHOOK_URL || '',
@@ -654,9 +813,22 @@ async function runMonitorCheck(monitor) {
           stmt.run(monitor.id, retryResult.status, retryResult.pingTime, retryResult.message);
 
           if (retryResult.status === 0) {
-            // Still down after retry - send alert
+            // Still down after retry - send alert and create incident
             console.log(`${monitor.name} confirmed DOWN after retry, sending alert`);
             await sendSlackAlert(monitor, 0, retryResult.message);
+
+            // Create incident
+            db.prepare(`
+              INSERT INTO incidents (monitor_id, device_name, device_type, floor, started_at)
+              VALUES (?, ?, ?, ?, datetime('now'))
+            `).run(monitor.id, monitor.name, monitor.device_type, monitor.floor);
+
+            // Create notification
+            createNotification('device_down', `${monitor.name} is offline`, retryResult.message, 'error', 'monitor', monitor.id);
+
+            // Trigger webhooks
+            triggerWebhooks('device_down', { monitor, message: retryResult.message });
+
             monitorStatus.set(monitor.id, {
               status: 0,
               lastChange: new Date(),
@@ -682,6 +854,22 @@ async function runMonitorCheck(monitor) {
       // Device came back UP
       pendingDownAlerts.delete(monitor.id); // Cancel any pending retry
       await sendSlackAlert(monitor, status, message);
+
+      // Close any open incidents for this monitor
+      const openIncident = db.prepare('SELECT * FROM incidents WHERE monitor_id = ? AND ended_at IS NULL').get(monitor.id);
+      if (openIncident) {
+        const durationSeconds = Math.floor((Date.now() - new Date(openIncident.started_at).getTime()) / 1000);
+        db.prepare(`
+          UPDATE incidents SET ended_at = datetime('now'), duration_seconds = ?
+          WHERE id = ?
+        `).run(durationSeconds, openIncident.id);
+
+        // Create notification
+        createNotification('device_up', `${monitor.name} is back online`, `Downtime: ${Math.floor(durationSeconds / 60)} minutes`, 'success', 'monitor', monitor.id);
+
+        // Trigger webhooks
+        triggerWebhooks('device_up', { monitor, downtime: durationSeconds });
+      }
     }
   }
 
@@ -2232,6 +2420,812 @@ setTimeout(async () => {
 
 // Refresh Poly Lens every 5 minutes
 setInterval(fetchPolyLensDevices, 5 * 60 * 1000);
+
+// ==================== ACTIVITY LOG ====================
+
+// Log activity helper function
+function logActivity(req, action, entityType = null, entityId = null, entityName = null, details = null) {
+  try {
+    const username = req.user?.username || 'system';
+    const ip = req.ip || req.connection?.remoteAddress || 'unknown';
+    db.prepare(`
+      INSERT INTO activity_log (username, action, entity_type, entity_id, entity_name, details, ip_address)
+      VALUES (?, ?, ?, ?, ?, ?, ?)
+    `).run(username, action, entityType, entityId, entityName, details ? JSON.stringify(details) : null, ip);
+  } catch (e) {
+    console.error('Failed to log activity:', e);
+  }
+}
+
+// Get activity log
+app.get('/api/activity-log', authMiddleware, (req, res) => {
+  const limit = Math.min(parseInt(req.query.limit) || 100, 500);
+  const offset = parseInt(req.query.offset) || 0;
+  const username = req.query.username;
+  const action = req.query.action;
+
+  let query = 'SELECT * FROM activity_log WHERE 1=1';
+  const params = [];
+
+  if (username) {
+    query += ' AND username = ?';
+    params.push(username);
+  }
+  if (action) {
+    query += ' AND action LIKE ?';
+    params.push(`%${action}%`);
+  }
+
+  query += ' ORDER BY created_at DESC LIMIT ? OFFSET ?';
+  params.push(limit, offset);
+
+  const logs = db.prepare(query).all(...params);
+  const total = db.prepare('SELECT COUNT(*) as count FROM activity_log').get().count;
+
+  res.json({ success: true, logs, total, limit, offset });
+});
+
+// ==================== INCIDENTS ====================
+
+// Get incidents
+app.get('/api/incidents', (req, res) => {
+  const limit = Math.min(parseInt(req.query.limit) || 50, 200);
+  const offset = parseInt(req.query.offset) || 0;
+  const status = req.query.status; // 'active', 'resolved', 'all'
+  const floor = req.query.floor;
+
+  let query = 'SELECT * FROM incidents WHERE 1=1';
+  const params = [];
+
+  if (status === 'active') {
+    query += ' AND ended_at IS NULL';
+  } else if (status === 'resolved') {
+    query += ' AND ended_at IS NOT NULL';
+  }
+
+  if (floor) {
+    query += ' AND floor = ?';
+    params.push(floor);
+  }
+
+  query += ' ORDER BY started_at DESC LIMIT ? OFFSET ?';
+  params.push(limit, offset);
+
+  const incidents = db.prepare(query).all(...params);
+  const total = db.prepare('SELECT COUNT(*) as count FROM incidents' + (status === 'active' ? ' WHERE ended_at IS NULL' : '')).get().count;
+
+  res.json({ success: true, incidents, total, limit, offset });
+});
+
+// Acknowledge incident
+app.patch('/api/incidents/:id/acknowledge', authMiddleware, (req, res) => {
+  const { notes } = req.body;
+
+  db.prepare(`
+    UPDATE incidents SET
+      acknowledged_by = ?,
+      acknowledged_at = datetime('now'),
+      resolution_notes = COALESCE(resolution_notes, '') || ?
+    WHERE id = ?
+  `).run(req.user?.username, notes ? '\n' + notes : '', req.params.id);
+
+  logActivity(req, 'acknowledge_incident', 'incident', req.params.id, null, { notes });
+  res.json({ success: true });
+});
+
+// Add resolution notes
+app.patch('/api/incidents/:id/resolve', authMiddleware, (req, res) => {
+  const { notes } = req.body;
+
+  db.prepare(`
+    UPDATE incidents SET resolution_notes = ? WHERE id = ?
+  `).run(notes, req.params.id);
+
+  logActivity(req, 'add_incident_notes', 'incident', req.params.id, null, { notes });
+  res.json({ success: true });
+});
+
+// ==================== DEVICE TAGS ====================
+
+// Get all tags
+app.get('/api/tags', (req, res) => {
+  const tags = db.prepare('SELECT * FROM device_tags ORDER BY priority DESC, name').all();
+  res.json({ success: true, tags });
+});
+
+// Create tag
+app.post('/api/tags', authMiddleware, (req, res) => {
+  const { name, color, priority } = req.body;
+
+  if (!name) {
+    return res.status(400).json({ success: false, error: 'Name is required' });
+  }
+
+  try {
+    const result = db.prepare('INSERT INTO device_tags (name, color, priority) VALUES (?, ?, ?)').run(name, color || '#3B82F6', priority || 0);
+    logActivity(req, 'create_tag', 'tag', result.lastInsertRowid, name);
+    res.json({ success: true, id: result.lastInsertRowid });
+  } catch (e) {
+    res.status(400).json({ success: false, error: 'Tag already exists' });
+  }
+});
+
+// Update tag
+app.put('/api/tags/:id', authMiddleware, (req, res) => {
+  const { name, color, priority } = req.body;
+
+  db.prepare('UPDATE device_tags SET name = ?, color = ?, priority = ? WHERE id = ?').run(name, color, priority, req.params.id);
+  logActivity(req, 'update_tag', 'tag', req.params.id, name);
+  res.json({ success: true });
+});
+
+// Delete tag
+app.delete('/api/tags/:id', authMiddleware, (req, res) => {
+  const tag = db.prepare('SELECT * FROM device_tags WHERE id = ?').get(req.params.id);
+  db.prepare('DELETE FROM device_tags WHERE id = ?').run(req.params.id);
+  logActivity(req, 'delete_tag', 'tag', req.params.id, tag?.name);
+  res.json({ success: true });
+});
+
+// Assign tags to monitor
+app.post('/api/monitors/:id/tags', authMiddleware, (req, res) => {
+  const { tagIds } = req.body;
+  const monitorId = req.params.id;
+
+  // Clear existing tags
+  db.prepare('DELETE FROM monitor_tags WHERE monitor_id = ?').run(monitorId);
+
+  // Add new tags
+  const insert = db.prepare('INSERT INTO monitor_tags (monitor_id, tag_id) VALUES (?, ?)');
+  tagIds?.forEach(tagId => insert.run(monitorId, tagId));
+
+  logActivity(req, 'assign_tags', 'monitor', monitorId, null, { tagIds });
+  res.json({ success: true });
+});
+
+// Get tags for a monitor
+app.get('/api/monitors/:id/tags', (req, res) => {
+  const tags = db.prepare(`
+    SELECT t.* FROM device_tags t
+    JOIN monitor_tags mt ON t.id = mt.tag_id
+    WHERE mt.monitor_id = ?
+  `).all(req.params.id);
+  res.json({ success: true, tags });
+});
+
+// ==================== NOTIFICATION CENTER ====================
+
+// Get user notifications (for notification center UI)
+app.get('/api/user-notifications', (req, res) => {
+  const limit = Math.min(parseInt(req.query.limit) || 50, 100);
+  const unreadOnly = req.query.unread === 'true';
+
+  let query = 'SELECT * FROM user_notifications WHERE dismissed_at IS NULL';
+  if (unreadOnly) {
+    query += ' AND read_at IS NULL';
+  }
+  query += ' ORDER BY created_at DESC LIMIT ?';
+
+  const notifications = db.prepare(query).all(limit);
+  const unreadCount = db.prepare('SELECT COUNT(*) as count FROM user_notifications WHERE read_at IS NULL AND dismissed_at IS NULL').get().count;
+
+  res.json({ success: true, notifications, unreadCount });
+});
+
+// Mark notification as read
+app.patch('/api/user-notifications/:id/read', (req, res) => {
+  db.prepare('UPDATE user_notifications SET read_at = datetime("now") WHERE id = ?').run(req.params.id);
+  res.json({ success: true });
+});
+
+// Mark all as read
+app.post('/api/user-notifications/read-all', (req, res) => {
+  db.prepare('UPDATE user_notifications SET read_at = datetime("now") WHERE read_at IS NULL').run();
+  res.json({ success: true });
+});
+
+// Dismiss notification
+app.delete('/api/user-notifications/:id', (req, res) => {
+  db.prepare('UPDATE user_notifications SET dismissed_at = datetime("now") WHERE id = ?').run(req.params.id);
+  res.json({ success: true });
+});
+
+// Create notification helper (for notification center UI)
+function createNotification(type, title, message, severity = 'info', entityType = null, entityId = null) {
+  try {
+    db.prepare(`
+      INSERT INTO user_notifications (type, title, message, severity, entity_type, entity_id)
+      VALUES (?, ?, ?, ?, ?, ?)
+    `).run(type, title, message, severity, entityType, entityId);
+  } catch (e) {
+    console.error('Failed to create notification:', e);
+  }
+}
+
+// ==================== WEBHOOKS ====================
+
+// Get webhooks
+app.get('/api/webhooks', authMiddleware, (req, res) => {
+  const webhooks = db.prepare('SELECT * FROM webhooks ORDER BY created_at DESC').all();
+  res.json({ success: true, webhooks });
+});
+
+// Create webhook
+app.post('/api/webhooks', authMiddleware, (req, res) => {
+  const { name, url, type, events, headers, enabled } = req.body;
+
+  if (!name || !url) {
+    return res.status(400).json({ success: false, error: 'Name and URL are required' });
+  }
+
+  const result = db.prepare(`
+    INSERT INTO webhooks (name, url, type, events, headers, enabled)
+    VALUES (?, ?, ?, ?, ?, ?)
+  `).run(name, url, type || 'generic', events || 'all', headers ? JSON.stringify(headers) : null, enabled !== false ? 1 : 0);
+
+  logActivity(req, 'create_webhook', 'webhook', result.lastInsertRowid, name);
+  res.json({ success: true, id: result.lastInsertRowid });
+});
+
+// Update webhook
+app.put('/api/webhooks/:id', authMiddleware, (req, res) => {
+  const { name, url, type, events, headers, enabled } = req.body;
+
+  db.prepare(`
+    UPDATE webhooks SET name = ?, url = ?, type = ?, events = ?, headers = ?, enabled = ?
+    WHERE id = ?
+  `).run(name, url, type, events, headers ? JSON.stringify(headers) : null, enabled ? 1 : 0, req.params.id);
+
+  logActivity(req, 'update_webhook', 'webhook', req.params.id, name);
+  res.json({ success: true });
+});
+
+// Delete webhook
+app.delete('/api/webhooks/:id', authMiddleware, (req, res) => {
+  const webhook = db.prepare('SELECT * FROM webhooks WHERE id = ?').get(req.params.id);
+  db.prepare('DELETE FROM webhooks WHERE id = ?').run(req.params.id);
+  logActivity(req, 'delete_webhook', 'webhook', req.params.id, webhook?.name);
+  res.json({ success: true });
+});
+
+// Test webhook
+app.post('/api/webhooks/:id/test', authMiddleware, async (req, res) => {
+  const webhook = db.prepare('SELECT * FROM webhooks WHERE id = ?').get(req.params.id);
+
+  if (!webhook) {
+    return res.status(404).json({ success: false, error: 'Webhook not found' });
+  }
+
+  try {
+    const headers = webhook.headers ? JSON.parse(webhook.headers) : {};
+    headers['Content-Type'] = 'application/json';
+
+    const response = await fetch(webhook.url, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({
+        event: 'test',
+        message: 'Test webhook from Office Monitor',
+        timestamp: new Date().toISOString()
+      })
+    });
+
+    db.prepare('UPDATE webhooks SET last_triggered = datetime("now"), last_status = ? WHERE id = ?').run(response.status, req.params.id);
+    res.json({ success: response.ok, status: response.status });
+  } catch (e) {
+    db.prepare('UPDATE webhooks SET last_triggered = datetime("now"), last_status = 0 WHERE id = ?').run(req.params.id);
+    res.json({ success: false, error: e.message });
+  }
+});
+
+// Trigger webhooks helper
+async function triggerWebhooks(event, data) {
+  const webhooks = db.prepare('SELECT * FROM webhooks WHERE enabled = 1').all();
+
+  for (const webhook of webhooks) {
+    if (webhook.events !== 'all' && !webhook.events.includes(event)) continue;
+
+    try {
+      const headers = webhook.headers ? JSON.parse(webhook.headers) : {};
+      headers['Content-Type'] = 'application/json';
+
+      let body;
+      if (webhook.type === 'slack') {
+        body = JSON.stringify({ text: `[${event}] ${data.message || JSON.stringify(data)}` });
+      } else if (webhook.type === 'teams') {
+        body = JSON.stringify({ text: `[${event}] ${data.message || JSON.stringify(data)}` });
+      } else {
+        body = JSON.stringify({ event, data, timestamp: new Date().toISOString() });
+      }
+
+      const response = await fetch(webhook.url, { method: 'POST', headers, body });
+      db.prepare('UPDATE webhooks SET last_triggered = datetime("now"), last_status = ? WHERE id = ?').run(response.status, webhook.id);
+    } catch (e) {
+      console.error(`Webhook ${webhook.name} failed:`, e.message);
+      db.prepare('UPDATE webhooks SET last_triggered = datetime("now"), last_status = 0 WHERE id = ?').run(webhook.id);
+    }
+  }
+}
+
+// ==================== SCHEDULED REPORTS ====================
+
+// Get scheduled reports
+app.get('/api/scheduled-reports', authMiddleware, (req, res) => {
+  const reports = db.prepare('SELECT * FROM scheduled_reports ORDER BY created_at DESC').all();
+  res.json({ success: true, reports });
+});
+
+// Create scheduled report
+app.post('/api/scheduled-reports', authMiddleware, (req, res) => {
+  const { name, schedule, report_type, recipients, slack_channel, include_floors, include_device_types, enabled } = req.body;
+
+  const result = db.prepare(`
+    INSERT INTO scheduled_reports (name, schedule, report_type, recipients, slack_channel, include_floors, include_device_types, enabled)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+  `).run(name, schedule, report_type || 'summary', recipients, slack_channel, include_floors, include_device_types, enabled !== false ? 1 : 0);
+
+  logActivity(req, 'create_report', 'scheduled_report', result.lastInsertRowid, name);
+  res.json({ success: true, id: result.lastInsertRowid });
+});
+
+// Update scheduled report
+app.put('/api/scheduled-reports/:id', authMiddleware, (req, res) => {
+  const { name, schedule, report_type, recipients, slack_channel, include_floors, include_device_types, enabled } = req.body;
+
+  db.prepare(`
+    UPDATE scheduled_reports SET name = ?, schedule = ?, report_type = ?, recipients = ?, slack_channel = ?, include_floors = ?, include_device_types = ?, enabled = ?
+    WHERE id = ?
+  `).run(name, schedule, report_type, recipients, slack_channel, include_floors, include_device_types, enabled ? 1 : 0, req.params.id);
+
+  logActivity(req, 'update_report', 'scheduled_report', req.params.id, name);
+  res.json({ success: true });
+});
+
+// Delete scheduled report
+app.delete('/api/scheduled-reports/:id', authMiddleware, (req, res) => {
+  const report = db.prepare('SELECT * FROM scheduled_reports WHERE id = ?').get(req.params.id);
+  db.prepare('DELETE FROM scheduled_reports WHERE id = ?').run(req.params.id);
+  logActivity(req, 'delete_report', 'scheduled_report', req.params.id, report?.name);
+  res.json({ success: true });
+});
+
+// Generate report now
+app.post('/api/scheduled-reports/:id/run', authMiddleware, async (req, res) => {
+  const report = db.prepare('SELECT * FROM scheduled_reports WHERE id = ?').get(req.params.id);
+
+  if (!report) {
+    return res.status(404).json({ success: false, error: 'Report not found' });
+  }
+
+  const reportData = generateReportData(report);
+
+  if (report.slack_channel) {
+    await sendReportToSlack(reportData, report.slack_channel);
+  }
+
+  db.prepare('UPDATE scheduled_reports SET last_sent = datetime("now") WHERE id = ?').run(req.params.id);
+  logActivity(req, 'run_report', 'scheduled_report', req.params.id, report.name);
+
+  res.json({ success: true, report: reportData });
+});
+
+// Generate report data helper
+function generateReportData(reportConfig) {
+  const monitors = db.prepare('SELECT * FROM monitors WHERE active = 1').all();
+  const polyDevices = db.prepare('SELECT * FROM poly_devices').all();
+
+  // Calculate stats
+  const now = new Date();
+  const dayAgo = new Date(now - 24 * 60 * 60 * 1000);
+
+  const recentIncidents = db.prepare(`
+    SELECT * FROM incidents WHERE started_at > ? ORDER BY started_at DESC
+  `).all(dayAgo.toISOString());
+
+  const uptimeStats = {};
+  monitors.forEach(m => {
+    const heartbeats = db.prepare(`
+      SELECT status FROM heartbeats WHERE monitor_id = ? AND time > ? ORDER BY time DESC
+    `).all(m.id, dayAgo.toISOString());
+
+    if (heartbeats.length > 0) {
+      const upCount = heartbeats.filter(h => h.status === 1).length;
+      uptimeStats[m.id] = ((upCount / heartbeats.length) * 100).toFixed(2);
+    }
+  });
+
+  const totalDevices = monitors.length + polyDevices.length;
+  const onlineMonitors = monitors.filter(m => {
+    const lastHb = db.prepare('SELECT status FROM heartbeats WHERE monitor_id = ? ORDER BY time DESC LIMIT 1').get(m.id);
+    return lastHb?.status === 1;
+  }).length;
+  const onlinePoly = polyDevices.filter(p => p.connected).length;
+
+  return {
+    generatedAt: now.toISOString(),
+    period: '24 hours',
+    summary: {
+      totalDevices,
+      online: onlineMonitors + onlinePoly,
+      offline: totalDevices - onlineMonitors - onlinePoly,
+      incidents: recentIncidents.length
+    },
+    incidents: recentIncidents.slice(0, 10),
+    uptimeStats,
+    floors: [...new Set(monitors.map(m => m.floor))].map(floor => ({
+      name: floor,
+      devices: monitors.filter(m => m.floor === floor).length,
+      online: monitors.filter(m => m.floor === floor && uptimeStats[m.id] > 0).length
+    }))
+  };
+}
+
+// Send report to Slack helper
+async function sendReportToSlack(reportData, channel) {
+  const webhookUrl = db.prepare(`SELECT value FROM settings WHERE key = 'slack_webhook_url'`).get()?.value;
+  if (!webhookUrl) return;
+
+  const blocks = [
+    {
+      type: 'header',
+      text: { type: 'plain_text', text: '📊 Office Monitor Daily Report', emoji: true }
+    },
+    {
+      type: 'section',
+      fields: [
+        { type: 'mrkdwn', text: `*Total Devices:* ${reportData.summary.totalDevices}` },
+        { type: 'mrkdwn', text: `*Online:* ${reportData.summary.online}` },
+        { type: 'mrkdwn', text: `*Offline:* ${reportData.summary.offline}` },
+        { type: 'mrkdwn', text: `*Incidents (24h):* ${reportData.summary.incidents}` }
+      ]
+    }
+  ];
+
+  if (reportData.incidents.length > 0) {
+    blocks.push({
+      type: 'section',
+      text: { type: 'mrkdwn', text: '*Recent Incidents:*\n' + reportData.incidents.slice(0, 5).map(i => `• ${i.device_name} (${i.floor || 'Unknown'})`).join('\n') }
+    });
+  }
+
+  try {
+    await fetch(webhookUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ channel, blocks })
+    });
+  } catch (e) {
+    console.error('Failed to send report to Slack:', e);
+  }
+}
+
+// Run scheduled reports (check every hour)
+setInterval(() => {
+  const now = new Date();
+  const hour = now.getHours();
+  const dayOfWeek = now.getDay();
+
+  const reports = db.prepare('SELECT * FROM scheduled_reports WHERE enabled = 1').all();
+
+  reports.forEach(report => {
+    let shouldRun = false;
+
+    if (report.schedule === 'daily' && hour === 8) {
+      shouldRun = true;
+    } else if (report.schedule === 'weekly' && dayOfWeek === 1 && hour === 8) {
+      shouldRun = true;
+    } else if (report.schedule === 'hourly') {
+      shouldRun = true;
+    }
+
+    if (shouldRun) {
+      const reportData = generateReportData(report);
+      if (report.slack_channel) {
+        sendReportToSlack(reportData, report.slack_channel);
+      }
+      db.prepare('UPDATE scheduled_reports SET last_sent = datetime("now") WHERE id = ?').run(report.id);
+    }
+  });
+}, 60 * 60 * 1000); // Every hour
+
+// ==================== CUSTOM ALERT RULES ====================
+
+// Get alert rules
+app.get('/api/alert-rules', authMiddleware, (req, res) => {
+  const rules = db.prepare(`
+    SELECT ar.*, m.name as monitor_name, t.name as tag_name
+    FROM alert_rules ar
+    LEFT JOIN monitors m ON ar.monitor_id = m.id
+    LEFT JOIN device_tags t ON ar.tag_id = t.id
+    ORDER BY ar.created_at DESC
+  `).all();
+  res.json({ success: true, rules });
+});
+
+// Create alert rule
+app.post('/api/alert-rules', authMiddleware, (req, res) => {
+  const { monitor_id, tag_id, rule_type, condition, threshold, retry_count, notify_slack, notify_webhook, enabled } = req.body;
+
+  const result = db.prepare(`
+    INSERT INTO alert_rules (monitor_id, tag_id, rule_type, condition, threshold, retry_count, notify_slack, notify_webhook, enabled)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `).run(monitor_id || null, tag_id || null, rule_type, condition, threshold, retry_count || 3, notify_slack !== false ? 1 : 0, notify_webhook, enabled !== false ? 1 : 0);
+
+  logActivity(req, 'create_alert_rule', 'alert_rule', result.lastInsertRowid);
+  res.json({ success: true, id: result.lastInsertRowid });
+});
+
+// Update alert rule
+app.put('/api/alert-rules/:id', authMiddleware, (req, res) => {
+  const { monitor_id, tag_id, rule_type, condition, threshold, retry_count, notify_slack, notify_webhook, enabled } = req.body;
+
+  db.prepare(`
+    UPDATE alert_rules SET monitor_id = ?, tag_id = ?, rule_type = ?, condition = ?, threshold = ?, retry_count = ?, notify_slack = ?, notify_webhook = ?, enabled = ?
+    WHERE id = ?
+  `).run(monitor_id || null, tag_id || null, rule_type, condition, threshold, retry_count, notify_slack ? 1 : 0, notify_webhook, enabled ? 1 : 0, req.params.id);
+
+  logActivity(req, 'update_alert_rule', 'alert_rule', req.params.id);
+  res.json({ success: true });
+});
+
+// Delete alert rule
+app.delete('/api/alert-rules/:id', authMiddleware, (req, res) => {
+  db.prepare('DELETE FROM alert_rules WHERE id = ?').run(req.params.id);
+  logActivity(req, 'delete_alert_rule', 'alert_rule', req.params.id);
+  res.json({ success: true });
+});
+
+// ==================== API HEALTH MONITORS ====================
+
+// Get API monitors
+app.get('/api/api-monitors', authMiddleware, (req, res) => {
+  const monitors = db.prepare('SELECT * FROM api_monitors ORDER BY created_at DESC').all();
+  res.json({ success: true, monitors });
+});
+
+// Create API monitor
+app.post('/api/api-monitors', authMiddleware, (req, res) => {
+  const { name, url, method, headers, body, expected_status, timeout, interval, enabled } = req.body;
+
+  const result = db.prepare(`
+    INSERT INTO api_monitors (name, url, method, headers, body, expected_status, timeout, interval, enabled)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `).run(name, url, method || 'GET', headers ? JSON.stringify(headers) : null, body, expected_status || 200, timeout || 10000, interval || 60000, enabled !== false ? 1 : 0);
+
+  logActivity(req, 'create_api_monitor', 'api_monitor', result.lastInsertRowid, name);
+  res.json({ success: true, id: result.lastInsertRowid });
+});
+
+// Update API monitor
+app.put('/api/api-monitors/:id', authMiddleware, (req, res) => {
+  const { name, url, method, headers, body, expected_status, timeout, interval, enabled } = req.body;
+
+  db.prepare(`
+    UPDATE api_monitors SET name = ?, url = ?, method = ?, headers = ?, body = ?, expected_status = ?, timeout = ?, interval = ?, enabled = ?
+    WHERE id = ?
+  `).run(name, url, method, headers ? JSON.stringify(headers) : null, body, expected_status, timeout, interval, enabled ? 1 : 0, req.params.id);
+
+  logActivity(req, 'update_api_monitor', 'api_monitor', req.params.id, name);
+  res.json({ success: true });
+});
+
+// Delete API monitor
+app.delete('/api/api-monitors/:id', authMiddleware, (req, res) => {
+  const monitor = db.prepare('SELECT * FROM api_monitors WHERE id = ?').get(req.params.id);
+  db.prepare('DELETE FROM api_monitors WHERE id = ?').run(req.params.id);
+  logActivity(req, 'delete_api_monitor', 'api_monitor', req.params.id, monitor?.name);
+  res.json({ success: true });
+});
+
+// Check API monitor now
+app.post('/api/api-monitors/:id/check', authMiddleware, async (req, res) => {
+  const monitor = db.prepare('SELECT * FROM api_monitors WHERE id = ?').get(req.params.id);
+
+  if (!monitor) {
+    return res.status(404).json({ success: false, error: 'Monitor not found' });
+  }
+
+  const result = await checkApiMonitor(monitor);
+  res.json({ success: true, result });
+});
+
+// Check API monitor helper
+async function checkApiMonitor(monitor) {
+  const startTime = Date.now();
+
+  try {
+    const headers = monitor.headers ? JSON.parse(monitor.headers) : {};
+    const options = {
+      method: monitor.method,
+      headers,
+      signal: AbortSignal.timeout(monitor.timeout)
+    };
+
+    if (monitor.body && ['POST', 'PUT', 'PATCH'].includes(monitor.method)) {
+      options.body = monitor.body;
+    }
+
+    const response = await fetch(monitor.url, options);
+    const responseTime = Date.now() - startTime;
+    const status = response.status === monitor.expected_status ? 'up' : 'down';
+
+    db.prepare(`
+      UPDATE api_monitors SET last_check = datetime('now'), last_status = ?, last_response_time = ?
+      WHERE id = ?
+    `).run(status, responseTime, monitor.id);
+
+    return { status, responseTime, httpStatus: response.status };
+  } catch (e) {
+    const responseTime = Date.now() - startTime;
+
+    db.prepare(`
+      UPDATE api_monitors SET last_check = datetime('now'), last_status = 'down', last_response_time = ?
+      WHERE id = ?
+    `).run(responseTime, monitor.id);
+
+    return { status: 'down', responseTime, error: e.message };
+  }
+}
+
+// Run API monitor checks periodically
+setInterval(async () => {
+  const monitors = db.prepare('SELECT * FROM api_monitors WHERE enabled = 1').all();
+
+  for (const monitor of monitors) {
+    await checkApiMonitor(monitor);
+  }
+}, 60000); // Every minute
+
+// ==================== BACKUP & RESTORE ====================
+
+// Export database backup
+app.get('/api/backup', authMiddleware, (req, res) => {
+  if (req.user?.role !== 'admin') {
+    return res.status(403).json({ success: false, error: 'Admin only' });
+  }
+
+  const backup = {
+    version: '1.0',
+    exportedAt: new Date().toISOString(),
+    monitors: db.prepare('SELECT * FROM monitors').all(),
+    device_types: db.prepare('SELECT * FROM device_types').all(),
+    floor_plans: db.prepare('SELECT floor, image_type FROM floor_plans').all(), // Exclude image data for size
+    room_positions: db.prepare('SELECT * FROM room_positions').all(),
+    device_tags: db.prepare('SELECT * FROM device_tags').all(),
+    monitor_tags: db.prepare('SELECT * FROM monitor_tags').all(),
+    webhooks: db.prepare('SELECT id, name, url, type, events, enabled FROM webhooks').all(),
+    scheduled_reports: db.prepare('SELECT * FROM scheduled_reports').all(),
+    alert_rules: db.prepare('SELECT * FROM alert_rules').all(),
+    api_monitors: db.prepare('SELECT * FROM api_monitors').all(),
+    settings: db.prepare('SELECT key, value FROM settings WHERE key NOT LIKE "%secret%" AND key NOT LIKE "%password%"').all()
+  };
+
+  logActivity(req, 'export_backup', 'system');
+
+  res.setHeader('Content-Type', 'application/json');
+  res.setHeader('Content-Disposition', `attachment; filename=office-monitor-backup-${new Date().toISOString().split('T')[0]}.json`);
+  res.json(backup);
+});
+
+// Import database backup
+app.post('/api/restore', authMiddleware, (req, res) => {
+  if (req.user?.role !== 'admin') {
+    return res.status(403).json({ success: false, error: 'Admin only' });
+  }
+
+  const { backup, options } = req.body;
+
+  if (!backup || !backup.version) {
+    return res.status(400).json({ success: false, error: 'Invalid backup file' });
+  }
+
+  try {
+    const results = { imported: {}, skipped: {} };
+
+    // Import monitors
+    if (backup.monitors && options?.monitors !== false) {
+      const insert = db.prepare(`INSERT OR REPLACE INTO monitors (id, name, hostname, type, floor, device_type, interval, active, pos_x, pos_y) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`);
+      backup.monitors.forEach(m => {
+        insert.run(m.id, m.name, m.hostname, m.type, m.floor, m.device_type, m.interval, m.active, m.pos_x, m.pos_y);
+      });
+      results.imported.monitors = backup.monitors.length;
+    }
+
+    // Import tags
+    if (backup.device_tags && options?.tags !== false) {
+      const insert = db.prepare('INSERT OR REPLACE INTO device_tags (id, name, color, priority) VALUES (?, ?, ?, ?)');
+      backup.device_tags.forEach(t => insert.run(t.id, t.name, t.color, t.priority));
+      results.imported.tags = backup.device_tags.length;
+    }
+
+    logActivity(req, 'restore_backup', 'system', null, null, results);
+    res.json({ success: true, results });
+  } catch (e) {
+    res.status(500).json({ success: false, error: e.message });
+  }
+});
+
+// ==================== EXPORT DATA ====================
+
+// Export monitors to CSV
+app.get('/api/export/monitors', authMiddleware, (req, res) => {
+  const monitors = db.prepare(`
+    SELECT m.*,
+           (SELECT status FROM heartbeats WHERE monitor_id = m.id ORDER BY time DESC LIMIT 1) as current_status,
+           (SELECT ping FROM heartbeats WHERE monitor_id = m.id ORDER BY time DESC LIMIT 1) as last_ping
+    FROM monitors m
+    ORDER BY m.floor, m.name
+  `).all();
+
+  const csv = [
+    'ID,Name,Hostname,Type,Floor,Device Type,Status,Last Ping (ms),Active',
+    ...monitors.map(m => `${m.id},"${m.name}","${m.hostname}",${m.type},"${m.floor}",${m.device_type},${m.current_status === 1 ? 'Online' : 'Offline'},${m.last_ping || ''},${m.active}`)
+  ].join('\n');
+
+  logActivity(req, 'export_monitors', 'export');
+
+  res.setHeader('Content-Type', 'text/csv');
+  res.setHeader('Content-Disposition', `attachment; filename=monitors-${new Date().toISOString().split('T')[0]}.csv`);
+  res.send(csv);
+});
+
+// Export incidents to CSV
+app.get('/api/export/incidents', authMiddleware, (req, res) => {
+  const days = parseInt(req.query.days) || 30;
+  const since = new Date(Date.now() - days * 24 * 60 * 60 * 1000).toISOString();
+
+  const incidents = db.prepare(`
+    SELECT * FROM incidents WHERE started_at > ? ORDER BY started_at DESC
+  `).all(since);
+
+  const csv = [
+    'ID,Device Name,Device Type,Floor,Started At,Ended At,Duration (min),Acknowledged By,Resolution Notes',
+    ...incidents.map(i => `${i.id},"${i.device_name}",${i.device_type || ''},"${i.floor || ''}","${i.started_at}","${i.ended_at || ''}",${i.duration_seconds ? Math.round(i.duration_seconds / 60) : ''},"${i.acknowledged_by || ''}","${(i.resolution_notes || '').replace(/"/g, '""')}"`)
+  ].join('\n');
+
+  logActivity(req, 'export_incidents', 'export');
+
+  res.setHeader('Content-Type', 'text/csv');
+  res.setHeader('Content-Disposition', `attachment; filename=incidents-${new Date().toISOString().split('T')[0]}.csv`);
+  res.send(csv);
+});
+
+// Export uptime report
+app.get('/api/export/uptime', authMiddleware, (req, res) => {
+  const days = parseInt(req.query.days) || 7;
+  const since = new Date(Date.now() - days * 24 * 60 * 60 * 1000).toISOString();
+
+  const monitors = db.prepare('SELECT * FROM monitors WHERE active = 1').all();
+
+  const uptimeData = monitors.map(m => {
+    const heartbeats = db.prepare(`
+      SELECT status FROM heartbeats WHERE monitor_id = ? AND time > ?
+    `).all(m.id, since);
+
+    const total = heartbeats.length;
+    const up = heartbeats.filter(h => h.status === 1).length;
+    const uptime = total > 0 ? ((up / total) * 100).toFixed(2) : 'N/A';
+
+    return { ...m, uptime, totalChecks: total, upChecks: up };
+  });
+
+  const csv = [
+    `Uptime Report - Last ${days} Days`,
+    'ID,Name,Floor,Device Type,Uptime %,Total Checks,Up Checks',
+    ...uptimeData.map(m => `${m.id},"${m.name}","${m.floor}",${m.device_type},${m.uptime},${m.totalChecks},${m.upChecks}`)
+  ].join('\n');
+
+  logActivity(req, 'export_uptime', 'export');
+
+  res.setHeader('Content-Type', 'text/csv');
+  res.setHeader('Content-Disposition', `attachment; filename=uptime-report-${new Date().toISOString().split('T')[0]}.csv`);
+  res.send(csv);
+});
+
+// Serve manifest.json for PWA
+app.get('/manifest.json', (req, res) => {
+  res.sendFile(path.join(__dirname, 'manifest.json'));
+});
 
 // Start server
 app.listen(PORT, () => {

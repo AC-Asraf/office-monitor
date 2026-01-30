@@ -1,0 +1,46 @@
+# Office Monitor - Google App Engine Configuration
+runtime: nodejs20
+
+instance_class: F2
+
+env_variables:
+  NODE_ENV: "production"
+  PORT: "8080"
+
+automatic_scaling:
+  min_instances: 1
+  max_instances: 3
+  target_cpu_utilization: 0.7
+
+handlers:
+  # Static files
+  - url: /sw.js
+    static_files: sw.js
+    upload: sw.js
+    secure: always
+
+  - url: /manifest.json
+    static_files: manifest.json
+    upload: manifest.json
+    secure: always
+
+  # All other requests go to the app
+  - url: /.*
+    script: auto
+    secure: always
+
+# Health checks
+liveness_check:
+  path: /api/health
+  check_interval_sec: 30
+  timeout_sec: 4
+  failure_threshold: 4
+  success_threshold: 2
+
+readiness_check:
+  path: /api/health
+  check_interval_sec: 5
+  timeout_sec: 4
+  failure_threshold: 2
+  success_threshold: 2
+  app_start_timeout_sec: 300

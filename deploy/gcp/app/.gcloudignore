@@ -1,0 +1,11 @@
+# Ignore files for GCP deployment
+.git
+.gitignore
+node_modules
+*.md
+*.log
+.env
+.env.*
+data/
+*.db
+*.sqlite

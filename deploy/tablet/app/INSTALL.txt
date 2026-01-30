@@ -1,0 +1,62 @@
+Office Monitor - Tablet Installation
+=====================================
+
+STEP 1: Start the Server
+------------------------
+On your computer/server, run:
+
+  cd deploy/tablet/app
+  ./start.sh
+
+Or manually:
+
+  npm install
+  node server.js
+
+The server will display URLs to access from your tablet.
+
+
+STEP 2: Install on iPad
+-----------------------
+1. Open Safari (must use Safari, not Chrome)
+2. Go to: http://YOUR_SERVER_IP:3002/dashboard.html
+3. Tap the Share button (square with arrow)
+4. Tap "Add to Home Screen"
+5. Name it "Office Monitor"
+6. Tap "Add"
+
+For wall-mounted kiosk mode:
+- Settings > Accessibility > Guided Access > ON
+- Open app, triple-click side button, tap Start
+
+
+STEP 3: Install on Android
+--------------------------
+1. Open Chrome
+2. Go to: http://YOUR_SERVER_IP:3002/dashboard.html
+3. Tap menu (three dots)
+4. Tap "Add to Home screen" or "Install app"
+5. Confirm installation
+
+
+TV MODE (for wall displays)
+---------------------------
+Add ?tvmode=true to the URL:
+  http://YOUR_SERVER_IP:3002/dashboard.html?tvmode=true
+
+This auto-cycles through floors every 30 seconds.
+
+
+RECOMMENDED TABLET SETTINGS
+---------------------------
+- Display timeout: Never (or maximum)
+- Brightness: 70-80%
+- Notifications: Allow for Office Monitor
+- Keep screen on while charging
+
+
+TROUBLESHOOTING
+---------------
+- Can't connect: Check firewall allows port 3002
+- App won't install: Must use Safari (iPad) or Chrome (Android)
+- Screen turns off: Disable auto-lock in settings

@@ -2,21 +2,8 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Office Infrastructure Monitor v2</title>
-
-  <!-- PWA Meta Tags -->
-  <link rel="manifest" href="manifest.json">
-  <meta name="theme-color" content="#0F172A">
-  <meta name="apple-mobile-web-app-capable" content="yes">
-  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-  <meta name="apple-mobile-web-app-title" content="Office Monitor">
-  <link rel="apple-touch-icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect fill='%230F172A' width='100' height='100' rx='20'/><text x='50' y='65' font-size='50' text-anchor='middle'>🏢</text></svg>">
-  <meta name="mobile-web-app-capable" content="yes">
-  <meta name="application-name" content="Office Monitor">
-  <meta name="msapplication-TileColor" content="#0F172A">
-  <meta name="msapplication-tap-highlight" content="no">
-
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
   <style>
     /* ==================== DESIGN SYSTEM ==================== */
@@ -154,66 +141,6 @@
     @keyframes ticker {
       0% { transform: translateX(100%); }
       100% { transform: translateX(-100%); }
-    }
-
-    /* Enhanced Status Animations */
-    @keyframes statusPulse {
-      0%, 100% { transform: scale(1); opacity: 1; }
-      50% { transform: scale(1.1); opacity: 0.8; }
-    }
-
-    @keyframes statusRipple {
-      0% { box-shadow: 0 0 0 0 currentColor; }
-      70% { box-shadow: 0 0 0 8px transparent; }
-      100% { box-shadow: 0 0 0 0 transparent; }
-    }
-
-    @keyframes breathe {
-      0%, 100% { opacity: 1; transform: scale(1); }
-      50% { opacity: 0.7; transform: scale(0.98); }
-    }
-
-    @keyframes onlineGlow {
-      0%, 100% { box-shadow: 0 0 4px var(--status-online), 0 0 8px rgba(16, 185, 129, 0.3); }
-      50% { box-shadow: 0 0 8px var(--status-online), 0 0 16px rgba(16, 185, 129, 0.5); }
-    }
-
-    @keyframes offlineAlert {
-      0%, 100% { box-shadow: 0 0 4px var(--status-offline); }
-      25% { box-shadow: 0 0 12px var(--status-offline), 0 0 20px rgba(239, 68, 68, 0.4); }
-      75% { box-shadow: 0 0 8px var(--status-offline); }
-    }
-
-    @keyframes dataRefresh {
-      0% { opacity: 0.5; }
-      50% { opacity: 1; }
-      100% { opacity: 0.5; }
-    }
-
-    /* Animated Status Classes */
-    .status-animated.online {
-      animation: onlineGlow 3s ease-in-out infinite;
-    }
-
-    .status-animated.offline {
-      animation: offlineAlert 1.5s ease-in-out infinite;
-    }
-
-    .data-refreshing {
-      animation: dataRefresh 1s ease-in-out infinite;
-    }
-
-    .status-change-enter {
-      animation: scaleIn 0.3s ease-out;
-    }
-
-    /* Device marker animations */
-    .device-marker.status-changed {
-      animation: statusPulse 0.5s ease-out;
-    }
-
-    .device-dot.animated {
-      animation: breathe 2s ease-in-out infinite;
     }
 
     /* ==================== MAIN LAYOUT ==================== */
@@ -412,6 +339,11 @@
 
     .header-btn.primary:hover {
       background: #2563EB;
+    }
+
+    .header-btn.tv-mode {
+      background: linear-gradient(135deg, var(--accent-purple), var(--accent-blue));
+      border: none;
     }
 
     .user-menu {
@@ -643,28 +575,9 @@
       position: relative;
       width: 100%;
       height: 100%;
-      transform-origin: center center;
-      will-change: transform;
+      background-size: contain;
       background-position: center;
       background-repeat: no-repeat;
-      background-size: contain;
-    }
-
-    .floor-plan-bg-loader {
-      position: absolute;
-      opacity: 0;
-      pointer-events: none;
-      max-width: 1px;
-      max-height: 1px;
-    }
-
-    .markers-overlay {
-      position: absolute;
-      pointer-events: none;
-    }
-
-    .markers-overlay .device-marker {
-      pointer-events: auto;
     }
 
     .map-placeholder {
@@ -783,21 +696,6 @@
       background: var(--status-offline-bg);
       border-color: var(--status-offline);
       animation: glow 2s infinite;
-    }
-
-    /* Disabled/non-serviceable devices */
-    .device-marker.disabled {
-      opacity: 0.4;
-    }
-
-    .device-marker.disabled .device-dot {
-      background: var(--bg-overlay) !important;
-      border-color: var(--text-muted) !important;
-      filter: grayscale(1);
-    }
-
-    .device-marker.disabled .device-ping {
-      display: none;
     }
 
     .marker-dot.warning {
@@ -1423,31 +1321,115 @@
       color: white;
     }
 
-    .btn-sm {
-      padding: var(--space-xs) var(--space-sm);
+    /* ==================== TV MODE ==================== */
+    .tv-mode-active {
+      position: fixed;
+      inset: 0;
+      z-index: 9999;
+    }
+
+    .tv-mode-active .header,
+    .tv-mode-active .left-panel,
+    .tv-mode-active .right-panel,
+    .tv-mode-active .footer {
+      display: none;
+    }
+
+    .tv-mode-active .main-content {
+      grid-template-columns: 1fr;
+    }
+
+    .tv-mode-active .map-container {
+      height: 100vh;
+    }
+
+    .tv-mode-active .floor-label {
+      font-size: var(--text-display);
+      padding: var(--space-md) var(--space-lg);
+    }
+
+    .tv-overlay {
+      position: fixed;
+      top: var(--space-lg);
+      right: var(--space-lg);
+      display: flex;
+      flex-direction: column;
+      align-items: flex-end;
+      gap: var(--space-md);
+      z-index: 10000;
+    }
+
+    .tv-status-bar {
+      display: flex;
+      gap: var(--space-md);
+      padding: var(--space-md) var(--space-lg);
+      background: var(--bg-glass);
+      backdrop-filter: blur(12px);
+      border-radius: var(--radius-lg);
+      border: 1px solid var(--border-default);
+    }
+
+    .tv-stat {
+      text-align: center;
+    }
+
+    .tv-stat-value {
+      font-size: var(--text-hero);
+      font-weight: 700;
+    }
+
+    .tv-stat-value.online { color: var(--status-online); }
+    .tv-stat-value.offline { color: var(--status-offline); }
+
+    .tv-stat-label {
+      font-size: var(--text-body);
+      color: var(--text-secondary);
+    }
+
+    .tv-time {
+      font-size: var(--text-display);
+      font-weight: 600;
+      padding: var(--space-sm) var(--space-lg);
+      background: var(--bg-glass);
+      backdrop-filter: blur(12px);
+      border-radius: var(--radius-md);
+      border: 1px solid var(--border-default);
+    }
+
+    .tv-exit-hint {
       font-size: var(--text-small);
+      color: var(--text-muted);
+      padding: var(--space-xs) var(--space-md);
+      background: var(--bg-glass);
+      backdrop-filter: blur(12px);
+      border-radius: var(--radius-sm);
     }
 
-    .btn-warning {
-      background: rgba(245, 158, 11, 0.2);
-      border-color: var(--status-warning);
-      color: var(--status-warning);
-    }
-
-    .btn-warning:hover {
-      background: var(--status-warning);
+    .tv-exit-btn {
+      position: fixed;
+      top: 20px;
+      left: 20px;
+      width: 50px;
+      height: 50px;
+      border-radius: 50%;
+      background: rgba(239, 68, 68, 0.9);
+      border: 2px solid rgba(255, 255, 255, 0.3);
       color: white;
+      font-size: 24px;
+      font-weight: bold;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: all 0.2s;
+      z-index: 10001;
+      box-shadow: 0 4px 20px rgba(0, 0, 0, 0.4);
     }
 
-    .btn-success {
-      background: rgba(16, 185, 129, 0.2);
-      border-color: var(--status-online);
-      color: var(--status-online);
-    }
-
-    .btn-success:hover {
-      background: var(--status-online);
-      color: white;
+    .tv-exit-btn:hover {
+      background: rgba(239, 68, 68, 1);
+      transform: scale(1.1);
+      box-shadow: 0 6px 25px rgba(239, 68, 68, 0.5);
     }
 
     /* ==================== ADMIN PANEL ==================== */
@@ -1814,164 +1796,6 @@
     .analytics-overlay.open {
       opacity: 1;
       visibility: visible;
-    }
-
-    /* Analytics sidebar - uptime bar and segments */
-    .analytics-section .uptime-bar {
-      display: flex;
-      gap: 2px;
-      height: 24px;
-      background: var(--bg-elevated);
-      border-radius: var(--radius-sm);
-      padding: 3px;
-      overflow: hidden;
-    }
-
-    .uptime-segment {
-      flex: 1;
-      border-radius: 2px;
-      min-width: 2px;
-      transition: var(--transition-fast);
-      cursor: pointer;
-      position: relative;
-    }
-
-    .uptime-segment.up { background: var(--status-online); }
-    .uptime-segment.down { background: var(--status-offline); }
-    .uptime-segment.unknown { background: var(--border-default); }
-
-    .uptime-segment:hover {
-      transform: scaleY(1.2);
-      opacity: 0.9;
-    }
-
-    .uptime-segment[data-tooltip]:hover::after {
-      content: attr(data-tooltip);
-      position: absolute;
-      bottom: 100%;
-      left: 50%;
-      transform: translateX(-50%);
-      background: var(--bg-overlay);
-      color: var(--text-primary);
-      padding: 4px 8px;
-      border-radius: var(--radius-sm);
-      font-size: 10px;
-      white-space: nowrap;
-      z-index: 10;
-      margin-bottom: 4px;
-    }
-
-    .uptime-legend {
-      display: flex;
-      justify-content: space-between;
-      font-size: var(--text-tiny);
-      color: var(--text-muted);
-      margin-top: 4px;
-    }
-
-    /* Analytics sidebar - response time chart */
-    .response-chart {
-      display: flex;
-      align-items: flex-end;
-      gap: 2px;
-      height: 60px;
-      background: var(--bg-elevated);
-      border-radius: var(--radius-sm);
-      padding: 8px;
-      overflow: hidden;
-    }
-
-    .response-bar {
-      flex: 1;
-      min-width: 4px;
-      background: var(--status-online);
-      border-radius: 2px 2px 0 0;
-      transition: var(--transition-fast);
-      cursor: pointer;
-      position: relative;
-    }
-
-    .response-bar:hover {
-      opacity: 0.8;
-      transform: scaleX(1.3);
-    }
-
-    .response-bar.slow {
-      background: var(--status-warning);
-    }
-
-    .response-bar.timeout {
-      background: var(--status-offline);
-    }
-
-    .response-bar[title]:hover::after {
-      content: attr(title);
-      position: absolute;
-      bottom: 100%;
-      left: 50%;
-      transform: translateX(-50%);
-      background: var(--bg-overlay);
-      color: var(--text-primary);
-      padding: 4px 8px;
-      border-radius: var(--radius-sm);
-      font-size: 10px;
-      white-space: nowrap;
-      z-index: 10;
-      margin-bottom: 4px;
-    }
-
-    /* Analytics sidebar - history list */
-    .history-list {
-      display: flex;
-      flex-direction: column;
-      gap: 8px;
-      max-height: 300px;
-      overflow-y: auto;
-    }
-
-    .history-item {
-      display: flex;
-      align-items: center;
-      gap: 10px;
-      padding: 8px;
-      background: var(--bg-elevated);
-      border-radius: var(--radius-sm);
-      border: 1px solid var(--border-subtle);
-    }
-
-    .history-status {
-      width: 8px;
-      height: 8px;
-      border-radius: 50%;
-      flex-shrink: 0;
-    }
-
-    .history-status.up { background: var(--status-online); }
-    .history-status.down { background: var(--status-offline); }
-
-    .history-info {
-      flex: 1;
-      min-width: 0;
-    }
-
-    .history-time {
-      font-size: var(--text-tiny);
-      color: var(--text-muted);
-    }
-
-    .history-message {
-      font-size: var(--text-small);
-      color: var(--text-secondary);
-      white-space: nowrap;
-      overflow: hidden;
-      text-overflow: ellipsis;
-    }
-
-    .history-ping {
-      font-size: var(--text-small);
-      font-weight: 600;
-      color: var(--accent-blue);
-      flex-shrink: 0;
     }
 
     /* Feature-specific styles using design system variables */
@@ -3583,7 +3407,6 @@
     };
     let lastFetchError = null;
     let activeFloor = "1st Floor";
-    let floors = ['1st Floor', '2nd Floor', '3rd Floor', '5th Floor']; // Updated dynamically from data
     let leftPanelCollapsed = localStorage.getItem('leftPanelCollapsed') === 'true';
     let compactMode = localStorage.getItem('compactMode') === 'true';
     let alertSoundsEnabled = localStorage.getItem('alertSoundsEnabled') === 'true';
@@ -4033,12 +3856,12 @@
       }
     }
 
-    async function saveDevicePosition(id, pos_x, pos_y, tvMode = false) {
+    async function saveDevicePosition(id, pos_x, pos_y) {
       try {
         const response = await authFetch(`${API_URL}/api/monitors/${id}/position`, {
           method: 'PATCH',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ pos_x, pos_y, tv_mode: tvMode })
+          body: JSON.stringify({ pos_x, pos_y })
         });
         return response.ok;
       } catch (e) {
@@ -4417,32 +4240,6 @@
       }
     }
 
-    function showToast(message, type = 'info') {
-      const toast = document.createElement('div');
-      toast.className = 'toast-notification';
-      toast.style.cssText = `
-        position: fixed;
-        bottom: 20px;
-        left: 50%;
-        transform: translateX(-50%);
-        background: ${type === 'success' ? 'var(--status-online)' : type === 'error' ? 'var(--status-offline)' : 'var(--accent-blue)'};
-        color: white;
-        padding: 12px 24px;
-        border-radius: 8px;
-        font-size: 14px;
-        font-weight: 500;
-        z-index: 100000;
-        animation: slideUp 0.3s ease;
-        box-shadow: 0 4px 12px rgba(0,0,0,0.3);
-      `;
-      toast.textContent = message;
-      document.body.appendChild(toast);
-      setTimeout(() => {
-        toast.style.animation = 'fadeIn 0.3s ease reverse';
-        setTimeout(() => toast.remove(), 300);
-      }, 3000);
-    }
-
     function handleFloorPlanUpload(floor, input) {
       const file = input.files[0];
       if (file) {
@@ -4543,7 +4340,7 @@
             </div>
             <div class="device-list">
               ${filteredMonitors.map(m => `
-                <div class="device-item" oncontextmenu="showContextMenu(event, ${JSON.stringify(m).replace(/"/g, '&quot;')}); return false;">
+                <div class="device-item" oncontextmenu="showContextMenu(event, ${JSON.stringify(m).replace(/"/g, '&quot;')})">
                   ${bulkSelectMode ? `
                     <input type="checkbox" class="bulk-checkbox device-checkbox"
                       ${selectedDevices.has(m.id) ? 'checked' : ''}
@@ -4939,12 +4736,9 @@
           });
         });
 
-        // Count only non-disabled devices for status
-        const activeDevices = roomDevices.filter(d => !d.disabled);
-        const onlineCount = activeDevices.filter(d => d.connected).length;
-        const offlineCount = activeDevices.filter(d => !d.connected).length;
-        const disabledCount = roomDevices.filter(d => d.disabled).length;
-        const uptime = activeDevices.length > 0 ? ((onlineCount / activeDevices.length) * 100).toFixed(1) : 100;
+        const onlineCount = roomDevices.filter(d => d.connected).length;
+        const offlineCount = roomDevices.length - onlineCount;
+        const uptime = roomDevices.length > 0 ? ((onlineCount / roomDevices.length) * 100).toFixed(1) : 0;
 
         return {
           isRoom: true,
@@ -4952,9 +4746,7 @@
           devices: roomDevices,
           onlineCount,
           offlineCount,
-          disabledCount,
           totalCount: roomDevices.length,
-          activeCount: activeDevices.length,
           currentUptime: uptime
         };
       }
@@ -5018,9 +4810,6 @@
       }
 
       try {
-        // Get monitor info for maintenance/disabled status
-        const monitor = allMonitors.find(m => m.id == deviceId);
-
         // Fetch uptime stats
         const uptimeRes = await fetch(`${API_URL}/api/monitors/${deviceId}/uptime?hours=24`);
         const uptimeData = uptimeRes.ok ? await uptimeRes.json() : null;
@@ -5042,9 +4831,7 @@
           uptime7d: uptime7dData?.uptime || 0,
           uptime30d: uptime30dData?.uptime || 0,
           totalChecks: uptimeData?.total || 0,
-          heartbeats: historyData?.heartbeats || [],
-          maintenance: monitor?.maintenance || 0,
-          disabled: monitor?.disabled || 0
+          heartbeats: historyData?.heartbeats || []
         };
       } catch (e) {
         console.error('Failed to fetch analytics:', e);
@@ -5203,28 +4990,6 @@
             ` : ''}
           </div>
 
-          ${!loading && !device.isRoom && !device.isPolyDevice ? `
-            <div class="analytics-actions" style="display: flex; gap: 8px; padding: 12px 16px; border-bottom: 1px solid var(--border-subtle); flex-wrap: wrap;">
-              <button onclick="toggleMaintenanceFromAnalytics(${device.id})" class="btn btn-sm ${data?.maintenance ? 'btn-warning' : 'btn-secondary'}" style="flex: 1; min-width: 120px;">
-                🔧 ${data?.maintenance ? 'End Maintenance' : 'Maintenance'}
-              </button>
-              <button onclick="toggleDisabledFromAnalytics(${device.id}, ${data?.disabled ? 'false' : 'true'})" class="btn btn-sm ${data?.disabled ? 'btn-success' : 'btn-danger'}" style="flex: 1; min-width: 120px;">
-                ${data?.disabled ? '✅ Enable' : '🚫 Disable'}
-              </button>
-              <button onclick="highlightDevice('${device.id}')" class="btn btn-sm btn-secondary" style="flex: 1; min-width: 100px;">
-                📍 Locate
-              </button>
-            </div>
-          ` : ''}
-
-          ${!loading && device.isRoom ? `
-            <div class="analytics-actions" style="display: flex; gap: 8px; padding: 12px 16px; border-bottom: 1px solid var(--border-subtle); flex-wrap: wrap;">
-              <button onclick="highlightDevice('${device.id}')" class="btn btn-sm btn-secondary" style="flex: 1; min-width: 100px;">
-                📍 Locate on Map
-              </button>
-            </div>
-          ` : ''}
-
           <div class="analytics-content">
             ${loading ? `
               <div style="text-align: center; padding: 40px; color: #64748B;">
@@ -5237,7 +5002,7 @@
                 <div class="stats-grid">
                   <div class="stat-card">
                     <div class="stat-value ${parseFloat(data.currentUptime) >= 99 ? 'green' : parseFloat(data.currentUptime) >= 50 ? 'yellow' : 'red'}">${data.currentUptime}%</div>
-                    <div class="stat-label">Uptime</div>
+                    <div class="stat-label">Current Uptime</div>
                   </div>
                   <div class="stat-card">
                     <div class="stat-value green">${data.onlineCount}</div>
@@ -5248,44 +5013,23 @@
                     <div class="stat-label">Offline</div>
                   </div>
                   <div class="stat-card">
-                    <div class="stat-value" style="color: var(--text-muted);">${data.disabledCount || 0}</div>
-                    <div class="stat-label">Disabled</div>
+                    <div class="stat-value blue">${data.totalCount}</div>
+                    <div class="stat-label">Total Devices</div>
                   </div>
                 </div>
               </div>
 
-              ${data.devices.filter(d => d.disabled).length > 0 ? `
-                <div class="analytics-section" style="background: rgba(107, 114, 128, 0.1); border: 1px solid rgba(107, 114, 128, 0.3); border-radius: 8px; padding: 12px;">
-                  <div class="analytics-section-title" style="color: #9CA3AF;">🚫 Disabled Devices (${data.devices.filter(d => d.disabled).length})</div>
-                  <div style="display: flex; flex-direction: column; gap: 8px;">
-                    ${data.devices.filter(d => d.disabled).map(d => `
-                      <div style="background: rgba(107, 114, 128, 0.15); border-radius: 6px; padding: 10px; opacity: 0.6;">
-                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
-                          <span style="font-weight: 600; color: #9CA3AF;">${d.name}</span>
-                          <button onclick="event.stopPropagation(); togglePolyDeviceDisabled('${d.id}', false)" class="btn btn-sm btn-success" style="padding: 2px 8px; font-size: 10px;">
-                            ✅ Enable
-                          </button>
-                        </div>
-                        <div style="font-size: 12px; color: #6B7280;">${d.hardwareModel || 'Unknown Model'}</div>
-                      </div>
-                    `).join('')}
-                  </div>
-                </div>
-              ` : ''}
-
-              ${data.devices.filter(d => !d.connected && !d.disabled).length > 0 ? `
+              ${data.offlineCount > 0 ? `
                 <div class="analytics-section" style="background: rgba(239, 68, 68, 0.1); border: 1px solid rgba(239, 68, 68, 0.3); border-radius: 8px; padding: 12px;">
-                  <div class="analytics-section-title" style="color: #EF4444;">⚠️ Devices with Issues (${data.devices.filter(d => !d.connected && !d.disabled).length})</div>
+                  <div class="analytics-section-title" style="color: #EF4444;">⚠️ Devices with Issues (${data.offlineCount})</div>
                   <div style="display: flex; flex-direction: column; gap: 8px;">
-                    ${data.devices.filter(d => !d.connected && !d.disabled).map(d => `
-                      <div style="background: rgba(239, 68, 68, 0.15); border-radius: 6px; padding: 10px;">
+                    ${data.devices.filter(d => !d.connected).map(d => `
+                      <div onclick="openPolyDeviceAnalytics(${JSON.stringify(d).replace(/"/g, '&quot;')})" style="background: rgba(239, 68, 68, 0.15); border-radius: 6px; padding: 10px; cursor: pointer; transition: all 0.2s;" onmouseover="this.style.background='rgba(239, 68, 68, 0.25)'" onmouseout="this.style.background='rgba(239, 68, 68, 0.15)'">
                         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
-                          <span onclick="openPolyDeviceAnalytics(${JSON.stringify(d).replace(/"/g, '&quot;')})" style="font-weight: 600; color: #FCA5A5; cursor: pointer;">${d.name}</span>
+                          <span style="font-weight: 600; color: #FCA5A5;">${d.name}</span>
                           <div style="display: flex; align-items: center; gap: 8px;">
                             <span style="padding: 2px 8px; border-radius: 4px; font-size: 10px; background: #EF4444; color: white;">OFFLINE</span>
-                            <button onclick="event.stopPropagation(); togglePolyDeviceDisabled('${d.id}', true)" class="btn btn-sm btn-secondary" style="padding: 2px 8px; font-size: 10px;" title="Disable this device">
-                              🚫
-                            </button>
+                            <span style="color: #94A3B8; font-size: 12px;">→</span>
                           </div>
                         </div>
                         <div style="font-size: 12px; color: #FDA4AF;">${d.hardwareModel || 'Unknown Model'}</div>
@@ -5297,17 +5041,15 @@
               ` : ''}
 
               <div class="analytics-section">
-                <div class="analytics-section-title">${data.devices.filter(d => !d.connected && !d.disabled).length > 0 ? 'Online Devices' : 'All Devices'} (${data.devices.filter(d => d.connected && !d.disabled).length})</div>
+                <div class="analytics-section-title">${data.offlineCount > 0 ? 'Online Devices' : 'All Devices'} (${data.onlineCount})</div>
                 <div style="display: flex; flex-direction: column; gap: 8px; max-height: 300px; overflow-y: auto;">
-                  ${data.devices.filter(d => d.connected && !d.disabled).map(d => `
-                    <div style="background: rgba(34, 197, 94, 0.1); border: 1px solid rgba(34, 197, 94, 0.2); border-radius: 6px; padding: 10px;">
+                  ${data.devices.filter(d => d.connected).map(d => `
+                    <div onclick="openPolyDeviceAnalytics(${JSON.stringify(d).replace(/"/g, '&quot;')})" style="background: rgba(34, 197, 94, 0.1); border: 1px solid rgba(34, 197, 94, 0.2); border-radius: 6px; padding: 10px; cursor: pointer; transition: all 0.2s;" onmouseover="this.style.background='rgba(34, 197, 94, 0.2)'; this.style.borderColor='rgba(34, 197, 94, 0.4)'" onmouseout="this.style.background='rgba(34, 197, 94, 0.1)'; this.style.borderColor='rgba(34, 197, 94, 0.2)'">
                       <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
-                        <span onclick="openPolyDeviceAnalytics(${JSON.stringify(d).replace(/"/g, '&quot;')})" style="font-weight: 600; color: #86EFAC; cursor: pointer;">${d.name}</span>
+                        <span style="font-weight: 600; color: #86EFAC;">${d.name}</span>
                         <div style="display: flex; align-items: center; gap: 8px;">
                           <span style="padding: 2px 8px; border-radius: 4px; font-size: 10px; background: #22C55E; color: white;">ONLINE</span>
-                          <button onclick="event.stopPropagation(); togglePolyDeviceDisabled('${d.id}', true)" class="btn btn-sm btn-secondary" style="padding: 2px 8px; font-size: 10px;" title="Disable this device">
-                            🚫
-                          </button>
+                          <span style="color: #94A3B8; font-size: 12px;">→</span>
                         </div>
                       </div>
                       <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 4px; font-size: 11px;">
@@ -5567,8 +5309,7 @@
     }
 
     function render() {
-      // Update global floors array from data
-      floors = Object.keys(uptimeKumaData).length > 0
+      const floors = Object.keys(uptimeKumaData).length > 0
         ? Object.keys(uptimeKumaData)
         : ['1st Floor', '2nd Floor', '3rd Floor', '5th Floor'];
 
@@ -5620,27 +5361,17 @@
 
       allDevices.forEach((device, idx) => {
         // Use saved position if available, otherwise use generated position
-        // In TV mode, prefer TV positions if available
         let pos;
         const isRoomMarker = device.source === 'polyLensRoom';
 
         if (isRoomMarker) {
           // Check for saved room position
           const savedRoomPos = roomPositions[device.id];
-          if (savedRoomPos && savedRoomPos.pos_x !== null && savedRoomPos.pos_y !== null) {
-            pos = { x: savedRoomPos.pos_x, y: savedRoomPos.pos_y };
-          } else {
-            pos = positions[idx];
-          }
+          pos = savedRoomPos ? { x: savedRoomPos.pos_x, y: savedRoomPos.pos_y } : positions[idx];
         } else {
           // Check for saved monitor position
           const hasCustomPos = device.pos_x !== null && device.pos_y !== null;
           pos = hasCustomPos ? { x: device.pos_x, y: device.pos_y } : positions[idx];
-        }
-
-        // Final safety check - ensure position is never null
-        if (pos.x === null || pos.y === null || pos.x === undefined || pos.y === undefined) {
-          pos = positions[idx] || { x: 10 + (idx % 5) * 20, y: 20 + Math.floor(idx / 5) * 20 };
         }
 
         const typeInfo = deviceTypes[device.type] || deviceTypes.polyLens;
@@ -5649,16 +5380,14 @@
         if (isRoomMarker) {
           // Room marker with multiple devices
           const roomDevices = device.roomDevices || [];
-          // Filter out disabled and maintenance devices for status calculation
-          const activeDevices = roomDevices.filter(d => !d.disabled && !d.maintenance);
-          const onlineCount = activeDevices.filter(d => d.connected).length;
-          const offlineCount = activeDevices.length - onlineCount;
+          const onlineCount = roomDevices.filter(d => d.connected).length;
+          const offlineCount = roomDevices.length - onlineCount;
 
           const popupBelowClass = pos.y < 30 ? 'popup-below' : '';
           deviceMarkersHTML += `
             <div class="device-marker ${popupBelowClass}" data-id="${device.id}" style="left: ${pos.x}%; top: ${pos.y}%;"
-              ${editMode ? 'draggable="true" onmousedown="startDrag(event, this)" onclick="event.stopPropagation(); event.preventDefault();"' : `onclick="event.stopPropagation(); openAnalytics('${device.id}', '${device.name.replace(/'/g, "\\'")}', 'polyLens', true)"`}>
-              ${offlineCount > 0 && activeDevices.length > 0 ? `<div class="device-ping" style="background: ${statusColors.down.pulse};"></div>` : ''}
+              ${editMode ? 'draggable="true" onmousedown="startDrag(event, this)"' : `onclick="openAnalytics('${device.id}', '${device.name.replace(/'/g, "\\'")}', 'polyLens', true)"`}>
+              ${offlineCount > 0 ? `<div class="device-ping" style="background: ${statusColors.down.pulse};"></div>` : ''}
               <div class="device-dot" style="background: ${status.bg}; border-color: ${typeInfo.color}; min-width: 28px; font-size: 9px;">
                 ${roomDevices.length}
               </div>
@@ -5699,12 +5428,11 @@
           const polyDevice = currentPolyData.find(p => p.ip === device.ip);
           const popupBelowClass = pos.y < 30 ? 'popup-below' : '';
 
-          const disabledClass = device.disabled ? 'disabled' : '';
           deviceMarkersHTML += `
-            <div class="device-marker ${popupBelowClass} ${disabledClass}" data-id="${device.id}" style="left: ${pos.x}%; top: ${pos.y}%;"
-              ${editMode ? 'draggable="true" onmousedown="startDrag(event, this)" onclick="event.stopPropagation(); event.preventDefault();"' : `onclick="event.stopPropagation(); openAnalytics('${device.id}', '${device.name.replace(/'/g, "\\'")}', '${device.type}')"`}
-              oncontextmenu="showContextMenu(event, ${JSON.stringify({id: device.id, name: device.name, hostname: device.ip || device.hostname, url: device.url, device_type: device.type, notes: device.notes, maintenance: device.maintenance, disabled: device.disabled}).replace(/"/g, '&quot;')}); return false;">
-              ${device.status === 'down' && !device.disabled ? `<div class="device-ping" style="background: ${status.pulse};"></div>` : ''}
+            <div class="device-marker ${popupBelowClass}" data-id="${device.id}" style="left: ${pos.x}%; top: ${pos.y}%;"
+              ${editMode ? 'draggable="true" onmousedown="startDrag(event, this)"' : `onclick="openAnalytics('${device.id}', '${device.name.replace(/'/g, "\\'")}', '${device.type}')"`}
+              oncontextmenu="showContextMenu(event, ${JSON.stringify({id: device.id, name: device.name, hostname: device.ip || device.hostname, url: device.url, device_type: device.type, notes: device.notes, maintenance: device.maintenance}).replace(/"/g, '&quot;')})">
+              ${device.status === 'down' ? `<div class="device-ping" style="background: ${status.pulse};"></div>` : ''}
               <div class="device-dot" style="background: ${status.bg}; border-color: ${typeInfo.color};">
                 ${typeInfo.icon.slice(0, 2)}
               </div>
@@ -5896,10 +5624,8 @@
             <div class="category-content collapsed">
               ${roomNames.map(roomName => {
                 const roomDevices = polyRooms[roomName];
-                // Filter out disabled and maintenance devices for status calculation
-                const activeRoomDevices = roomDevices.filter(d => !d.disabled && !d.maintenance);
-                const allOnline = activeRoomDevices.every(d => d.connected);
-                const anyOffline = activeRoomDevices.some(d => !d.connected);
+                const allOnline = roomDevices.every(d => d.connected);
+                const anyOffline = roomDevices.some(d => !d.connected);
                 const onlineInRoom = roomDevices.filter(d => d.connected).length;
 
                 const roomId = 'room-' + roomName.replace(/\s+/g, '-');
@@ -6033,15 +5759,7 @@
                 ` : `
                   <button class="header-btn" onclick="toggleEditMode()">✏️ Edit</button>
                 `}
-                <button class="header-btn" onclick="openCustomizeModal()" title="Customize Dashboard">
-                  🎨
-                </button>
-                <button class="header-btn" onclick="window.location.href='reports.html'" title="Uptime Reports">
-                  📊
-                </button>
-                <button class="header-btn" onclick="window.location.href='topology.html'" title="Network Topology">
-                  🔗
-                </button>
+                <button class="header-btn tv-mode" onclick="enterTVMode()">📺 TV</button>
                 <button class="header-btn" onclick="window.location.href='settings.html'" title="Settings">
                   ⚙️${isAdmin() && pendingChangesCount > 0 ? `<span class="pending-badge">${pendingChangesCount}</span>` : ''}
                 </button>
@@ -6123,24 +5841,16 @@
             <main class="map-container">
               <div class="floor-label">${activeFloor}</div>
 
-              <div class="floor-map" id="floor-map-container">
-                ${floorPlans[activeFloor]?.image_data ? `
-                  <img src="data:image/${floorPlans[activeFloor].image_type};base64,${floorPlans[activeFloor].image_data}"
-                       class="floor-plan-bg-loader"
-                       id="floor-plan-img"
-                       onload="onFloorPlanLoaded(this)"
-                       alt="" />
-                  <div class="markers-overlay" id="markers-overlay">
-                    ${renderZones(activeFloor)}
-                    ${deviceMarkersHTML}
-                  </div>
-                ` : `
+              <div class="floor-map" style="${floorPlans[activeFloor]?.image_data ? `background-image: url('data:image/${floorPlans[activeFloor].image_type};base64,${floorPlans[activeFloor].image_data}');` : ''}">
+                ${!floorPlans[activeFloor]?.image_data ? `
                   <div class="map-placeholder">
                     <div class="map-placeholder-icon">🗺️</div>
                     <div class="map-placeholder-title">No Floor Plan</div>
                     <div class="map-placeholder-subtitle">Upload a floor plan in Settings</div>
                   </div>
-                `}
+                ` : ''}
+                ${renderZones(activeFloor)}
+                ${deviceMarkersHTML}
               </div>
 
               <div class="map-controls">
@@ -6238,9 +5948,6 @@
           </footer>
         </div>
       `;
-
-      // Update markers overlay position after DOM update
-      setTimeout(updateMarkersOverlay, 50);
     }
 
     function setFloor(floor) {
@@ -6252,8 +5959,6 @@
       leftPanelCollapsed = !leftPanelCollapsed;
       localStorage.setItem('leftPanelCollapsed', leftPanelCollapsed);
       render();
-      // Update overlay after panel animation completes
-      setTimeout(updateMarkersOverlay, 350);
     }
 
     function toggleCompactMode() {
@@ -6326,174 +6031,6 @@
       }
     }
 
-    // ==================== DASHBOARD CUSTOMIZATION ====================
-    const defaultDashboardConfig = {
-      showLeftPanel: true,
-      showRightPanel: true,
-      showFooter: true,
-      showAccessPoints: true,
-      showPrinters: true,
-      showZoomRooms: true,
-      showOfflineOnly: false,
-      animateStatus: true,
-      showResponseTimes: true,
-      refreshRate: 30000
-    };
-
-    let dashboardConfig = { ...defaultDashboardConfig };
-
-    function loadDashboardConfig() {
-      const saved = localStorage.getItem('dashboardConfig');
-      if (saved) {
-        try {
-          dashboardConfig = { ...defaultDashboardConfig, ...JSON.parse(saved) };
-        } catch (e) {
-          dashboardConfig = { ...defaultDashboardConfig };
-        }
-      }
-      applyDashboardConfig();
-    }
-
-    function saveDashboardConfig() {
-      dashboardConfig = {
-        showLeftPanel: document.getElementById('show-left-panel')?.checked ?? true,
-        showRightPanel: document.getElementById('show-right-panel')?.checked ?? true,
-        showFooter: document.getElementById('show-footer')?.checked ?? true,
-        showAccessPoints: document.getElementById('show-access-points')?.checked ?? true,
-        showPrinters: document.getElementById('show-printers')?.checked ?? true,
-        showZoomRooms: document.getElementById('show-zoom-rooms')?.checked ?? true,
-        showOfflineOnly: document.getElementById('show-offline-only')?.checked ?? false,
-        animateStatus: document.getElementById('animate-status')?.checked ?? true,
-        showResponseTimes: document.getElementById('show-response-times')?.checked ?? true,
-        refreshRate: parseInt(document.getElementById('refresh-rate')?.value) || 30000
-      };
-      localStorage.setItem('dashboardConfig', JSON.stringify(dashboardConfig));
-      applyDashboardConfig();
-      render();
-    }
-
-    function applyDashboardConfig() {
-      // Apply panel visibility
-      const leftPanel = document.querySelector('.left-panel');
-      const rightPanel = document.querySelector('.right-panel');
-      const footer = document.querySelector('.footer');
-
-      if (leftPanel) leftPanel.style.display = dashboardConfig.showLeftPanel ? '' : 'none';
-      if (rightPanel) rightPanel.style.display = dashboardConfig.showRightPanel ? '' : 'none';
-      if (footer) footer.style.display = dashboardConfig.showFooter ? '' : 'none';
-
-      // Apply animation class to body
-      document.body.classList.toggle('animations-enabled', dashboardConfig.animateStatus);
-
-      // Update refresh interval if changed
-      if (window.refreshInterval) {
-        clearInterval(window.refreshInterval);
-      }
-      window.refreshInterval = setInterval(() => {
-        fetchAllData();
-      }, dashboardConfig.refreshRate);
-    }
-
-    function openCustomizeModal() {
-      const modal = document.getElementById('customize-modal');
-      modal.style.display = 'flex';
-
-      // Populate form with current values
-      document.getElementById('show-left-panel').checked = dashboardConfig.showLeftPanel;
-      document.getElementById('show-right-panel').checked = dashboardConfig.showRightPanel;
-      document.getElementById('show-footer').checked = dashboardConfig.showFooter;
-      document.getElementById('show-access-points').checked = dashboardConfig.showAccessPoints;
-      document.getElementById('show-printers').checked = dashboardConfig.showPrinters;
-      document.getElementById('show-zoom-rooms').checked = dashboardConfig.showZoomRooms;
-      document.getElementById('show-offline-only').checked = dashboardConfig.showOfflineOnly;
-      document.getElementById('animate-status').checked = dashboardConfig.animateStatus;
-      document.getElementById('show-response-times').checked = dashboardConfig.showResponseTimes;
-      document.getElementById('refresh-rate').value = dashboardConfig.refreshRate;
-    }
-
-    function closeCustomizeModal() {
-      document.getElementById('customize-modal').style.display = 'none';
-    }
-
-    function exportDashboardConfig() {
-      const config = {
-        dashboardConfig: dashboardConfig,
-        leftPanelCollapsed: leftPanelCollapsed,
-        compactMode: compactMode,
-        alertSoundsEnabled: alertSoundsEnabled,
-        activeFloor: activeFloor,
-        exportDate: new Date().toISOString(),
-        version: '2.0'
-      };
-      const blob = new Blob([JSON.stringify(config, null, 2)], { type: 'application/json' });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = `office-monitor-config-${new Date().toISOString().split('T')[0]}.json`;
-      a.click();
-      URL.revokeObjectURL(url);
-      showToast('Configuration exported!', 'success');
-    }
-
-    function importDashboardConfig(event) {
-      const file = event.target.files[0];
-      if (!file) return;
-
-      const reader = new FileReader();
-      reader.onload = (e) => {
-        try {
-          const config = JSON.parse(e.target.result);
-          if (config.dashboardConfig) {
-            dashboardConfig = { ...defaultDashboardConfig, ...config.dashboardConfig };
-            localStorage.setItem('dashboardConfig', JSON.stringify(dashboardConfig));
-          }
-          if (config.leftPanelCollapsed !== undefined) {
-            leftPanelCollapsed = config.leftPanelCollapsed;
-            localStorage.setItem('leftPanelCollapsed', leftPanelCollapsed);
-          }
-          if (config.compactMode !== undefined) {
-            compactMode = config.compactMode;
-            localStorage.setItem('compactMode', compactMode);
-          }
-          if (config.alertSoundsEnabled !== undefined) {
-            alertSoundsEnabled = config.alertSoundsEnabled;
-            localStorage.setItem('alertSoundsEnabled', alertSoundsEnabled);
-          }
-          applyDashboardConfig();
-          render();
-          closeCustomizeModal();
-          showToast('Configuration imported!', 'success');
-        } catch (err) {
-          showToast('Invalid config file', 'error');
-        }
-      };
-      reader.readAsText(file);
-      event.target.value = '';
-    }
-
-    function resetDashboardConfig() {
-      if (!confirm('Reset all dashboard settings to defaults?')) return;
-      dashboardConfig = { ...defaultDashboardConfig };
-      localStorage.setItem('dashboardConfig', JSON.stringify(dashboardConfig));
-      applyDashboardConfig();
-      openCustomizeModal(); // Refresh the modal
-      render();
-      showToast('Settings reset to defaults', 'success');
-    }
-
-    // Close modal on escape key or outside click
-    document.addEventListener('keydown', (e) => {
-      if (e.key === 'Escape') {
-        closeCustomizeModal();
-      }
-    });
-
-    document.getElementById('customize-modal')?.addEventListener('click', (e) => {
-      if (e.target.id === 'customize-modal') {
-        closeCustomizeModal();
-      }
-    });
-
     function checkForStatusChanges() {
       let newOfflineDevices = [];
 
@@ -6534,6 +6071,8 @@
     document.addEventListener('keydown', (e) => {
       // Ignore if typing in an input
       if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
+      // Ignore if in TV mode
+      if (tvModeActive) return;
 
       const floors = Object.keys(uptimeKumaData).length > 0
         ? Object.keys(uptimeKumaData)
@@ -6552,6 +6091,9 @@
           break;
         case 'c': case 'C':
           if (!e.metaKey && !e.ctrlKey) toggleCompactMode();
+          break;
+        case 't': case 'T':
+          if (!e.metaKey && !e.ctrlKey) enterTVMode();
           break;
       }
     });
@@ -6941,76 +6483,134 @@
       loadIncidents();
     }, 1000);
 
-    // ==================== UI FEATURES ====================
+    // ==================== NEW PROFESSIONAL UI FEATURES ====================
 
-    // Store floor plan dimensions for positioning calculations
-    let floorPlanDimensions = {};
+    // TV Mode state
+    let tvModeActive = false;
+    let tvModeInterval = null;
 
-    // Called when floor plan image loads (from hidden img element)
-    function onFloorPlanLoaded(img) {
-      const floor = activeFloor;
-      floorPlanDimensions[floor] = {
-        width: img.naturalWidth,
-        height: img.naturalHeight,
-        aspectRatio: img.naturalWidth / img.naturalHeight
-      };
+    function enterTVMode() {
+      tvModeActive = true;
+      document.body.classList.add('tv-mode-active');
 
-      // Set background image on container
-      const container = document.getElementById('floor-map-container');
-      if (container) {
-        container.style.backgroundImage = `url('${img.src}')`;
+      // Create TV mode overlay
+      const overlay = document.createElement('div');
+      overlay.id = 'tv-overlay';
+      overlay.className = 'tv-overlay';
+      overlay.innerHTML = `
+        <button class="tv-exit-btn" onclick="exitTVMode()" title="Exit TV Mode">✕</button>
+        <div class="tv-status-bar">
+          <div class="tv-stat">
+            <div class="tv-stat-value online" id="tv-online">0</div>
+            <div class="tv-stat-label">Online</div>
+          </div>
+          <div class="tv-stat">
+            <div class="tv-stat-value offline" id="tv-offline">0</div>
+            <div class="tv-stat-label">Offline</div>
+          </div>
+          <div class="tv-stat">
+            <div class="tv-stat-value" style="color: var(--status-warning);" id="tv-zoom">0</div>
+            <div class="tv-stat-label">Zoom</div>
+          </div>
+        </div>
+        <div class="tv-time" id="tv-time"></div>
+        <div class="tv-exit-hint">Click ✕ or anywhere to exit</div>
+      `;
+      document.body.appendChild(overlay);
+
+      // Update TV stats
+      updateTVStats();
+
+      // Auto-cycle floors every 30 seconds
+      let floorIndex = floors.indexOf(activeFloor);
+      tvModeInterval = setInterval(() => {
+        floorIndex = (floorIndex + 1) % floors.length;
+        setFloor(floors[floorIndex]);
+        updateTVStats();
+      }, 30000);
+
+      // Update time every second
+      const timeInterval = setInterval(() => {
+        const timeEl = document.getElementById('tv-time');
+        if (timeEl && tvModeActive) {
+          timeEl.textContent = new Date().toLocaleTimeString();
+        } else {
+          clearInterval(timeInterval);
+        }
+      }, 1000);
+
+      // Exit handlers
+      document.addEventListener('keydown', exitTVModeOnEsc);
+      document.addEventListener('fullscreenchange', onFullscreenChange);
+      overlay.addEventListener('click', exitTVMode);
+
+      // Request fullscreen
+      if (document.documentElement.requestFullscreen) {
+        document.documentElement.requestFullscreen().catch(() => {});
       }
-
-      // Position the markers overlay
-      updateMarkersOverlay();
     }
 
-    // Update markers overlay to match actual floor plan image bounds
-    function updateMarkersOverlay() {
-      const container = document.getElementById('floor-map-container');
-      const overlay = document.getElementById('markers-overlay');
-      const dims = floorPlanDimensions[activeFloor];
-
-      if (!container || !overlay || !dims) return;
-
-      const containerRect = container.getBoundingClientRect();
-      const containerWidth = containerRect.width;
-      const containerHeight = containerRect.height;
-      const containerAspect = containerWidth / containerHeight;
-      const imageAspect = dims.aspectRatio;
-
-      let imageWidth, imageHeight, offsetX, offsetY;
-
-      if (containerAspect > imageAspect) {
-        // Container is wider - image is limited by height
-        imageHeight = containerHeight;
-        imageWidth = imageHeight * imageAspect;
-        offsetX = (containerWidth - imageWidth) / 2;
-        offsetY = 0;
-      } else {
-        // Container is taller - image is limited by width
-        imageWidth = containerWidth;
-        imageHeight = imageWidth / imageAspect;
-        offsetX = 0;
-        offsetY = (containerHeight - imageHeight) / 2;
-      }
-
-      // Position the overlay to exactly match the image bounds
-      overlay.style.left = `${offsetX}px`;
-      overlay.style.top = `${offsetY}px`;
-      overlay.style.width = `${imageWidth}px`;
-      overlay.style.height = `${imageHeight}px`;
+    function exitTVModeOnEsc(e) {
+      if (e.key === 'Escape') exitTVMode();
     }
 
-    // Update overlay on window resize
-    let resizeTimeout;
-    window.addEventListener('resize', () => {
-      clearTimeout(resizeTimeout);
-      resizeTimeout = setTimeout(updateMarkersOverlay, 50);
-    });
+    function onFullscreenChange() {
+      // If we were in TV mode and fullscreen was exited (user pressed ESC), exit TV mode
+      if (tvModeActive && !document.fullscreenElement) {
+        exitTVMode();
+      }
+    }
 
-    // Also update after render completes
-    setTimeout(updateMarkersOverlay, 100);
+    function exitTVMode() {
+      if (!tvModeActive) return; // Prevent double execution
+      tvModeActive = false;
+      document.body.classList.remove('tv-mode-active');
+
+      const overlay = document.getElementById('tv-overlay');
+      if (overlay) overlay.remove();
+
+      if (tvModeInterval) {
+        clearInterval(tvModeInterval);
+        tvModeInterval = null;
+      }
+
+      document.removeEventListener('keydown', exitTVModeOnEsc);
+      document.removeEventListener('fullscreenchange', onFullscreenChange);
+
+      if (document.fullscreenElement) {
+        document.exitFullscreen().catch(() => {});
+      }
+
+      render();
+    }
+
+    function updateTVStats() {
+      const floors = Object.keys(uptimeKumaData).length > 0
+        ? Object.keys(uptimeKumaData)
+        : ['1st Floor', '2nd Floor', '3rd Floor', '5th Floor'];
+
+      let online = 0, offline = 0, zoom = 0;
+      floors.forEach(floor => {
+        const fd = uptimeKumaData[floor] || {};
+        const pf = polyLensData[floor] || [];
+        Object.values(fd).forEach(cat => {
+          if (Array.isArray(cat)) {
+            cat.forEach(d => {
+              if (d.status === 'up') online++;
+              else if (d.status === 'down') offline++;
+            });
+          }
+        });
+        zoom += pf.filter(d => d.connected).length;
+      });
+
+      const onlineEl = document.getElementById('tv-online');
+      const offlineEl = document.getElementById('tv-offline');
+      const zoomEl = document.getElementById('tv-zoom');
+      if (onlineEl) onlineEl.textContent = online;
+      if (offlineEl) offlineEl.textContent = offline;
+      if (zoomEl) zoomEl.textContent = zoom;
+    }
 
     // Zoom/Pan for floor map
     let mapZoom = 1;
@@ -7191,7 +6791,6 @@
         return;
       }
 
-      loadDashboardConfig(); // Load user's dashboard customization
       await fetchAllData();
       await fetchFloorPlans();
       await fetchCustomDeviceTypes();
@@ -7262,184 +6861,6 @@
   <!-- Modal Container -->
   <div id="modal-container"></div>
 
-  <!-- Dashboard Customize Modal -->
-  <div id="customize-modal" class="customize-modal" style="display: none;">
-    <div class="customize-modal-content">
-      <div class="customize-modal-header">
-        <h2>Customize Dashboard</h2>
-        <button class="customize-close" onclick="closeCustomizeModal()">&times;</button>
-      </div>
-      <div class="customize-modal-body">
-        <div class="customize-section">
-          <h3>Visible Panels</h3>
-          <label class="customize-toggle">
-            <input type="checkbox" id="show-left-panel" checked onchange="saveDashboardConfig()">
-            <span>Left Panel (Quick Stats)</span>
-          </label>
-          <label class="customize-toggle">
-            <input type="checkbox" id="show-right-panel" checked onchange="saveDashboardConfig()">
-            <span>Right Panel (Device List)</span>
-          </label>
-          <label class="customize-toggle">
-            <input type="checkbox" id="show-footer" checked onchange="saveDashboardConfig()">
-            <span>Footer (Status Bar)</span>
-          </label>
-        </div>
-        <div class="customize-section">
-          <h3>Device Categories</h3>
-          <label class="customize-toggle">
-            <input type="checkbox" id="show-access-points" checked onchange="saveDashboardConfig()">
-            <span>Access Points</span>
-          </label>
-          <label class="customize-toggle">
-            <input type="checkbox" id="show-printers" checked onchange="saveDashboardConfig()">
-            <span>Printers</span>
-          </label>
-          <label class="customize-toggle">
-            <input type="checkbox" id="show-zoom-rooms" checked onchange="saveDashboardConfig()">
-            <span>Zoom Rooms</span>
-          </label>
-        </div>
-        <div class="customize-section">
-          <h3>Display Options</h3>
-          <label class="customize-toggle">
-            <input type="checkbox" id="show-offline-only" onchange="saveDashboardConfig()">
-            <span>Show Offline Devices Only</span>
-          </label>
-          <label class="customize-toggle">
-            <input type="checkbox" id="animate-status" checked onchange="saveDashboardConfig()">
-            <span>Animated Status Indicators</span>
-          </label>
-          <label class="customize-toggle">
-            <input type="checkbox" id="show-response-times" checked onchange="saveDashboardConfig()">
-            <span>Show Response Times</span>
-          </label>
-        </div>
-        <div class="customize-section">
-          <h3>Refresh Rate</h3>
-          <select id="refresh-rate" class="customize-select" onchange="saveDashboardConfig()">
-            <option value="10000">10 seconds</option>
-            <option value="30000" selected>30 seconds</option>
-            <option value="60000">1 minute</option>
-            <option value="300000">5 minutes</option>
-          </select>
-        </div>
-        <div class="customize-section">
-          <h3>Backup & Restore</h3>
-          <div class="customize-buttons">
-            <button class="btn btn-secondary" onclick="exportDashboardConfig()">📥 Export Config</button>
-            <button class="btn btn-secondary" onclick="document.getElementById('import-config-file').click()">📤 Import Config</button>
-            <input type="file" id="import-config-file" accept=".json" style="display:none" onchange="importDashboardConfig(event)">
-          </div>
-          <button class="btn btn-outline" onclick="resetDashboardConfig()" style="margin-top: 8px; width: 100%;">🔄 Reset to Defaults</button>
-        </div>
-      </div>
-    </div>
-  </div>
-
-  <style>
-    /* Customize Modal Styles */
-    .customize-modal {
-      position: fixed;
-      inset: 0;
-      background: rgba(0, 0, 0, 0.7);
-      z-index: 10000;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      animation: fadeIn 0.2s ease;
-    }
-    .customize-modal-content {
-      background: var(--bg-surface);
-      border-radius: var(--radius-lg);
-      border: 1px solid var(--border-default);
-      width: 90%;
-      max-width: 420px;
-      max-height: 85vh;
-      overflow: hidden;
-      animation: scaleIn 0.2s ease;
-    }
-    .customize-modal-header {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      padding: var(--space-md);
-      border-bottom: 1px solid var(--border-subtle);
-    }
-    .customize-modal-header h2 {
-      font-size: var(--text-large);
-      font-weight: 600;
-      margin: 0;
-    }
-    .customize-close {
-      background: none;
-      border: none;
-      color: var(--text-muted);
-      font-size: 24px;
-      cursor: pointer;
-      padding: 0;
-      line-height: 1;
-    }
-    .customize-close:hover { color: var(--text-primary); }
-    .customize-modal-body {
-      padding: var(--space-md);
-      overflow-y: auto;
-      max-height: calc(85vh - 60px);
-    }
-    .customize-section {
-      margin-bottom: var(--space-lg);
-    }
-    .customize-section h3 {
-      font-size: var(--text-small);
-      font-weight: 600;
-      color: var(--text-muted);
-      text-transform: uppercase;
-      letter-spacing: 0.05em;
-      margin-bottom: var(--space-sm);
-    }
-    .customize-toggle {
-      display: flex;
-      align-items: center;
-      gap: var(--space-sm);
-      padding: var(--space-xs) 0;
-      cursor: pointer;
-      color: var(--text-secondary);
-    }
-    .customize-toggle:hover { color: var(--text-primary); }
-    .customize-toggle input[type="checkbox"] {
-      width: 18px;
-      height: 18px;
-      accent-color: var(--accent-blue);
-    }
-    .customize-select {
-      width: 100%;
-      padding: var(--space-sm);
-      background: var(--bg-elevated);
-      border: 1px solid var(--border-default);
-      border-radius: var(--radius-sm);
-      color: var(--text-primary);
-      font-size: var(--text-body);
-    }
-    .customize-buttons {
-      display: flex;
-      gap: var(--space-sm);
-    }
-    .customize-buttons .btn { flex: 1; }
-    .btn-outline {
-      background: transparent;
-      border: 1px solid var(--border-default);
-      color: var(--text-secondary);
-      padding: var(--space-sm);
-      border-radius: var(--radius-sm);
-      cursor: pointer;
-      font-size: var(--text-small);
-    }
-    .btn-outline:hover {
-      background: var(--bg-elevated);
-      color: var(--text-primary);
-    }
-  </style>
-
   <script>
     // Update admin tab styling
     function updateAdminTabs() {
@@ -7463,15 +6884,12 @@
     let dragStartY = 0;
     let elementStartX = 0;
     let elementStartY = 0;
-    let dragHasMovedBeyondThreshold = false;
-    const DRAG_THRESHOLD_PX = 5; // Minimum pixels to move before considering it a drag
 
     function startDrag(e, element) {
       if (!editMode) return;
       e.preventDefault();
 
       isDragging = true;
-      dragHasMovedBeyondThreshold = false;
       currentDragElement = element;
       dragStartX = e.clientX;
       dragStartY = e.clientY;
@@ -7487,14 +6905,6 @@
 
     function onDrag(e) {
       if (!isDragging || !currentDragElement) return;
-
-      // Check if we've moved beyond the threshold
-      const distanceMoved = Math.sqrt(
-        Math.pow(e.clientX - dragStartX, 2) + Math.pow(e.clientY - dragStartY, 2)
-      );
-      if (distanceMoved > DRAG_THRESHOLD_PX) {
-        dragHasMovedBeyondThreshold = true;
-      }
 
       const container = document.querySelector('.floor-map');
       const rect = container.getBoundingClientRect();
@@ -7526,21 +6936,16 @@
       currentDragElement.style.zIndex = '';
       currentDragElement.style.cursor = '';
 
-      // Only store position if we actually dragged (moved beyond threshold)
-      if (deviceId && dragHasMovedBeyondThreshold) {
+      // Store position in pending changes (don't save to database yet)
+      if (deviceId) {
         const isRoom = deviceId.startsWith('room-');
         pendingPositions[deviceId] = { x: newX, y: newY, isRoom, floor: activeFloor };
         console.log(`Position queued for ${isRoom ? 'room' : 'device'} ${deviceId}: ${newX}%, ${newY}%`);
         // Update the save button count
         updateEditModeButtons();
-      } else if (!dragHasMovedBeyondThreshold) {
-        // Reset position if it was just a click (not a real drag)
-        currentDragElement.style.left = `${elementStartX}%`;
-        currentDragElement.style.top = `${elementStartY}%`;
       }
 
       isDragging = false;
-      dragHasMovedBeyondThreshold = false;
       currentDragElement = null;
     }
 
@@ -7565,16 +6970,12 @@
     function toggleRoom(event, header, roomId) {
       event.stopPropagation();
 
-      // If clicking on the room name area, open analytics
+      // If clicking on the room name area, highlight on map
       const clickedOnName = event.target.classList.contains('room-name') ||
                            event.target.classList.contains('room-status');
 
       if (clickedOnName) {
-        // Get the room name from the header
-        const roomNameEl = header.querySelector('.room-name');
-        const roomName = roomNameEl ? roomNameEl.textContent : roomId.replace('room-', '').replace(/-/g, ' ');
         highlightDevice(roomId);
-        openAnalytics(roomId, roomName, 'polyLens', true);
       } else {
         // Toggle collapse
         header.classList.toggle('collapsed');
@@ -8373,9 +7774,6 @@
         <div class="context-menu-item" onclick="openEditModal(${JSON.stringify(device).replace(/"/g, '&quot;')}); hideContextMenu();">
           ✏️ Edit Device
         </div>
-        <div class="context-menu-item" onclick="toggleDisabled(${device.id}, ${device.disabled ? 'false' : 'true'}); hideContextMenu();">
-          ${device.disabled ? '✅ Enable Device' : '🚫 Disable (Non-serviceable)'}
-        </div>
         <div class="context-menu-item danger" onclick="deleteMonitor(${device.id}); hideContextMenu();">
           🗑️ Delete Device
         </div>
@@ -8509,73 +7907,6 @@
         }
       } catch (e) {
         showAlert('Failed to toggle maintenance', 'error');
-      }
-    }
-
-    async function toggleDisabled(id, disabled) {
-      try {
-        const response = await authFetch(`${API_URL}/api/monitors/${id}/disable`, {
-          method: 'PATCH',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ disabled })
-        });
-
-        if (response.ok) {
-          await fetchAllMonitors();
-          await fetchAllData();
-          render();
-          showAlert(disabled ? 'Device disabled (non-serviceable)' : 'Device enabled', 'success');
-        }
-      } catch (e) {
-        showAlert('Failed to toggle device status', 'error');
-      }
-    }
-
-    // Wrapper functions for analytics panel buttons
-    async function toggleMaintenanceFromAnalytics(id) {
-      await toggleMaintenance(id);
-      // Refresh analytics panel
-      if (analyticsDevice && analyticsDevice.id === id) {
-        analyticsData = await fetchAnalyticsData(id, analyticsDevice.isRoom, analyticsDevice.name, analyticsDevice.isPolyDevice, analyticsDevice.polyDeviceData);
-        renderAnalyticsSidebar(false);
-      }
-    }
-
-    async function toggleDisabledFromAnalytics(id, disabled) {
-      await toggleDisabled(id, disabled);
-      // Refresh analytics panel
-      if (analyticsDevice && analyticsDevice.id === id) {
-        analyticsData = await fetchAnalyticsData(id, analyticsDevice.isRoom, analyticsDevice.name, analyticsDevice.isPolyDevice, analyticsDevice.polyDeviceData);
-        renderAnalyticsSidebar(false);
-      }
-    }
-
-    // Toggle disabled state for a Poly device
-    async function togglePolyDeviceDisabled(deviceId, disabled) {
-      try {
-        const response = await fetch(`${API_URL}/api/poly-devices/${deviceId}/disable`, {
-          method: 'PATCH',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ disabled })
-        });
-        const data = await response.json();
-        if (data.success) {
-          // Update local poly data
-          Object.values(polyLensData).forEach(floorDevices => {
-            const device = floorDevices.find(d => d.id === deviceId);
-            if (device) {
-              device.disabled = data.disabled;
-            }
-          });
-          // Refresh the room analytics if viewing a room
-          if (analyticsDevice && analyticsDevice.isRoom) {
-            analyticsData = await fetchAnalyticsData(analyticsDevice.id, true, analyticsDevice.name, false, null);
-            renderAnalyticsSidebar(false);
-          }
-          render();
-        }
-      } catch (e) {
-        console.error('Error toggling poly device disabled state:', e);
       }
     }
 

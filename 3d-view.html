@@ -1,0 +1,969 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>3D Floor View - Office Monitor</title>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    :root {
+      --bg-base: #0A0F1A;
+      --bg-surface: #111827;
+      --bg-elevated: #1F2937;
+      --text-primary: #F9FAFB;
+      --text-secondary: #9CA3AF;
+      --text-muted: #6B7280;
+      --accent-blue: #3B82F6;
+      --status-online: #10B981;
+      --status-offline: #EF4444;
+      --status-warning: #F59E0B;
+      --border-subtle: rgba(255, 255, 255, 0.06);
+    }
+
+    body {
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+      background: var(--bg-base);
+      color: var(--text-primary);
+      overflow: hidden;
+    }
+
+    #canvas-container {
+      width: 100vw;
+      height: 100vh;
+      position: relative;
+    }
+
+    canvas { display: block; }
+
+    /* Header */
+    .header {
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      height: 60px;
+      background: rgba(17, 24, 39, 0.95);
+      backdrop-filter: blur(10px);
+      border-bottom: 1px solid var(--border-subtle);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 20px;
+      z-index: 100;
+    }
+
+    .header-left {
+      display: flex;
+      align-items: center;
+      gap: 20px;
+    }
+
+    .logo {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 18px;
+      font-weight: 600;
+    }
+
+    .logo-icon { font-size: 24px; }
+
+    .back-btn {
+      padding: 8px 16px;
+      background: var(--bg-elevated);
+      border: 1px solid var(--border-subtle);
+      color: var(--text-secondary);
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: 14px;
+      transition: all 0.2s;
+    }
+
+    .back-btn:hover {
+      background: var(--accent-blue);
+      color: white;
+      border-color: var(--accent-blue);
+    }
+
+    .status-bar {
+      display: flex;
+      gap: 20px;
+    }
+
+    .status-item {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 14px;
+    }
+
+    .status-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+    }
+
+    .status-dot.online { background: var(--status-online); }
+    .status-dot.offline { background: var(--status-offline); }
+
+    /* Controls Panel */
+    .controls-panel {
+      position: fixed;
+      top: 80px;
+      left: 20px;
+      background: rgba(17, 24, 39, 0.95);
+      backdrop-filter: blur(10px);
+      border: 1px solid var(--border-subtle);
+      border-radius: 12px;
+      padding: 16px;
+      width: 240px;
+      z-index: 100;
+    }
+
+    .controls-title {
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--text-muted);
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      margin-bottom: 12px;
+    }
+
+    .control-group {
+      margin-bottom: 16px;
+    }
+
+    .control-label {
+      font-size: 13px;
+      color: var(--text-secondary);
+      margin-bottom: 6px;
+      display: block;
+    }
+
+    .control-slider {
+      width: 100%;
+      height: 4px;
+      border-radius: 2px;
+      background: var(--bg-elevated);
+      -webkit-appearance: none;
+      cursor: pointer;
+    }
+
+    .control-slider::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      width: 14px;
+      height: 14px;
+      border-radius: 50%;
+      background: var(--accent-blue);
+      cursor: pointer;
+    }
+
+    .control-btn {
+      width: 100%;
+      padding: 10px;
+      background: var(--bg-elevated);
+      border: 1px solid var(--border-subtle);
+      color: var(--text-primary);
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: 13px;
+      margin-bottom: 8px;
+      transition: all 0.2s;
+    }
+
+    .control-btn:hover {
+      background: var(--accent-blue);
+      border-color: var(--accent-blue);
+    }
+
+    .control-btn.active {
+      background: var(--accent-blue);
+      border-color: var(--accent-blue);
+    }
+
+    .floor-buttons {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+    }
+
+    .floor-btn {
+      flex: 1;
+      min-width: 60px;
+      padding: 8px;
+      background: var(--bg-elevated);
+      border: 1px solid var(--border-subtle);
+      color: var(--text-secondary);
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: 12px;
+      text-align: center;
+      transition: all 0.2s;
+    }
+
+    .floor-btn:hover, .floor-btn.active {
+      background: var(--accent-blue);
+      border-color: var(--accent-blue);
+      color: white;
+    }
+
+    /* Device Info Panel */
+    .device-panel {
+      position: fixed;
+      top: 80px;
+      right: 20px;
+      background: rgba(17, 24, 39, 0.95);
+      backdrop-filter: blur(10px);
+      border: 1px solid var(--border-subtle);
+      border-radius: 12px;
+      padding: 16px;
+      width: 280px;
+      z-index: 100;
+      display: none;
+    }
+
+    .device-panel.visible { display: block; }
+
+    .device-panel-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 12px;
+    }
+
+    .device-panel-title {
+      font-size: 16px;
+      font-weight: 600;
+    }
+
+    .device-panel-close {
+      background: none;
+      border: none;
+      color: var(--text-muted);
+      cursor: pointer;
+      font-size: 20px;
+    }
+
+    .device-panel-status {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 4px 10px;
+      border-radius: 20px;
+      font-size: 12px;
+      font-weight: 500;
+      margin-bottom: 12px;
+    }
+
+    .device-panel-status.online {
+      background: rgba(16, 185, 129, 0.15);
+      color: var(--status-online);
+    }
+
+    .device-panel-status.offline {
+      background: rgba(239, 68, 68, 0.15);
+      color: var(--status-offline);
+    }
+
+    .device-info-row {
+      display: flex;
+      justify-content: space-between;
+      padding: 8px 0;
+      border-bottom: 1px solid var(--border-subtle);
+      font-size: 13px;
+    }
+
+    .device-info-label { color: var(--text-muted); }
+    .device-info-value { color: var(--text-primary); }
+
+    /* Legend */
+    .legend {
+      position: fixed;
+      bottom: 20px;
+      left: 20px;
+      background: rgba(17, 24, 39, 0.95);
+      backdrop-filter: blur(10px);
+      border: 1px solid var(--border-subtle);
+      border-radius: 12px;
+      padding: 12px 16px;
+      z-index: 100;
+    }
+
+    .legend-title {
+      font-size: 11px;
+      font-weight: 600;
+      color: var(--text-muted);
+      text-transform: uppercase;
+      margin-bottom: 8px;
+    }
+
+    .legend-items {
+      display: flex;
+      gap: 16px;
+    }
+
+    .legend-item {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 12px;
+      color: var(--text-secondary);
+    }
+
+    .legend-color {
+      width: 12px;
+      height: 12px;
+      border-radius: 3px;
+    }
+
+    .legend-color.ap { background: #3B82F6; }
+    .legend-color.printer { background: #8B5CF6; }
+    .legend-color.zoom { background: #10B981; }
+    .legend-color.offline { background: #EF4444; }
+
+    /* Loading */
+    .loading {
+      position: fixed;
+      inset: 0;
+      background: var(--bg-base);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-direction: column;
+      gap: 20px;
+      z-index: 1000;
+    }
+
+    .loading-spinner {
+      width: 50px;
+      height: 50px;
+      border: 3px solid var(--bg-elevated);
+      border-top-color: var(--accent-blue);
+      border-radius: 50%;
+      animation: spin 1s linear infinite;
+    }
+
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+
+    .loading-text {
+      color: var(--text-secondary);
+      font-size: 14px;
+    }
+
+    /* Instructions */
+    .instructions {
+      position: fixed;
+      bottom: 20px;
+      right: 20px;
+      background: rgba(17, 24, 39, 0.95);
+      backdrop-filter: blur(10px);
+      border: 1px solid var(--border-subtle);
+      border-radius: 12px;
+      padding: 12px 16px;
+      z-index: 100;
+      font-size: 12px;
+      color: var(--text-muted);
+    }
+
+    .instructions kbd {
+      background: var(--bg-elevated);
+      padding: 2px 6px;
+      border-radius: 4px;
+      font-family: monospace;
+    }
+  </style>
+</head>
+<body>
+  <div class="loading" id="loading">
+    <div class="loading-spinner"></div>
+    <div class="loading-text">Loading 3D View...</div>
+  </div>
+
+  <div class="header">
+    <div class="header-left">
+      <div class="logo">
+        <span class="logo-icon">🏢</span>
+        <span>3D Floor View</span>
+      </div>
+      <button class="back-btn" onclick="window.location.href='dashboard.html'">← Back to Dashboard</button>
+    </div>
+    <div class="status-bar" id="status-bar">
+      <div class="status-item">
+        <span class="status-dot online"></span>
+        <span id="online-count">0</span> Online
+      </div>
+      <div class="status-item">
+        <span class="status-dot offline"></span>
+        <span id="offline-count">0</span> Offline
+      </div>
+    </div>
+  </div>
+
+  <div class="controls-panel">
+    <div class="controls-title">View Controls</div>
+
+    <div class="control-group">
+      <label class="control-label">Floor Spacing</label>
+      <input type="range" class="control-slider" id="floor-spacing" min="2" max="10" value="5" oninput="updateFloorSpacing(this.value)">
+    </div>
+
+    <div class="control-group">
+      <label class="control-label">Device Size</label>
+      <input type="range" class="control-slider" id="device-size" min="0.1" max="0.5" step="0.05" value="0.2" oninput="updateDeviceSize(this.value)">
+    </div>
+
+    <div class="control-group">
+      <button class="control-btn" onclick="toggleAutoRotate()" id="auto-rotate-btn">Auto Rotate: Off</button>
+      <button class="control-btn" onclick="resetCamera()">Reset Camera</button>
+      <button class="control-btn" onclick="toggleWireframe()" id="wireframe-btn">Wireframe: Off</button>
+    </div>
+
+    <div class="controls-title" style="margin-top: 16px;">Floors</div>
+    <div class="floor-buttons" id="floor-buttons"></div>
+
+    <div class="control-group" style="margin-top: 16px;">
+      <button class="control-btn" onclick="showAllFloors()">Show All Floors</button>
+    </div>
+  </div>
+
+  <div class="device-panel" id="device-panel">
+    <div class="device-panel-header">
+      <div class="device-panel-title" id="device-name">Device Name</div>
+      <button class="device-panel-close" onclick="closeDevicePanel()">&times;</button>
+    </div>
+    <div class="device-panel-status online" id="device-status">
+      <span class="status-dot online"></span> Online
+    </div>
+    <div id="device-details"></div>
+  </div>
+
+  <div class="legend">
+    <div class="legend-title">Device Types</div>
+    <div class="legend-items">
+      <div class="legend-item"><div class="legend-color ap"></div> Access Point</div>
+      <div class="legend-item"><div class="legend-color printer"></div> Printer</div>
+      <div class="legend-item"><div class="legend-color zoom"></div> Zoom Room</div>
+      <div class="legend-item"><div class="legend-color offline"></div> Offline</div>
+    </div>
+  </div>
+
+  <div class="instructions">
+    <kbd>Drag</kbd> Rotate &nbsp; <kbd>Scroll</kbd> Zoom &nbsp; <kbd>Right-drag</kbd> Pan &nbsp; <kbd>Click</kbd> Select device
+  </div>
+
+  <div id="canvas-container"></div>
+
+  <script>
+    // Configuration
+    const API_URL = window.location.origin;
+    const authToken = localStorage.getItem('authToken');
+
+    // Three.js variables
+    let scene, camera, renderer, controls;
+    let floors = [];
+    let deviceMeshes = [];
+    let selectedDevice = null;
+    let raycaster, mouse;
+    let floorSpacing = 5;
+    let deviceSize = 0.2;
+    let autoRotate = false;
+    let wireframeMode = false;
+
+    // Data
+    let monitorsData = {};
+    let polyLensData = {};
+    let floorNames = [];
+    let visibleFloors = new Set();
+
+    // Colors
+    const COLORS = {
+      floor: 0x1F2937,
+      floorEdge: 0x374151,
+      accessPoint: 0x3B82F6,
+      printer: 0x8B5CF6,
+      polyLens: 0x10B981,
+      offline: 0xEF4444,
+      selected: 0xF59E0B
+    };
+
+    // Initialize
+    async function init() {
+      await fetchData();
+      setupScene();
+      createFloors();
+      createDevices();
+      updateStats();
+      animate();
+      document.getElementById('loading').style.display = 'none';
+    }
+
+    // Fetch data from API
+    async function fetchData() {
+      try {
+        const headers = { 'Authorization': `Bearer ${authToken}` };
+
+        const [monitorsRes, polyRes] = await Promise.all([
+          fetch(`${API_URL}/api/monitors`, { headers }),
+          fetch(`${API_URL}/api/poly-lens/devices`, { headers })
+        ]);
+
+        const monitorsJson = await monitorsRes.json();
+        const polyJson = await polyRes.json();
+
+        // Group monitors by floor
+        const monitors = monitorsJson.monitors || [];
+        monitors.forEach(m => {
+          const floor = m.floor || 'Unknown';
+          if (!monitorsData[floor]) monitorsData[floor] = [];
+          monitorsData[floor].push(m);
+        });
+
+        // Group poly devices by floor
+        const polyDevices = polyJson.devices || [];
+        polyDevices.forEach(p => {
+          const floor = p.floor || 'Unknown';
+          if (!polyLensData[floor]) polyLensData[floor] = [];
+          polyLensData[floor].push(p);
+        });
+
+        // Get all floor names
+        floorNames = [...new Set([...Object.keys(monitorsData), ...Object.keys(polyLensData)])];
+        floorNames.sort();
+
+        // All floors visible by default
+        floorNames.forEach(f => visibleFloors.add(f));
+
+        // Create floor buttons
+        const container = document.getElementById('floor-buttons');
+        container.innerHTML = floorNames.map(f =>
+          `<button class="floor-btn active" onclick="toggleFloor('${f}')" id="floor-btn-${f.replace(/\s/g, '-')}">${f}</button>`
+        ).join('');
+
+      } catch (e) {
+        console.error('Failed to fetch data:', e);
+      }
+    }
+
+    // Setup Three.js scene
+    function setupScene() {
+      const container = document.getElementById('canvas-container');
+
+      // Scene
+      scene = new THREE.Scene();
+      scene.background = new THREE.Color(0x0A0F1A);
+      scene.fog = new THREE.Fog(0x0A0F1A, 20, 80);
+
+      // Camera
+      camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 1000);
+      camera.position.set(15, 15, 15);
+
+      // Renderer
+      renderer = new THREE.WebGLRenderer({ antialias: true });
+      renderer.setSize(window.innerWidth, window.innerHeight);
+      renderer.setPixelRatio(window.devicePixelRatio);
+      renderer.shadowMap.enabled = true;
+      renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+      container.appendChild(renderer.domElement);
+
+      // Controls
+      controls = new THREE.OrbitControls(camera, renderer.domElement);
+      controls.enableDamping = true;
+      controls.dampingFactor = 0.05;
+      controls.maxDistance = 50;
+      controls.minDistance = 5;
+
+      // Lights
+      const ambientLight = new THREE.AmbientLight(0xffffff, 0.4);
+      scene.add(ambientLight);
+
+      const directionalLight = new THREE.DirectionalLight(0xffffff, 0.8);
+      directionalLight.position.set(10, 20, 10);
+      directionalLight.castShadow = true;
+      directionalLight.shadow.mapSize.width = 2048;
+      directionalLight.shadow.mapSize.height = 2048;
+      scene.add(directionalLight);
+
+      const pointLight = new THREE.PointLight(0x3B82F6, 0.5, 50);
+      pointLight.position.set(0, 10, 0);
+      scene.add(pointLight);
+
+      // Grid helper
+      const gridHelper = new THREE.GridHelper(30, 30, 0x374151, 0x1F2937);
+      gridHelper.position.y = -0.5;
+      scene.add(gridHelper);
+
+      // Raycaster for mouse interaction
+      raycaster = new THREE.Raycaster();
+      mouse = new THREE.Vector2();
+
+      // Event listeners
+      window.addEventListener('resize', onWindowResize);
+      renderer.domElement.addEventListener('click', onMouseClick);
+      renderer.domElement.addEventListener('mousemove', onMouseMove);
+    }
+
+    // Create floor planes
+    function createFloors() {
+      floorNames.forEach((floorName, index) => {
+        const y = index * floorSpacing;
+
+        // Floor plane
+        const geometry = new THREE.BoxGeometry(12, 0.2, 8);
+        const material = new THREE.MeshPhongMaterial({
+          color: COLORS.floor,
+          transparent: true,
+          opacity: 0.9
+        });
+        const floor = new THREE.Mesh(geometry, material);
+        floor.position.y = y;
+        floor.receiveShadow = true;
+        floor.userData = { type: 'floor', name: floorName, index };
+        scene.add(floor);
+        floors.push(floor);
+
+        // Floor edges
+        const edges = new THREE.EdgesGeometry(geometry);
+        const lineMaterial = new THREE.LineBasicMaterial({ color: COLORS.floorEdge });
+        const wireframe = new THREE.LineSegments(edges, lineMaterial);
+        wireframe.position.y = y;
+        floor.userData.wireframe = wireframe;
+        scene.add(wireframe);
+
+        // Floor label
+        createTextLabel(floorName, new THREE.Vector3(-7, y + 0.5, 0));
+      });
+    }
+
+    // Create text label (using sprite)
+    function createTextLabel(text, position) {
+      const canvas = document.createElement('canvas');
+      const ctx = canvas.getContext('2d');
+      canvas.width = 256;
+      canvas.height = 64;
+
+      ctx.fillStyle = '#1F2937';
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+      ctx.fillStyle = '#F9FAFB';
+      ctx.font = 'bold 28px Inter, Arial';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(text, canvas.width / 2, canvas.height / 2);
+
+      const texture = new THREE.CanvasTexture(canvas);
+      const material = new THREE.SpriteMaterial({ map: texture });
+      const sprite = new THREE.Sprite(material);
+      sprite.position.copy(position);
+      sprite.scale.set(4, 1, 1);
+      scene.add(sprite);
+    }
+
+    // Create device markers
+    function createDevices() {
+      deviceMeshes.forEach(m => scene.remove(m));
+      deviceMeshes = [];
+
+      floorNames.forEach((floorName, floorIndex) => {
+        const y = floorIndex * floorSpacing + 0.3;
+        const monitors = monitorsData[floorName] || [];
+        const polyDevices = polyLensData[floorName] || [];
+
+        // Position devices in a grid
+        let deviceIndex = 0;
+
+        // Monitors (Access Points, Printers)
+        monitors.forEach(device => {
+          const pos = getDevicePosition(device, deviceIndex, floorIndex);
+          const isOffline = device.status !== 'up';
+          const color = isOffline ? COLORS.offline :
+                       device.device_type === 'printers' ? COLORS.printer : COLORS.accessPoint;
+
+          const mesh = createDeviceMesh(color, pos, device, floorName);
+          deviceMeshes.push(mesh);
+          deviceIndex++;
+        });
+
+        // Poly Lens devices
+        polyDevices.forEach(device => {
+          const pos = getDevicePosition(device, deviceIndex, floorIndex);
+          const isOffline = !device.connected;
+          const color = isOffline ? COLORS.offline : COLORS.polyLens;
+
+          const mesh = createDeviceMesh(color, pos, { ...device, isPoly: true }, floorName);
+          deviceMeshes.push(mesh);
+          deviceIndex++;
+        });
+      });
+    }
+
+    function getDevicePosition(device, index, floorIndex) {
+      // Use saved position or generate grid position
+      let x, z;
+      if (device.pos_x !== null && device.pos_y !== null) {
+        x = (device.pos_x / 100) * 10 - 5;
+        z = (device.pos_y / 100) * 6 - 3;
+      } else {
+        const col = index % 6;
+        const row = Math.floor(index / 6);
+        x = col * 1.8 - 4.5;
+        z = row * 1.5 - 2.5;
+      }
+      const y = floorIndex * floorSpacing + 0.3;
+      return new THREE.Vector3(x, y, z);
+    }
+
+    function createDeviceMesh(color, position, deviceData, floorName) {
+      const geometry = new THREE.SphereGeometry(deviceSize, 16, 16);
+      const material = new THREE.MeshPhongMaterial({
+        color: color,
+        emissive: color,
+        emissiveIntensity: 0.3,
+        shininess: 100
+      });
+      const mesh = new THREE.Mesh(geometry, material);
+      mesh.position.copy(position);
+      mesh.castShadow = true;
+      mesh.userData = {
+        type: 'device',
+        data: deviceData,
+        floor: floorName,
+        originalColor: color
+      };
+      scene.add(mesh);
+
+      // Add glow effect for online devices
+      if (color !== COLORS.offline) {
+        const glowGeometry = new THREE.SphereGeometry(deviceSize * 1.5, 16, 16);
+        const glowMaterial = new THREE.MeshBasicMaterial({
+          color: color,
+          transparent: true,
+          opacity: 0.2
+        });
+        const glow = new THREE.Mesh(glowGeometry, glowMaterial);
+        mesh.add(glow);
+      }
+
+      return mesh;
+    }
+
+    // Update floor visibility
+    function toggleFloor(floorName) {
+      const btn = document.getElementById(`floor-btn-${floorName.replace(/\s/g, '-')}`);
+      if (visibleFloors.has(floorName)) {
+        visibleFloors.delete(floorName);
+        btn.classList.remove('active');
+      } else {
+        visibleFloors.add(floorName);
+        btn.classList.add('active');
+      }
+      updateVisibility();
+    }
+
+    function showAllFloors() {
+      floorNames.forEach(f => {
+        visibleFloors.add(f);
+        document.getElementById(`floor-btn-${f.replace(/\s/g, '-')}`)?.classList.add('active');
+      });
+      updateVisibility();
+    }
+
+    function updateVisibility() {
+      floors.forEach(floor => {
+        const visible = visibleFloors.has(floor.userData.name);
+        floor.visible = visible;
+        floor.userData.wireframe.visible = visible;
+      });
+
+      deviceMeshes.forEach(mesh => {
+        mesh.visible = visibleFloors.has(mesh.userData.floor);
+      });
+    }
+
+    // Update floor spacing
+    function updateFloorSpacing(value) {
+      floorSpacing = parseFloat(value);
+
+      floors.forEach((floor, index) => {
+        floor.position.y = index * floorSpacing;
+        floor.userData.wireframe.position.y = index * floorSpacing;
+      });
+
+      // Update device positions
+      deviceMeshes.forEach(mesh => {
+        const floorIndex = floorNames.indexOf(mesh.userData.floor);
+        mesh.position.y = floorIndex * floorSpacing + 0.3;
+      });
+    }
+
+    // Update device size
+    function updateDeviceSize(value) {
+      deviceSize = parseFloat(value);
+      createDevices();
+    }
+
+    // Toggle auto rotate
+    function toggleAutoRotate() {
+      autoRotate = !autoRotate;
+      controls.autoRotate = autoRotate;
+      controls.autoRotateSpeed = 2;
+      document.getElementById('auto-rotate-btn').textContent = `Auto Rotate: ${autoRotate ? 'On' : 'Off'}`;
+      document.getElementById('auto-rotate-btn').classList.toggle('active', autoRotate);
+    }
+
+    // Toggle wireframe
+    function toggleWireframe() {
+      wireframeMode = !wireframeMode;
+      floors.forEach(floor => {
+        floor.material.wireframe = wireframeMode;
+        floor.material.opacity = wireframeMode ? 0.3 : 0.9;
+      });
+      document.getElementById('wireframe-btn').textContent = `Wireframe: ${wireframeMode ? 'On' : 'Off'}`;
+      document.getElementById('wireframe-btn').classList.toggle('active', wireframeMode);
+    }
+
+    // Reset camera
+    function resetCamera() {
+      camera.position.set(15, 15, 15);
+      controls.target.set(0, floorNames.length * floorSpacing / 2, 0);
+      controls.update();
+    }
+
+    // Mouse interaction
+    function onMouseClick(event) {
+      updateMouse(event);
+      raycaster.setFromCamera(mouse, camera);
+
+      const intersects = raycaster.intersectObjects(deviceMeshes);
+
+      if (intersects.length > 0) {
+        selectDevice(intersects[0].object);
+      } else {
+        deselectDevice();
+      }
+    }
+
+    function onMouseMove(event) {
+      updateMouse(event);
+      raycaster.setFromCamera(mouse, camera);
+
+      const intersects = raycaster.intersectObjects(deviceMeshes);
+
+      document.body.style.cursor = intersects.length > 0 ? 'pointer' : 'default';
+    }
+
+    function updateMouse(event) {
+      const rect = renderer.domElement.getBoundingClientRect();
+      mouse.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
+      mouse.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
+    }
+
+    function selectDevice(mesh) {
+      deselectDevice();
+
+      selectedDevice = mesh;
+      mesh.material.emissive.setHex(COLORS.selected);
+      mesh.material.emissiveIntensity = 0.8;
+      mesh.scale.set(1.3, 1.3, 1.3);
+
+      showDevicePanel(mesh.userData.data);
+    }
+
+    function deselectDevice() {
+      if (selectedDevice) {
+        selectedDevice.material.emissive.setHex(selectedDevice.userData.originalColor);
+        selectedDevice.material.emissiveIntensity = 0.3;
+        selectedDevice.scale.set(1, 1, 1);
+        selectedDevice = null;
+      }
+      closeDevicePanel();
+    }
+
+    function showDevicePanel(device) {
+      const panel = document.getElementById('device-panel');
+      const isOnline = device.isPoly ? device.connected : device.status === 'up';
+
+      document.getElementById('device-name').textContent = device.name || device.hostname || 'Unknown';
+
+      const statusEl = document.getElementById('device-status');
+      statusEl.className = `device-panel-status ${isOnline ? 'online' : 'offline'}`;
+      statusEl.innerHTML = `<span class="status-dot ${isOnline ? 'online' : 'offline'}"></span> ${isOnline ? 'Online' : 'Offline'}`;
+
+      let detailsHTML = '';
+      if (device.isPoly) {
+        detailsHTML = `
+          <div class="device-info-row"><span class="device-info-label">Type</span><span class="device-info-value">Zoom Room</span></div>
+          <div class="device-info-row"><span class="device-info-label">Model</span><span class="device-info-value">${device.hardwareModel || 'Unknown'}</span></div>
+          <div class="device-info-row"><span class="device-info-label">Room</span><span class="device-info-value">${device.room || 'Unassigned'}</span></div>
+          <div class="device-info-row"><span class="device-info-label">IP</span><span class="device-info-value">${device.ip || 'N/A'}</span></div>
+        `;
+      } else {
+        detailsHTML = `
+          <div class="device-info-row"><span class="device-info-label">Type</span><span class="device-info-value">${device.device_type === 'printers' ? 'Printer' : 'Access Point'}</span></div>
+          <div class="device-info-row"><span class="device-info-label">Hostname</span><span class="device-info-value">${device.hostname || 'N/A'}</span></div>
+          <div class="device-info-row"><span class="device-info-label">Floor</span><span class="device-info-value">${device.floor || 'Unknown'}</span></div>
+          ${device.ping ? `<div class="device-info-row"><span class="device-info-label">Response</span><span class="device-info-value">${device.ping}ms</span></div>` : ''}
+        `;
+      }
+
+      document.getElementById('device-details').innerHTML = detailsHTML;
+      panel.classList.add('visible');
+    }
+
+    function closeDevicePanel() {
+      document.getElementById('device-panel').classList.remove('visible');
+    }
+
+    // Update stats
+    function updateStats() {
+      let online = 0, offline = 0;
+
+      Object.values(monitorsData).flat().forEach(m => {
+        if (m.status === 'up') online++;
+        else offline++;
+      });
+
+      Object.values(polyLensData).flat().forEach(p => {
+        if (p.connected) online++;
+        else offline++;
+      });
+
+      document.getElementById('online-count').textContent = online;
+      document.getElementById('offline-count').textContent = offline;
+    }
+
+    // Window resize
+    function onWindowResize() {
+      camera.aspect = window.innerWidth / window.innerHeight;
+      camera.updateProjectionMatrix();
+      renderer.setSize(window.innerWidth, window.innerHeight);
+    }
+
+    // Animation loop
+    function animate() {
+      requestAnimationFrame(animate);
+      controls.update();
+
+      // Animate device glow
+      const time = Date.now() * 0.001;
+      deviceMeshes.forEach(mesh => {
+        if (mesh.children[0]) {
+          mesh.children[0].material.opacity = 0.15 + Math.sin(time * 2) * 0.1;
+        }
+      });
+
+      renderer.render(scene, camera);
+    }
+
+    // Check auth and init
+    if (!authToken) {
+      window.location.href = 'dashboard.html';
+    } else {
+      init();
+    }
+  </script>
+</body>
+</html>

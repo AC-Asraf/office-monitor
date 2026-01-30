@@ -5600,13 +5600,15 @@
 
       // Add one marker per Poly Lens room
       Object.entries(polyRoomGroups).forEach(([roomName, devices]) => {
-        const allConnected = devices.every(d => d.connected);
-        const anyDisconnected = devices.some(d => !d.connected);
+        // Filter out disabled and maintenance devices for status calculation
+        const activeDevices = devices.filter(d => !d.disabled && !d.maintenance);
+        const allConnected = activeDevices.every(d => d.connected);
+        const anyDisconnected = activeDevices.some(d => !d.connected);
         allDevices.push({
           id: `room-${roomName.replace(/\s+/g, '-')}`,
           name: roomName,
           ip: devices.map(d => d.ip).filter(Boolean).join(', '),
-          status: anyDisconnected ? 'down' : 'up',
+          status: (activeDevices.length === 0 || !anyDisconnected) ? 'up' : 'down',
           type: 'polyLens',
           source: 'polyLensRoom',
           roomDevices: devices,
@@ -6041,6 +6043,9 @@
                 </button>
                 <button class="header-btn" onclick="window.location.href='topology.html'" title="Network Topology">
                   🔗
+                </button>
+                <button class="header-btn" onclick="window.location.href='3d-view.html'" title="3D Floor View">
+                  🏗️
                 </button>
                 <button class="header-btn" onclick="window.location.href='settings.html'" title="Settings">
                   ⚙️${isAdmin() && pendingChangesCount > 0 ? `<span class="pending-badge">${pendingChangesCount}</span>` : ''}

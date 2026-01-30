@@ -1,9 +1,12 @@
 // Service Worker for Office Monitor PWA
-const CACHE_NAME = 'office-monitor-v1';
+const CACHE_NAME = 'office-monitor-v2';
 const STATIC_ASSETS = [
   '/',
   '/dashboard.html',
   '/settings.html',
+  '/reports.html',
+  '/topology.html',
+  '/3d-view.html',
   '/manifest.json'
 ];
 

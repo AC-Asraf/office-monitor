@@ -3672,10 +3672,27 @@
         await authFetch(`${API_URL}/api/auth/logout`, { method: 'POST' });
       } catch (e) {}
 
+      // Clean up WebSocket and timers
+      if (wsReconnectTimer) {
+        clearTimeout(wsReconnectTimer);
+        wsReconnectTimer = null;
+      }
+      if (ws) {
+        ws.close();
+        ws = null;
+      }
+
+      // Clean up analytics interval
+      if (analyticsRefreshInterval) {
+        clearInterval(analyticsRefreshInterval);
+        analyticsRefreshInterval = null;
+      }
+
       authToken = null;
       currentUser = null;
       localStorage.removeItem('authToken');
       localStorage.removeItem('currentUser');
+      localStorage.removeItem('notifications');
       renderLogin();
     }
 
@@ -5995,8 +6012,8 @@
               <!-- Global Search -->
               <div class="global-search">
                 <span class="search-icon">🔍</span>
-                <input type="text" class="search-input" placeholder="Search devices..." id="global-search" oninput="handleSearch(this.value)" onfocus="showSearchResults()" onblur="setTimeout(() => hideSearchResults(), 200)">
-                <div class="search-results" id="search-results"></div>
+                <input type="text" class="search-input" placeholder="Search devices..." id="global-search" oninput="handleSearch(this.value)" onfocus="showSearchResults()" onblur="hideSearchResults()">
+                <div class="search-results" id="search-results" onmousedown="event.preventDefault()"></div>
               </div>
 
               <!-- Notification Center -->
@@ -6244,6 +6261,13 @@
     }
 
     function setFloor(floor) {
+      // Clean up any active drag operation
+      if (isDragging) {
+        document.removeEventListener('mousemove', onDrag);
+        document.removeEventListener('mouseup', endDrag);
+        isDragging = false;
+        currentDragElement = null;
+      }
       activeFloor = floor;
       render();
     }
@@ -8719,6 +8743,18 @@
           break;
       }
     }
+
+    // Clean up WebSocket on page unload
+    window.addEventListener('beforeunload', () => {
+      if (wsReconnectTimer) {
+        clearTimeout(wsReconnectTimer);
+        wsReconnectTimer = null;
+      }
+      if (ws) {
+        ws.close();
+        ws = null;
+      }
+    });
 
     // ==================== WIDGETS ====================
     function renderWidgets() {

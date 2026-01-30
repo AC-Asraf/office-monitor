@@ -1,0 +1,1824 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Settings - Office Monitor</title>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg-base: #0A0F1A;
+      --bg-surface: #111827;
+      --bg-elevated: #1F2937;
+      --bg-overlay: #374151;
+      --status-online: #10B981;
+      --status-offline: #EF4444;
+      --status-warning: #F59E0B;
+      --status-info: #3B82F6;
+      --text-primary: #F9FAFB;
+      --text-secondary: #9CA3AF;
+      --text-muted: #6B7280;
+      --accent-blue: #3B82F6;
+      --border-subtle: rgba(255, 255, 255, 0.06);
+      --border-default: rgba(255, 255, 255, 0.1);
+      --radius-sm: 6px;
+      --radius-md: 10px;
+      --radius-lg: 16px;
+      --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.4);
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      min-height: 100vh;
+      background: var(--bg-base);
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+      color: var(--text-primary);
+      line-height: 1.5;
+    }
+
+    .settings-container {
+      display: grid;
+      grid-template-columns: 240px 1fr;
+      min-height: 100vh;
+    }
+
+    /* Sidebar Navigation */
+    .settings-nav {
+      background: var(--bg-surface);
+      border-right: 1px solid var(--border-subtle);
+      padding: 24px 0;
+    }
+
+    .nav-header {
+      padding: 0 24px 24px;
+      border-bottom: 1px solid var(--border-subtle);
+      margin-bottom: 16px;
+    }
+
+    .nav-header a {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      color: var(--text-secondary);
+      text-decoration: none;
+      font-size: 14px;
+      transition: color 0.2s;
+    }
+
+    .nav-header a:hover {
+      color: var(--text-primary);
+    }
+
+    .nav-title {
+      font-size: 20px;
+      font-weight: 600;
+      margin-top: 16px;
+    }
+
+    .nav-section {
+      padding: 8px 16px;
+      margin-bottom: 8px;
+    }
+
+    .nav-section-title {
+      font-size: 11px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      color: var(--text-muted);
+      padding: 8px;
+    }
+
+    .nav-item {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 12px 16px;
+      color: var(--text-secondary);
+      cursor: pointer;
+      border-radius: var(--radius-md);
+      transition: all 0.2s;
+    }
+
+    .nav-item:hover {
+      background: var(--bg-elevated);
+      color: var(--text-primary);
+    }
+
+    .nav-item.active {
+      background: rgba(59, 130, 246, 0.15);
+      color: var(--accent-blue);
+    }
+
+    .nav-item-icon {
+      font-size: 18px;
+    }
+
+    .nav-item-badge {
+      margin-left: auto;
+      background: var(--status-offline);
+      color: white;
+      font-size: 11px;
+      font-weight: 600;
+      padding: 2px 8px;
+      border-radius: 10px;
+    }
+
+    /* Main Content Area */
+    .settings-main {
+      padding: 32px 48px;
+      overflow-y: auto;
+      max-height: 100vh;
+    }
+
+    .settings-header {
+      margin-bottom: 32px;
+    }
+
+    .settings-header h1 {
+      font-size: 28px;
+      font-weight: 600;
+      margin-bottom: 8px;
+    }
+
+    .settings-header p {
+      color: var(--text-secondary);
+    }
+
+    /* Settings Sections */
+    .settings-section {
+      background: var(--bg-surface);
+      border: 1px solid var(--border-subtle);
+      border-radius: var(--radius-lg);
+      padding: 24px;
+      margin-bottom: 24px;
+    }
+
+    .section-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 20px;
+      padding-bottom: 16px;
+      border-bottom: 1px solid var(--border-subtle);
+    }
+
+    .section-title {
+      font-size: 18px;
+      font-weight: 600;
+    }
+
+    .section-description {
+      font-size: 14px;
+      color: var(--text-secondary);
+      margin-top: 4px;
+    }
+
+    /* Form Elements */
+    .form-group {
+      margin-bottom: 20px;
+    }
+
+    .form-label {
+      display: block;
+      font-size: 14px;
+      font-weight: 500;
+      margin-bottom: 8px;
+      color: var(--text-primary);
+    }
+
+    .form-hint {
+      font-size: 12px;
+      color: var(--text-muted);
+      margin-top: 4px;
+    }
+
+    .form-input {
+      width: 100%;
+      padding: 10px 14px;
+      background: var(--bg-elevated);
+      border: 1px solid var(--border-default);
+      border-radius: var(--radius-md);
+      color: var(--text-primary);
+      font-size: 14px;
+      transition: border-color 0.2s;
+    }
+
+    .form-input:focus {
+      outline: none;
+      border-color: var(--accent-blue);
+    }
+
+    .form-input:disabled {
+      opacity: 0.6;
+      cursor: not-allowed;
+    }
+
+    .form-row {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 16px;
+    }
+
+    /* Toggle Switch */
+    .toggle-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 16px;
+      background: var(--bg-elevated);
+      border-radius: var(--radius-md);
+      margin-bottom: 12px;
+    }
+
+    .toggle-info {
+      flex: 1;
+    }
+
+    .toggle-title {
+      font-size: 14px;
+      font-weight: 500;
+    }
+
+    .toggle-description {
+      font-size: 12px;
+      color: var(--text-muted);
+      margin-top: 2px;
+    }
+
+    .toggle-switch {
+      position: relative;
+      width: 48px;
+      height: 26px;
+    }
+
+    .toggle-switch input {
+      opacity: 0;
+      width: 0;
+      height: 0;
+    }
+
+    .toggle-slider {
+      position: absolute;
+      inset: 0;
+      background: var(--bg-overlay);
+      border-radius: 26px;
+      cursor: pointer;
+      transition: 0.3s;
+    }
+
+    .toggle-slider::before {
+      content: '';
+      position: absolute;
+      width: 20px;
+      height: 20px;
+      left: 3px;
+      bottom: 3px;
+      background: white;
+      border-radius: 50%;
+      transition: 0.3s;
+    }
+
+    .toggle-switch input:checked + .toggle-slider {
+      background: var(--accent-blue);
+    }
+
+    .toggle-switch input:checked + .toggle-slider::before {
+      transform: translateX(22px);
+    }
+
+    /* Buttons */
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 10px 20px;
+      border: none;
+      border-radius: var(--radius-md);
+      font-size: 14px;
+      font-weight: 500;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+
+    .btn-primary {
+      background: var(--accent-blue);
+      color: white;
+    }
+
+    .btn-primary:hover {
+      background: #2563EB;
+    }
+
+    .btn-secondary {
+      background: var(--bg-elevated);
+      color: var(--text-primary);
+      border: 1px solid var(--border-default);
+    }
+
+    .btn-secondary:hover {
+      background: var(--bg-overlay);
+    }
+
+    .btn-danger {
+      background: var(--status-offline);
+      color: white;
+    }
+
+    .btn-group {
+      display: flex;
+      gap: 12px;
+      margin-top: 20px;
+    }
+
+    /* Device List */
+    .device-list {
+      max-height: 400px;
+      overflow-y: auto;
+    }
+
+    .device-row {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 12px;
+      border-bottom: 1px solid var(--border-subtle);
+      transition: background 0.2s;
+    }
+
+    .device-row:hover {
+      background: var(--bg-elevated);
+    }
+
+    .device-row:last-child {
+      border-bottom: none;
+    }
+
+    .device-status {
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+    }
+
+    .device-status.online { background: var(--status-online); }
+    .device-status.offline { background: var(--status-offline); }
+
+    .device-info {
+      flex: 1;
+    }
+
+    .device-name {
+      font-weight: 500;
+      font-size: 14px;
+    }
+
+    .device-meta {
+      font-size: 12px;
+      color: var(--text-muted);
+    }
+
+    .device-actions {
+      display: flex;
+      gap: 8px;
+    }
+
+    .device-actions button {
+      padding: 6px 12px;
+      font-size: 12px;
+    }
+
+    /* Floor Plan Grid */
+    .floor-grid {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 16px;
+    }
+
+    .floor-card {
+      background: var(--bg-elevated);
+      border: 1px solid var(--border-subtle);
+      border-radius: var(--radius-md);
+      padding: 16px;
+      text-align: center;
+    }
+
+    .floor-card-title {
+      font-weight: 600;
+      margin-bottom: 12px;
+    }
+
+    .floor-card-preview {
+      width: 100%;
+      height: 120px;
+      background: var(--bg-overlay);
+      border-radius: var(--radius-sm);
+      margin-bottom: 12px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      overflow: hidden;
+    }
+
+    .floor-card-preview img {
+      max-width: 100%;
+      max-height: 100%;
+      object-fit: contain;
+    }
+
+    .floor-card-actions {
+      display: flex;
+      gap: 8px;
+      justify-content: center;
+    }
+
+    /* Search Box */
+    .search-box {
+      position: relative;
+      margin-bottom: 16px;
+    }
+
+    .search-box input {
+      width: 100%;
+      padding: 10px 14px 10px 40px;
+      background: var(--bg-elevated);
+      border: 1px solid var(--border-default);
+      border-radius: var(--radius-md);
+      color: var(--text-primary);
+      font-size: 14px;
+    }
+
+    .search-box::before {
+      content: '🔍';
+      position: absolute;
+      left: 14px;
+      top: 50%;
+      transform: translateY(-50%);
+      font-size: 14px;
+    }
+
+    /* Toolbar */
+    .toolbar {
+      display: flex;
+      gap: 12px;
+      margin-bottom: 16px;
+      flex-wrap: wrap;
+    }
+
+    /* Alert */
+    .alert {
+      padding: 12px 16px;
+      border-radius: var(--radius-md);
+      margin-bottom: 16px;
+      font-size: 14px;
+    }
+
+    .alert-success {
+      background: rgba(16, 185, 129, 0.15);
+      color: var(--status-online);
+      border: 1px solid var(--status-online);
+    }
+
+    .alert-error {
+      background: rgba(239, 68, 68, 0.15);
+      color: var(--status-offline);
+      border: 1px solid var(--status-offline);
+    }
+
+    /* Responsive */
+    @media (max-width: 1024px) {
+      .settings-container {
+        grid-template-columns: 1fr;
+      }
+      .settings-nav {
+        display: none;
+      }
+      .settings-main {
+        padding: 24px;
+      }
+      .form-row {
+        grid-template-columns: 1fr;
+      }
+      .floor-grid {
+        grid-template-columns: 1fr;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="settings-container">
+    <!-- Sidebar Navigation -->
+    <nav class="settings-nav">
+      <div class="nav-header">
+        <a href="dashboard.html">← Back to Dashboard</a>
+        <h1 class="nav-title">⚙️ Settings</h1>
+      </div>
+
+      <div class="nav-section">
+        <div class="nav-section-title">Manage</div>
+        <div class="nav-item active" onclick="showSection('devices')">
+          <span class="nav-item-icon">📡</span>
+          <span>Devices</span>
+        </div>
+        <div class="nav-item" onclick="showSection('floors')">
+          <span class="nav-item-icon">🗺️</span>
+          <span>Floor Plans</span>
+        </div>
+        <div class="nav-item" onclick="showSection('approvals')">
+          <span class="nav-item-icon">✅</span>
+          <span>Approvals</span>
+          <span class="nav-item-badge" id="pending-badge" style="display: none;">0</span>
+        </div>
+      </div>
+
+      <div class="nav-section">
+        <div class="nav-section-title">Integrations</div>
+        <div class="nav-item" onclick="showSection('slack')">
+          <span class="nav-item-icon">💬</span>
+          <span>Slack</span>
+        </div>
+        <div class="nav-item" onclick="showSection('api')">
+          <span class="nav-item-icon">🔌</span>
+          <span>API Keys</span>
+        </div>
+      </div>
+
+      <div class="nav-section">
+        <div class="nav-section-title">Admin</div>
+        <div class="nav-item" onclick="showSection('users')">
+          <span class="nav-item-icon">👥</span>
+          <span>Users</span>
+        </div>
+        <div class="nav-item" onclick="showSection('backup')">
+          <span class="nav-item-icon">💾</span>
+          <span>Backup/Export</span>
+        </div>
+      </div>
+
+      <div class="nav-section">
+        <div class="nav-section-title">Account</div>
+        <div class="nav-item" onclick="showSection('profile')">
+          <span class="nav-item-icon">👤</span>
+          <span>Profile</span>
+        </div>
+        <div class="nav-item" onclick="showSection('security')">
+          <span class="nav-item-icon">🔐</span>
+          <span>Security (2FA)</span>
+        </div>
+        <div class="nav-item" onclick="showSection('audit')">
+          <span class="nav-item-icon">📋</span>
+          <span>Audit Log</span>
+        </div>
+        <div class="nav-item" onclick="logout()">
+          <span class="nav-item-icon">🚪</span>
+          <span>Logout</span>
+        </div>
+      </div>
+    </nav>
+
+    <!-- Main Content -->
+    <main class="settings-main">
+      <div id="alert-container"></div>
+
+      <!-- Devices Section -->
+      <section id="section-devices" class="settings-section-container">
+        <div class="settings-header">
+          <h1>Devices</h1>
+          <p>Manage monitored devices, add new ones, or import in bulk.</p>
+        </div>
+
+        <div class="settings-section">
+          <div class="section-header">
+            <div>
+              <h2 class="section-title">All Devices</h2>
+              <p class="section-description" id="device-count">Loading...</p>
+            </div>
+            <div class="btn-group" style="margin-top: 0;">
+              <button class="btn btn-primary" onclick="openAddDevice()">+ Add Device</button>
+              <button class="btn btn-secondary" onclick="openBulkImport()">📥 Import CSV</button>
+              <button class="btn btn-secondary" onclick="openDiscovery()">🔍 Discover</button>
+            </div>
+          </div>
+
+          <div class="search-box">
+            <input type="text" placeholder="Search devices by name, IP, or floor..." id="device-search" oninput="filterDevices()">
+          </div>
+
+          <div class="device-list" id="device-list">
+            <p style="text-align: center; padding: 40px; color: var(--text-muted);">Loading devices...</p>
+          </div>
+        </div>
+      </section>
+
+      <!-- Floor Plans Section -->
+      <section id="section-floors" class="settings-section-container" style="display: none;">
+        <div class="settings-header">
+          <h1>Floor Plans</h1>
+          <p>Upload and manage floor plan images for each floor.</p>
+        </div>
+
+        <div class="settings-section">
+          <div class="section-header">
+            <div>
+              <h2 class="section-title">Floor Plan Images</h2>
+              <p class="section-description">Upload PNG, JPG, or SVG images</p>
+            </div>
+          </div>
+
+          <div class="floor-grid" id="floor-grid">
+            <!-- Floor cards will be rendered here -->
+          </div>
+        </div>
+      </section>
+
+      <!-- Approvals Section -->
+      <section id="section-approvals" class="settings-section-container" style="display: none;">
+        <div class="settings-header">
+          <h1>Pending Approvals</h1>
+          <p>Review and approve changes made by users.</p>
+        </div>
+
+        <div class="settings-section">
+          <div id="approvals-list">
+            <p style="text-align: center; padding: 40px; color: var(--text-muted);">Loading...</p>
+          </div>
+        </div>
+      </section>
+
+      <!-- Slack Section -->
+      <section id="section-slack" class="settings-section-container" style="display: none;">
+        <div class="settings-header">
+          <h1>Slack Integration</h1>
+          <p>Configure Slack notifications for device status changes.</p>
+        </div>
+
+        <div class="settings-section">
+          <div class="toggle-row">
+            <div class="toggle-info">
+              <div class="toggle-title">Enable Slack Notifications</div>
+              <div class="toggle-description">Send alerts when devices go offline or come back online</div>
+            </div>
+            <label class="toggle-switch">
+              <input type="checkbox" id="slack-enabled">
+              <span class="toggle-slider"></span>
+            </label>
+          </div>
+
+          <div class="form-group">
+            <label class="form-label">Webhook URL</label>
+            <input type="text" class="form-input" id="slack-webhook" placeholder="https://hooks.slack.com/services/...">
+            <p class="form-hint">Create a webhook in your Slack workspace settings</p>
+          </div>
+
+          <div class="form-group">
+            <label class="form-label">Channel</label>
+            <input type="text" class="form-input" id="slack-channel" placeholder="#alerts">
+          </div>
+
+          <div class="btn-group">
+            <button class="btn btn-primary" onclick="saveSlackSettings()">💾 Save Settings</button>
+            <button class="btn btn-secondary" onclick="testSlack()">🔔 Send Test</button>
+          </div>
+        </div>
+      </section>
+
+      <!-- API Section -->
+      <section id="section-api" class="settings-section-container" style="display: none;">
+        <div class="settings-header">
+          <h1>API Integrations</h1>
+          <p>Configure external API connections like Poly Lens.</p>
+        </div>
+
+        <div class="settings-section">
+          <div class="section-header">
+            <div>
+              <h2 class="section-title">Poly Lens</h2>
+              <p class="section-description">Connect to Poly Lens for Zoom Room device monitoring</p>
+            </div>
+          </div>
+
+          <div class="form-row">
+            <div class="form-group">
+              <label class="form-label">Client ID</label>
+              <input type="text" class="form-input" id="poly-client-id" placeholder="Enter client ID">
+            </div>
+            <div class="form-group">
+              <label class="form-label">Client Secret</label>
+              <input type="password" class="form-input" id="poly-secret" placeholder="Enter client secret">
+            </div>
+          </div>
+
+          <div class="btn-group">
+            <button class="btn btn-primary" onclick="saveApiSettings()">💾 Save Settings</button>
+          </div>
+        </div>
+      </section>
+
+      <!-- Users Section -->
+      <section id="section-users" class="settings-section-container" style="display: none;">
+        <div class="settings-header">
+          <h1>User Management</h1>
+          <p>Manage user accounts and permissions.</p>
+        </div>
+
+        <div class="settings-section">
+          <div class="section-header">
+            <div>
+              <h2 class="section-title">All Users</h2>
+              <p class="section-description" id="user-count">Loading...</p>
+            </div>
+            <button class="btn btn-primary" onclick="openAddUserModal()">+ Add User</button>
+          </div>
+
+          <div class="device-list" id="users-list">
+            <p style="text-align: center; padding: 40px; color: var(--text-muted);">Loading users...</p>
+          </div>
+        </div>
+      </section>
+
+      <!-- Backup Section -->
+      <section id="section-backup" class="settings-section-container" style="display: none;">
+        <div class="settings-header">
+          <h1>Backup & Export</h1>
+          <p>Export your data or create backups.</p>
+        </div>
+
+        <div class="settings-section">
+          <div class="section-header">
+            <div>
+              <h2 class="section-title">Export Data</h2>
+              <p class="section-description">Download your configuration and device data</p>
+            </div>
+          </div>
+
+          <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 16px;">
+            <div class="floor-card">
+              <div class="floor-card-title">📡 Devices</div>
+              <p style="color: var(--text-muted); font-size: 12px; margin-bottom: 12px;">Export all devices as CSV</p>
+              <button class="btn btn-secondary" onclick="exportDevices()">📥 Export CSV</button>
+            </div>
+
+            <div class="floor-card">
+              <div class="floor-card-title">⚙️ Configuration</div>
+              <p style="color: var(--text-muted); font-size: 12px; margin-bottom: 12px;">Export all settings as JSON</p>
+              <button class="btn btn-secondary" onclick="exportConfig()">📥 Export JSON</button>
+            </div>
+
+            <div class="floor-card">
+              <div class="floor-card-title">📊 Analytics</div>
+              <p style="color: var(--text-muted); font-size: 12px; margin-bottom: 12px;">Export heartbeat data</p>
+              <button class="btn btn-secondary" onclick="exportAnalytics()">📥 Export CSV</button>
+            </div>
+
+            <div class="floor-card">
+              <div class="floor-card-title">💾 Full Backup</div>
+              <p style="color: var(--text-muted); font-size: 12px; margin-bottom: 12px;">Download complete backup</p>
+              <button class="btn btn-primary" onclick="exportFullBackup()">📥 Download Backup</button>
+            </div>
+          </div>
+        </div>
+
+        <div class="settings-section" style="margin-top: 24px;">
+          <div class="section-header">
+            <div>
+              <h2 class="section-title">Import Data</h2>
+              <p class="section-description">Restore from a backup file</p>
+            </div>
+          </div>
+
+          <div class="floor-card" style="text-align: center; padding: 24px;">
+            <input type="file" id="import-backup" accept=".json" style="display: none" onchange="importBackup(this.files[0])">
+            <button class="btn btn-secondary" onclick="document.getElementById('import-backup').click()">
+              📤 Import Backup File
+            </button>
+            <p style="color: var(--text-muted); font-size: 12px; margin-top: 12px;">
+              Warning: Importing will overwrite existing data
+            </p>
+          </div>
+        </div>
+      </section>
+
+      <!-- Profile Section -->
+      <section id="section-profile" class="settings-section-container" style="display: none;">
+        <div class="settings-header">
+          <h1>Profile</h1>
+          <p>Manage your account settings.</p>
+        </div>
+
+        <div class="settings-section">
+          <div class="form-group">
+            <label class="form-label">Username</label>
+            <input type="text" class="form-input" id="profile-username" disabled>
+          </div>
+
+          <div class="form-group">
+            <label class="form-label">Role</label>
+            <input type="text" class="form-input" id="profile-role" disabled>
+          </div>
+
+          <div class="btn-group">
+            <button class="btn btn-danger" onclick="logout()">🚪 Logout</button>
+          </div>
+        </div>
+      </section>
+
+      <!-- Security (2FA) Section -->
+      <section id="section-security" class="settings-section-container" style="display: none;">
+        <div class="settings-header">
+          <h1>Two-Factor Authentication</h1>
+          <p>Add an extra layer of security to your account.</p>
+        </div>
+
+        <div class="settings-section">
+          <div id="2fa-status-container">
+            <div class="toggle-item" style="margin-bottom: 20px;">
+              <div>
+                <div class="toggle-title">2FA Status</div>
+                <div class="toggle-desc" id="2fa-status-text">Loading...</div>
+              </div>
+              <div id="2fa-status-badge" class="badge">Unknown</div>
+            </div>
+          </div>
+
+          <div id="2fa-setup-container" style="display: none;">
+            <div class="settings-section" style="background: var(--bg-elevated); padding: 20px; border-radius: 8px; margin-bottom: 20px;">
+              <h3 style="margin-bottom: 15px;">Setup Two-Factor Authentication</h3>
+              <p style="color: var(--text-secondary); margin-bottom: 20px;">
+                Scan the QR code below with your authenticator app (Google Authenticator, Authy, etc.)
+              </p>
+
+              <div style="text-align: center; margin-bottom: 20px;">
+                <div id="qr-code-container" style="background: white; padding: 20px; display: inline-block; border-radius: 8px;">
+                  <canvas id="qr-canvas" width="200" height="200"></canvas>
+                </div>
+              </div>
+
+              <div class="form-group">
+                <label class="form-label">Or enter this code manually:</label>
+                <code id="2fa-secret-code" style="display: block; padding: 10px; background: var(--bg-base); border-radius: 4px; font-size: 14px; letter-spacing: 2px; text-align: center;">Loading...</code>
+              </div>
+
+              <div class="form-group">
+                <label class="form-label">Enter verification code from app:</label>
+                <input type="text" class="form-input" id="2fa-verify-code" placeholder="000000" maxlength="6" pattern="[0-9]{6}" style="font-size: 24px; text-align: center; letter-spacing: 8px;">
+              </div>
+
+              <div class="btn-group">
+                <button class="btn btn-primary" onclick="verify2FA()">Verify & Enable 2FA</button>
+                <button class="btn btn-secondary" onclick="cancel2FASetup()">Cancel</button>
+              </div>
+            </div>
+          </div>
+
+          <div id="2fa-enabled-container" style="display: none;">
+            <div style="background: rgba(16, 185, 129, 0.1); border: 1px solid var(--status-online); padding: 20px; border-radius: 8px; margin-bottom: 20px;">
+              <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 10px;">
+                <span style="font-size: 24px;">🔒</span>
+                <span style="font-weight: 600; color: var(--status-online);">Two-Factor Authentication is Enabled</span>
+              </div>
+              <p style="color: var(--text-secondary);">Your account is protected with an extra layer of security.</p>
+            </div>
+
+            <div class="form-group">
+              <label class="form-label">To disable 2FA, enter your password and current 2FA code:</label>
+              <input type="password" class="form-input" id="2fa-disable-password" placeholder="Your password" style="margin-bottom: 10px;">
+              <input type="text" class="form-input" id="2fa-disable-code" placeholder="2FA Code" maxlength="6">
+            </div>
+
+            <div class="btn-group">
+              <button class="btn btn-danger" onclick="disable2FA()">Disable 2FA</button>
+            </div>
+          </div>
+
+          <div id="2fa-disabled-container" style="display: none;">
+            <div style="background: rgba(245, 158, 11, 0.1); border: 1px solid var(--status-warning); padding: 20px; border-radius: 8px; margin-bottom: 20px;">
+              <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 10px;">
+                <span style="font-size: 24px;">⚠️</span>
+                <span style="font-weight: 600; color: var(--status-warning);">Two-Factor Authentication is Disabled</span>
+              </div>
+              <p style="color: var(--text-secondary);">We recommend enabling 2FA to protect your account.</p>
+            </div>
+
+            <div class="btn-group">
+              <button class="btn btn-primary" onclick="setup2FA()">Enable Two-Factor Authentication</button>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Audit Log Section -->
+      <section id="section-audit" class="settings-section-container" style="display: none;">
+        <div class="settings-header">
+          <h1>Audit Log</h1>
+          <p>View all user actions and system events.</p>
+        </div>
+
+        <div class="settings-section">
+          <div class="section-header" style="margin-bottom: 20px;">
+            <div class="form-group" style="margin: 0; display: flex; gap: 10px; align-items: center;">
+              <select class="form-input" id="audit-filter-action" onchange="loadAuditLog()" style="width: auto;">
+                <option value="">All Actions</option>
+                <option value="login">Login</option>
+                <option value="logout">Logout</option>
+                <option value="create">Create</option>
+                <option value="update">Update</option>
+                <option value="delete">Delete</option>
+                <option value="enable_2fa">Enable 2FA</option>
+                <option value="disable_2fa">Disable 2FA</option>
+              </select>
+              <input type="text" class="form-input" id="audit-filter-user" placeholder="Filter by user..." onkeyup="loadAuditLog()" style="width: 200px;">
+            </div>
+            <button class="btn btn-secondary" onclick="exportAuditLog()">📥 Export CSV</button>
+          </div>
+
+          <div class="device-list" id="audit-log-list" style="max-height: 600px; overflow-y: auto;">
+            <p style="text-align: center; padding: 40px; color: var(--text-muted);">Loading audit log...</p>
+          </div>
+
+          <div style="margin-top: 15px; display: flex; justify-content: center; gap: 10px;">
+            <button class="btn btn-secondary" id="audit-prev-btn" onclick="loadAuditLog(auditPage - 1)" disabled>← Previous</button>
+            <span id="audit-page-info" style="line-height: 38px; color: var(--text-secondary);">Page 1</span>
+            <button class="btn btn-secondary" id="audit-next-btn" onclick="loadAuditLog(auditPage + 1)">Next →</button>
+          </div>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <script>
+    const API_URL = window.location.origin;
+    let authToken = localStorage.getItem('authToken');
+    let currentUser = JSON.parse(localStorage.getItem('currentUser') || 'null');
+    let allMonitors = [];
+    let settings = {};
+    let floorPlans = {};
+    let currentSection = 'devices';
+
+    // Check authentication
+    if (!authToken || !currentUser) {
+      window.location.href = 'dashboard.html';
+    }
+
+    // Auth fetch helper
+    async function authFetch(url, options = {}) {
+      const headers = { ...options.headers, 'Authorization': `Bearer ${authToken}` };
+      return fetch(url, { ...options, headers });
+    }
+
+    // Show section
+    function showSection(section) {
+      currentSection = section;
+      document.querySelectorAll('.settings-section-container').forEach(el => el.style.display = 'none');
+      document.getElementById(`section-${section}`).style.display = 'block';
+      document.querySelectorAll('.nav-item').forEach(el => el.classList.remove('active'));
+      document.querySelector(`.nav-item[onclick="showSection('${section}')"]`)?.classList.add('active');
+
+      // Load section data
+      if (section === 'devices') loadDevices();
+      if (section === 'floors') loadFloorPlans();
+      if (section === 'approvals') loadApprovals();
+      if (section === 'slack') loadSlackSettings();
+      if (section === 'api') loadApiSettings();
+      if (section === 'profile') loadProfile();
+      if (section === 'security') load2FAStatus();
+      if (section === 'audit') loadAuditLog();
+    }
+
+    // Show alert
+    function showAlert(message, type = 'success') {
+      const container = document.getElementById('alert-container');
+      container.innerHTML = `<div class="alert alert-${type}">${message}</div>`;
+      setTimeout(() => container.innerHTML = '', 3000);
+    }
+
+    // Load devices
+    async function loadDevices() {
+      try {
+        const response = await authFetch(`${API_URL}/api/monitors`);
+        const data = await response.json();
+        allMonitors = data.monitors || [];
+        document.getElementById('device-count').textContent = `${allMonitors.length} devices`;
+        renderDevices();
+      } catch (e) {
+        console.error('Failed to load devices:', e);
+      }
+    }
+
+    function renderDevices() {
+      const search = document.getElementById('device-search')?.value?.toLowerCase() || '';
+      const filtered = allMonitors.filter(m =>
+        m.name.toLowerCase().includes(search) ||
+        (m.hostname && m.hostname.toLowerCase().includes(search)) ||
+        (m.floor && m.floor.toLowerCase().includes(search))
+      );
+
+      const list = document.getElementById('device-list');
+      if (filtered.length === 0) {
+        list.innerHTML = '<p style="text-align: center; padding: 40px; color: var(--text-muted);">No devices found</p>';
+        return;
+      }
+
+      list.innerHTML = filtered.map(m => `
+        <div class="device-row">
+          <div class="device-status ${m.status === 'up' ? 'online' : 'offline'}"></div>
+          <div class="device-info">
+            <div class="device-name">${m.name}</div>
+            <div class="device-meta">${m.hostname || m.url || 'No address'} · ${m.floor || 'No floor'} · ${m.device_type || 'Unknown'}</div>
+          </div>
+          <div class="device-actions">
+            <button class="btn btn-secondary" onclick="editDevice(${m.id})">✏️ Edit</button>
+            <button class="btn btn-danger" onclick="deleteDevice(${m.id})">🗑️</button>
+          </div>
+        </div>
+      `).join('');
+    }
+
+    function filterDevices() {
+      renderDevices();
+    }
+
+    async function deleteDevice(id) {
+      if (!confirm('Delete this device?')) return;
+      try {
+        await authFetch(`${API_URL}/api/monitors/${id}`, { method: 'DELETE' });
+        showAlert('Device deleted');
+        loadDevices();
+      } catch (e) {
+        showAlert('Failed to delete device', 'error');
+      }
+    }
+
+    function openAddDevice() {
+      alert('Add device modal - Coming soon! For now, use the dashboard.');
+    }
+
+    function editDevice(id) {
+      alert('Edit device modal - Coming soon! For now, use the dashboard.');
+    }
+
+    function openBulkImport() {
+      alert('Bulk import modal - Coming soon! For now, use the dashboard.');
+    }
+
+    function openDiscovery() {
+      alert('Network discovery modal - Coming soon! For now, use the dashboard.');
+    }
+
+    // Load floor plans
+    async function loadFloorPlans() {
+      try {
+        const response = await authFetch(`${API_URL}/api/floor-plans`);
+        const data = await response.json();
+        floorPlans = {};
+        (data.floorPlans || []).forEach(fp => floorPlans[fp.floor] = fp);
+        renderFloorPlans();
+      } catch (e) {
+        console.error('Failed to load floor plans:', e);
+      }
+    }
+
+    function renderFloorPlans() {
+      const floors = ['1st Floor', '2nd Floor', '3rd Floor', '5th Floor'];
+      const grid = document.getElementById('floor-grid');
+
+      grid.innerHTML = floors.map(floor => {
+        const plan = floorPlans[floor];
+        return `
+          <div class="floor-card">
+            <div class="floor-card-title">${floor}</div>
+            <div class="floor-card-preview">
+              ${plan?.image_data
+                ? `<img src="data:image/${plan.image_type};base64,${plan.image_data}" alt="${floor}">`
+                : '<span style="color: var(--text-muted);">No image uploaded</span>'}
+            </div>
+            <div class="floor-card-actions">
+              <input type="file" id="upload-${floor.replace(/\s/g, '')}" accept="image/*" style="display: none"
+                onchange="uploadFloorPlan('${floor}', this.files[0])">
+              <button class="btn btn-secondary" onclick="document.getElementById('upload-${floor.replace(/\s/g, '')}').click()">
+                ${plan ? '🔄 Change' : '📤 Upload'}
+              </button>
+              ${plan ? `<button class="btn btn-danger" onclick="deleteFloorPlan('${floor}')">🗑️</button>` : ''}
+            </div>
+          </div>
+        `;
+      }).join('');
+    }
+
+    async function uploadFloorPlan(floor, file) {
+      if (!file) return;
+      const reader = new FileReader();
+      reader.onload = async (e) => {
+        const base64 = e.target.result.split(',')[1];
+        const imageType = file.type.split('/')[1];
+        try {
+          await authFetch(`${API_URL}/api/floor-plans`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ floor, image_data: base64, image_type: imageType })
+          });
+          showAlert('Floor plan uploaded!');
+          loadFloorPlans();
+        } catch (e) {
+          showAlert('Upload failed', 'error');
+        }
+      };
+      reader.readAsDataURL(file);
+    }
+
+    async function deleteFloorPlan(floor) {
+      if (!confirm(`Delete floor plan for ${floor}?`)) return;
+      try {
+        await authFetch(`${API_URL}/api/floor-plans/${encodeURIComponent(floor)}`, { method: 'DELETE' });
+        showAlert('Floor plan deleted');
+        loadFloorPlans();
+      } catch (e) {
+        showAlert('Failed to delete', 'error');
+      }
+    }
+
+    // Load approvals
+    async function loadApprovals() {
+      if (currentUser?.role !== 'admin') {
+        document.getElementById('approvals-list').innerHTML =
+          '<p style="text-align: center; padding: 40px; color: var(--text-muted);">Admin access required</p>';
+        return;
+      }
+
+      try {
+        const response = await authFetch(`${API_URL}/api/pending-changes`);
+        const data = await response.json();
+        const pending = data.changes || [];
+
+        if (pending.length === 0) {
+          document.getElementById('approvals-list').innerHTML =
+            '<p style="text-align: center; padding: 40px; color: var(--text-muted);">No pending approvals</p>';
+        } else {
+          document.getElementById('approvals-list').innerHTML = pending.map(c => `
+            <div class="device-row">
+              <div class="device-info">
+                <div class="device-name">${c.action_type}: ${c.details}</div>
+                <div class="device-meta">By ${c.username} · ${new Date(c.created_at).toLocaleString()}</div>
+              </div>
+              <div class="device-actions">
+                <button class="btn btn-primary" onclick="approveChange(${c.id})">✓ Approve</button>
+                <button class="btn btn-danger" onclick="rejectChange(${c.id})">✕ Reject</button>
+              </div>
+            </div>
+          `).join('');
+        }
+      } catch (e) {
+        console.error('Failed to load approvals:', e);
+      }
+    }
+
+    async function approveChange(id) {
+      try {
+        await authFetch(`${API_URL}/api/pending-changes/${id}/approve`, { method: 'POST' });
+        showAlert('Change approved');
+        loadApprovals();
+      } catch (e) {
+        showAlert('Failed to approve', 'error');
+      }
+    }
+
+    async function rejectChange(id) {
+      try {
+        await authFetch(`${API_URL}/api/pending-changes/${id}/reject`, { method: 'POST' });
+        showAlert('Change rejected');
+        loadApprovals();
+      } catch (e) {
+        showAlert('Failed to reject', 'error');
+      }
+    }
+
+    // Slack settings
+    async function loadSlackSettings() {
+      try {
+        const response = await authFetch(`${API_URL}/api/settings`);
+        settings = await response.json();
+        document.getElementById('slack-enabled').checked = settings.slack_enabled === '1';
+        document.getElementById('slack-webhook').value = settings.slack_webhook_url || '';
+        document.getElementById('slack-channel').value = settings.slack_channel || '';
+      } catch (e) {
+        console.error('Failed to load settings:', e);
+      }
+    }
+
+    async function saveSlackSettings() {
+      try {
+        await authFetch(`${API_URL}/api/settings`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            slack_enabled: document.getElementById('slack-enabled').checked ? '1' : '0',
+            slack_webhook_url: document.getElementById('slack-webhook').value,
+            slack_channel: document.getElementById('slack-channel').value
+          })
+        });
+        showAlert('Slack settings saved!');
+      } catch (e) {
+        showAlert('Failed to save settings', 'error');
+      }
+    }
+
+    async function testSlack() {
+      try {
+        const response = await authFetch(`${API_URL}/api/test-slack`, { method: 'POST' });
+        const data = await response.json();
+        if (data.success) {
+          showAlert('Test notification sent!');
+        } else {
+          showAlert('Failed: ' + (data.error || 'Unknown error'), 'error');
+        }
+      } catch (e) {
+        showAlert('Failed to send test', 'error');
+      }
+    }
+
+    // API settings
+    async function loadApiSettings() {
+      try {
+        const response = await authFetch(`${API_URL}/api/settings`);
+        settings = await response.json();
+        document.getElementById('poly-client-id').value = settings.poly_lens_client_id || '';
+        document.getElementById('poly-secret').value = settings.poly_lens_client_secret ? '••••••••' : '';
+      } catch (e) {
+        console.error('Failed to load settings:', e);
+      }
+    }
+
+    async function saveApiSettings() {
+      const clientId = document.getElementById('poly-client-id').value;
+      const secret = document.getElementById('poly-secret').value;
+
+      const updates = { poly_lens_client_id: clientId };
+      if (secret && !secret.startsWith('••')) {
+        updates.poly_lens_client_secret = secret;
+      }
+
+      try {
+        await authFetch(`${API_URL}/api/settings`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(updates)
+        });
+        showAlert('API settings saved!');
+      } catch (e) {
+        showAlert('Failed to save settings', 'error');
+      }
+    }
+
+    // Profile
+    function loadProfile() {
+      document.getElementById('profile-username').value = currentUser?.username || 'Unknown';
+      document.getElementById('profile-role').value = currentUser?.role || 'user';
+    }
+
+    function logout() {
+      localStorage.removeItem('authToken');
+      localStorage.removeItem('currentUser');
+      window.location.href = 'dashboard.html';
+    }
+
+    // ==================== 2FA Functions ====================
+    let current2FASecret = null;
+
+    async function load2FAStatus() {
+      try {
+        const response = await authFetch(`${API_URL}/api/2fa/status`);
+        const data = await response.json();
+
+        const statusText = document.getElementById('2fa-status-text');
+        const statusBadge = document.getElementById('2fa-status-badge');
+        const setupContainer = document.getElementById('2fa-setup-container');
+        const enabledContainer = document.getElementById('2fa-enabled-container');
+        const disabledContainer = document.getElementById('2fa-disabled-container');
+
+        setupContainer.style.display = 'none';
+        enabledContainer.style.display = 'none';
+        disabledContainer.style.display = 'none';
+
+        if (data.enabled) {
+          statusText.textContent = 'Your account is protected with two-factor authentication.';
+          statusBadge.textContent = 'Enabled';
+          statusBadge.style.background = 'var(--status-online)';
+          enabledContainer.style.display = 'block';
+        } else {
+          statusText.textContent = 'Two-factor authentication is not enabled.';
+          statusBadge.textContent = 'Disabled';
+          statusBadge.style.background = 'var(--status-warning)';
+          disabledContainer.style.display = 'block';
+        }
+      } catch (e) {
+        console.error('Failed to load 2FA status:', e);
+      }
+    }
+
+    async function setup2FA() {
+      try {
+        const response = await authFetch(`${API_URL}/api/2fa/setup`, { method: 'POST' });
+        const data = await response.json();
+
+        if (data.success) {
+          current2FASecret = data.secret;
+          document.getElementById('2fa-secret-code').textContent = data.secret;
+
+          // Generate QR code using simple canvas drawing
+          generateQRCode(data.qrCodeUrl);
+
+          document.getElementById('2fa-disabled-container').style.display = 'none';
+          document.getElementById('2fa-setup-container').style.display = 'block';
+        } else {
+          showAlert(data.error || 'Failed to setup 2FA', 'error');
+        }
+      } catch (e) {
+        showAlert('Failed to setup 2FA: ' + e.message, 'error');
+      }
+    }
+
+    function generateQRCode(text) {
+      // Simple QR code placeholder - in production, use a proper QR library
+      const canvas = document.getElementById('qr-canvas');
+      const ctx = canvas.getContext('2d');
+      ctx.fillStyle = '#fff';
+      ctx.fillRect(0, 0, 200, 200);
+
+      // Draw placeholder text
+      ctx.fillStyle = '#000';
+      ctx.font = '12px monospace';
+      ctx.textAlign = 'center';
+      ctx.fillText('Scan with', 100, 80);
+      ctx.fillText('Authenticator App', 100, 100);
+      ctx.fillText('or enter code below', 100, 120);
+    }
+
+    async function verify2FA() {
+      const code = document.getElementById('2fa-verify-code').value.trim();
+
+      if (!code || code.length !== 6) {
+        showAlert('Please enter a 6-digit verification code', 'error');
+        return;
+      }
+
+      try {
+        const response = await authFetch(`${API_URL}/api/2fa/verify`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ code })
+        });
+        const data = await response.json();
+
+        if (data.success) {
+          showAlert('Two-factor authentication enabled successfully!', 'success');
+          load2FAStatus();
+        } else {
+          showAlert(data.error || 'Invalid verification code', 'error');
+        }
+      } catch (e) {
+        showAlert('Failed to verify code: ' + e.message, 'error');
+      }
+    }
+
+    function cancel2FASetup() {
+      current2FASecret = null;
+      document.getElementById('2fa-verify-code').value = '';
+      load2FAStatus();
+    }
+
+    async function disable2FA() {
+      const password = document.getElementById('2fa-disable-password').value;
+      const code = document.getElementById('2fa-disable-code').value.trim();
+
+      if (!password) {
+        showAlert('Please enter your password', 'error');
+        return;
+      }
+
+      if (!code || code.length !== 6) {
+        showAlert('Please enter your 2FA code', 'error');
+        return;
+      }
+
+      try {
+        const response = await authFetch(`${API_URL}/api/2fa/disable`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ password, code })
+        });
+        const data = await response.json();
+
+        if (data.success) {
+          showAlert('Two-factor authentication disabled', 'success');
+          document.getElementById('2fa-disable-password').value = '';
+          document.getElementById('2fa-disable-code').value = '';
+          load2FAStatus();
+        } else {
+          showAlert(data.error || 'Failed to disable 2FA', 'error');
+        }
+      } catch (e) {
+        showAlert('Failed to disable 2FA: ' + e.message, 'error');
+      }
+    }
+
+    // ==================== Audit Log Functions ====================
+    let auditPage = 1;
+    const auditPageSize = 50;
+
+    async function loadAuditLog(page = 1) {
+      auditPage = page;
+      const action = document.getElementById('audit-filter-action')?.value || '';
+      const user = document.getElementById('audit-filter-user')?.value || '';
+
+      try {
+        const params = new URLSearchParams({
+          page,
+          limit: auditPageSize,
+          action,
+          username: user
+        });
+
+        const response = await authFetch(`${API_URL}/api/activity-log?${params}`);
+        const data = await response.json();
+
+        renderAuditLog(data.logs || [], data.total || 0);
+      } catch (e) {
+        console.error('Failed to load audit log:', e);
+        document.getElementById('audit-log-list').innerHTML =
+          '<p style="text-align: center; padding: 40px; color: var(--text-muted);">Failed to load audit log</p>';
+      }
+    }
+
+    function renderAuditLog(logs, total) {
+      const list = document.getElementById('audit-log-list');
+
+      if (logs.length === 0) {
+        list.innerHTML = '<p style="text-align: center; padding: 40px; color: var(--text-muted);">No audit log entries found</p>';
+        return;
+      }
+
+      list.innerHTML = logs.map(log => `
+        <div class="device-item" style="display: flex; justify-content: space-between; align-items: flex-start;">
+          <div>
+            <div style="font-weight: 500; margin-bottom: 4px;">
+              ${getActionIcon(log.action)} ${formatAction(log.action)}
+            </div>
+            <div style="font-size: 13px; color: var(--text-secondary);">
+              ${log.entity_type ? `<span style="background: var(--bg-elevated); padding: 2px 6px; border-radius: 4px; margin-right: 8px;">${log.entity_type}</span>` : ''}
+              ${log.entity_name || log.details || ''}
+            </div>
+            <div style="font-size: 12px; color: var(--text-muted); margin-top: 4px;">
+              by <strong>${log.username || 'System'}</strong> from ${log.ip_address || 'unknown'}
+            </div>
+          </div>
+          <div style="text-align: right; flex-shrink: 0;">
+            <div style="font-size: 12px; color: var(--text-muted);">
+              ${formatDateTime(log.created_at)}
+            </div>
+          </div>
+        </div>
+      `).join('');
+
+      // Update pagination
+      const totalPages = Math.ceil(total / auditPageSize);
+      document.getElementById('audit-page-info').textContent = `Page ${auditPage} of ${totalPages}`;
+      document.getElementById('audit-prev-btn').disabled = auditPage <= 1;
+      document.getElementById('audit-next-btn').disabled = auditPage >= totalPages;
+    }
+
+    function getActionIcon(action) {
+      const icons = {
+        login: '🔑',
+        logout: '🚪',
+        create: '➕',
+        update: '✏️',
+        delete: '🗑️',
+        enable_2fa: '🔒',
+        disable_2fa: '🔓',
+        acknowledge_incident: '✅',
+        assign_tags: '🏷️',
+        create_webhook: '🔗',
+        create_report: '📊'
+      };
+      return icons[action] || '📝';
+    }
+
+    function formatAction(action) {
+      return action.split('_').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
+    }
+
+    function formatDateTime(dateStr) {
+      return new Date(dateStr).toLocaleString();
+    }
+
+    function exportAuditLog() {
+      const action = document.getElementById('audit-filter-action')?.value || '';
+      const user = document.getElementById('audit-filter-user')?.value || '';
+
+      authFetch(`${API_URL}/api/activity-log?limit=10000&action=${action}&username=${user}`)
+        .then(r => r.json())
+        .then(data => {
+          const logs = data.logs || [];
+          const csv = [
+            ['Timestamp', 'User', 'Action', 'Entity Type', 'Entity Name', 'Details', 'IP Address'].join(','),
+            ...logs.map(log => [
+              log.created_at,
+              log.username || '',
+              log.action,
+              log.entity_type || '',
+              log.entity_name || '',
+              (log.details || '').replace(/,/g, ';'),
+              log.ip_address || ''
+            ].map(v => `"${v}"`).join(','))
+          ].join('\n');
+
+          const blob = new Blob([csv], { type: 'text/csv' });
+          const url = URL.createObjectURL(blob);
+          const a = document.createElement('a');
+          a.href = url;
+          a.download = `audit-log-${new Date().toISOString().split('T')[0]}.csv`;
+          a.click();
+        });
+    }
+
+    // Initialize
+    showSection('devices');
+
+    // Load pending count
+    async function loadPendingCount() {
+      if (currentUser?.role === 'admin') {
+        try {
+          const response = await authFetch(`${API_URL}/api/pending-changes`);
+          const data = await response.json();
+          const count = (data.changes || []).length;
+          const badge = document.getElementById('pending-badge');
+          if (count > 0) {
+            badge.textContent = count;
+            badge.style.display = 'block';
+          } else {
+            badge.style.display = 'none';
+          }
+        } catch (e) {}
+      }
+    }
+    loadPendingCount();
+
+    // ==================== USER MANAGEMENT ====================
+    let allUsers = [];
+
+    async function loadUsers() {
+      if (currentUser?.role !== 'admin') {
+        document.getElementById('users-list').innerHTML =
+          '<p style="text-align: center; padding: 40px; color: var(--text-muted);">Admin access required</p>';
+        return;
+      }
+
+      try {
+        const response = await authFetch(`${API_URL}/api/users`);
+        const data = await response.json();
+        allUsers = data.users || [];
+        document.getElementById('user-count').textContent = `${allUsers.length} users`;
+        renderUsers();
+      } catch (e) {
+        document.getElementById('users-list').innerHTML =
+          '<p style="text-align: center; padding: 40px; color: var(--text-muted);">Failed to load users</p>';
+      }
+    }
+
+    function renderUsers() {
+      const list = document.getElementById('users-list');
+      if (allUsers.length === 0) {
+        list.innerHTML = '<p style="text-align: center; padding: 40px; color: var(--text-muted);">No users found</p>';
+        return;
+      }
+
+      list.innerHTML = allUsers.map(u => `
+        <div class="device-row">
+          <div class="device-info">
+            <div class="device-name">${u.username} ${u.id === currentUser?.id ? '(You)' : ''}</div>
+            <div class="device-meta">
+              Role: <span style="color: ${u.role === 'admin' ? 'var(--status-warning)' : 'var(--text-secondary)'};">${u.role}</span>
+              · Created: ${new Date(u.created_at).toLocaleDateString()}
+            </div>
+          </div>
+          <div class="device-actions">
+            ${u.id !== currentUser?.id ? `
+              <button class="btn btn-secondary" onclick="toggleUserRole(${u.id}, '${u.role}')">
+                ${u.role === 'admin' ? '👤 Make User' : '👑 Make Admin'}
+              </button>
+              <button class="btn btn-danger" onclick="deleteUser(${u.id})">🗑️</button>
+            ` : ''}
+          </div>
+        </div>
+      `).join('');
+    }
+
+    function openAddUserModal() {
+      const username = prompt('Enter username:');
+      if (!username) return;
+
+      const password = prompt('Enter password (min 6 characters):');
+      if (!password || password.length < 6) {
+        showAlert('Password must be at least 6 characters', 'error');
+        return;
+      }
+
+      const role = confirm('Make this user an admin?') ? 'admin' : 'user';
+
+      authFetch(`${API_URL}/api/users`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ username, password, role })
+      }).then(r => r.json()).then(data => {
+        if (data.success) {
+          showAlert('User created!');
+          loadUsers();
+        } else {
+          showAlert(data.error || 'Failed to create user', 'error');
+        }
+      });
+    }
+
+    async function toggleUserRole(id, currentRole) {
+      const newRole = currentRole === 'admin' ? 'user' : 'admin';
+      try {
+        const response = await authFetch(`${API_URL}/api/users/${id}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ role: newRole })
+        });
+        const data = await response.json();
+        if (data.success) {
+          showAlert(`User role changed to ${newRole}`);
+          loadUsers();
+        } else {
+          showAlert(data.error || 'Failed to update user', 'error');
+        }
+      } catch (e) {
+        showAlert('Failed to update user', 'error');
+      }
+    }
+
+    async function deleteUser(id) {
+      if (!confirm('Delete this user?')) return;
+      try {
+        await authFetch(`${API_URL}/api/users/${id}`, { method: 'DELETE' });
+        showAlert('User deleted');
+        loadUsers();
+      } catch (e) {
+        showAlert('Failed to delete user', 'error');
+      }
+    }
+
+    // ==================== BACKUP / EXPORT ====================
+    async function exportDevices() {
+      try {
+        const response = await authFetch(`${API_URL}/api/monitors`);
+        const data = await response.json();
+        const devices = data.monitors || [];
+
+        // Convert to CSV
+        const headers = ['id', 'name', 'hostname', 'url', 'floor', 'device_type', 'active', 'notes'];
+        const csv = [
+          headers.join(','),
+          ...devices.map(d => headers.map(h => `"${(d[h] || '').toString().replace(/"/g, '""')}"`).join(','))
+        ].join('\n');
+
+        downloadFile(csv, 'devices.csv', 'text/csv');
+        showAlert('Devices exported!');
+      } catch (e) {
+        showAlert('Export failed', 'error');
+      }
+    }
+
+    async function exportConfig() {
+      try {
+        const [monitorsRes, settingsRes, floorPlansRes] = await Promise.all([
+          authFetch(`${API_URL}/api/monitors`),
+          authFetch(`${API_URL}/api/settings`),
+          authFetch(`${API_URL}/api/floor-plans`)
+        ]);
+
+        const config = {
+          exportDate: new Date().toISOString(),
+          monitors: (await monitorsRes.json()).monitors || [],
+          settings: await settingsRes.json(),
+          floorPlans: (await floorPlansRes.json()).floorPlans || []
+        };
+
+        downloadFile(JSON.stringify(config, null, 2), 'config.json', 'application/json');
+        showAlert('Configuration exported!');
+      } catch (e) {
+        showAlert('Export failed', 'error');
+      }
+    }
+
+    async function exportAnalytics() {
+      try {
+        const response = await authFetch(`${API_URL}/api/heartbeats?limit=10000`);
+        const data = await response.json();
+        const heartbeats = data.heartbeats || [];
+
+        const headers = ['monitor_id', 'status', 'ping', 'time', 'message'];
+        const csv = [
+          headers.join(','),
+          ...heartbeats.map(h => headers.map(key => `"${(h[key] || '').toString().replace(/"/g, '""')}"`).join(','))
+        ].join('\n');
+
+        downloadFile(csv, 'analytics.csv', 'text/csv');
+        showAlert('Analytics exported!');
+      } catch (e) {
+        showAlert('Export failed', 'error');
+      }
+    }
+
+    async function exportFullBackup() {
+      try {
+        showAlert('Creating backup...', 'success');
+
+        const [monitorsRes, settingsRes, floorPlansRes, usersRes] = await Promise.all([
+          authFetch(`${API_URL}/api/monitors`),
+          authFetch(`${API_URL}/api/settings`),
+          authFetch(`${API_URL}/api/floor-plans`),
+          authFetch(`${API_URL}/api/users`)
+        ]);
+
+        const backup = {
+          version: '1.0',
+          exportDate: new Date().toISOString(),
+          monitors: (await monitorsRes.json()).monitors || [],
+          settings: await settingsRes.json(),
+          floorPlans: (await floorPlansRes.json()).floorPlans || [],
+          users: currentUser?.role === 'admin' ? (await usersRes.json()).users || [] : []
+        };
+
+        const filename = `office-monitor-backup-${new Date().toISOString().split('T')[0]}.json`;
+        downloadFile(JSON.stringify(backup, null, 2), filename, 'application/json');
+        showAlert('Full backup downloaded!');
+      } catch (e) {
+        showAlert('Backup failed: ' + e.message, 'error');
+      }
+    }
+
+    async function importBackup(file) {
+      if (!file) return;
+      if (!confirm('This will overwrite existing data. Are you sure?')) return;
+
+      try {
+        const text = await file.text();
+        const backup = JSON.parse(text);
+
+        if (!backup.version || !backup.monitors) {
+          showAlert('Invalid backup file', 'error');
+          return;
+        }
+
+        // Import monitors
+        for (const monitor of backup.monitors) {
+          await authFetch(`${API_URL}/api/monitors`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(monitor)
+          });
+        }
+
+        showAlert(`Imported ${backup.monitors.length} devices!`);
+        loadDevices();
+      } catch (e) {
+        showAlert('Import failed: ' + e.message, 'error');
+      }
+    }
+
+    function downloadFile(content, filename, mimeType) {
+      const blob = new Blob([content], { type: mimeType });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    }
+
+    // Update showSection to handle new sections
+    const originalShowSection = showSection;
+    showSection = function(section) {
+      currentSection = section;
+      document.querySelectorAll('.settings-section-container').forEach(el => el.style.display = 'none');
+      const sectionEl = document.getElementById(`section-${section}`);
+      if (sectionEl) sectionEl.style.display = 'block';
+      document.querySelectorAll('.nav-item').forEach(el => el.classList.remove('active'));
+      document.querySelector(`.nav-item[onclick="showSection('${section}')"]`)?.classList.add('active');
+
+      // Load section data
+      if (section === 'devices') loadDevices();
+      if (section === 'floors') loadFloorPlans();
+      if (section === 'approvals') loadApprovals();
+      if (section === 'slack') loadSlackSettings();
+      if (section === 'api') loadApiSettings();
+      if (section === 'profile') loadProfile();
+      if (section === 'users') loadUsers();
+    };
+  </script>
+</body>
+</html>

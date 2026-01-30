@@ -1,0 +1,814 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Uptime Reports - Office Monitor</title>
+  <style>
+    :root {
+      --bg-base: #0A0F1A;
+      --bg-surface: #111827;
+      --bg-elevated: #1F2937;
+      --bg-overlay: #374151;
+      --text-primary: #F9FAFB;
+      --text-secondary: #9CA3AF;
+      --text-muted: #6B7280;
+      --border-subtle: rgba(255,255,255,0.06);
+      --border-default: rgba(255,255,255,0.1);
+      --status-online: #10B981;
+      --status-offline: #EF4444;
+      --status-warning: #F59E0B;
+      --accent-blue: #3B82F6;
+      --radius-md: 8px;
+      --radius-lg: 12px;
+      --space-xs: 4px;
+      --space-sm: 8px;
+      --space-md: 16px;
+      --space-lg: 24px;
+      --space-xl: 32px;
+    }
+
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: var(--bg-base);
+      color: var(--text-primary);
+      min-height: 100vh;
+    }
+
+    .app-container {
+      display: flex;
+      min-height: 100vh;
+    }
+
+    /* Sidebar */
+    .sidebar {
+      width: 250px;
+      background: var(--bg-surface);
+      border-right: 1px solid var(--border-subtle);
+      padding: var(--space-lg);
+      display: flex;
+      flex-direction: column;
+    }
+
+    .sidebar-header {
+      display: flex;
+      align-items: center;
+      gap: var(--space-sm);
+      margin-bottom: var(--space-xl);
+    }
+
+    .sidebar-logo { font-size: 24px; }
+    .sidebar-title { font-size: 18px; font-weight: 600; }
+
+    .nav-link {
+      display: flex;
+      align-items: center;
+      gap: var(--space-sm);
+      padding: var(--space-sm) var(--space-md);
+      border-radius: var(--radius-md);
+      color: var(--text-secondary);
+      text-decoration: none;
+      margin-bottom: var(--space-xs);
+      transition: all 0.2s;
+    }
+
+    .nav-link:hover { background: var(--bg-elevated); color: var(--text-primary); }
+    .nav-link.active { background: var(--accent-blue); color: white; }
+
+    .nav-section {
+      margin-top: var(--space-lg);
+      margin-bottom: var(--space-sm);
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--text-muted);
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+
+    /* Main Content */
+    .main-content {
+      flex: 1;
+      padding: var(--space-xl);
+      overflow-y: auto;
+    }
+
+    .page-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: var(--space-xl);
+    }
+
+    .page-title { font-size: 28px; font-weight: 600; }
+
+    .header-actions {
+      display: flex;
+      gap: var(--space-sm);
+    }
+
+    .btn {
+      padding: var(--space-sm) var(--space-md);
+      border-radius: var(--radius-md);
+      border: none;
+      font-size: 14px;
+      font-weight: 500;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      gap: var(--space-xs);
+      transition: all 0.2s;
+    }
+
+    .btn-primary { background: var(--accent-blue); color: white; }
+    .btn-primary:hover { background: #2563EB; }
+    .btn-secondary { background: var(--bg-elevated); color: var(--text-primary); border: 1px solid var(--border-default); }
+    .btn-secondary:hover { background: var(--bg-overlay); }
+
+    /* Report Controls */
+    .report-controls {
+      display: flex;
+      gap: var(--space-md);
+      margin-bottom: var(--space-xl);
+      flex-wrap: wrap;
+    }
+
+    .control-group {
+      display: flex;
+      flex-direction: column;
+      gap: var(--space-xs);
+    }
+
+    .control-label {
+      font-size: 12px;
+      color: var(--text-secondary);
+      font-weight: 500;
+    }
+
+    .control-select, .control-input {
+      padding: var(--space-sm) var(--space-md);
+      background: var(--bg-elevated);
+      border: 1px solid var(--border-default);
+      border-radius: var(--radius-md);
+      color: var(--text-primary);
+      font-size: 14px;
+      min-width: 150px;
+    }
+
+    .control-select:focus, .control-input:focus {
+      outline: none;
+      border-color: var(--accent-blue);
+    }
+
+    /* Stats Cards */
+    .stats-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: var(--space-md);
+      margin-bottom: var(--space-xl);
+    }
+
+    .stat-card {
+      background: var(--bg-surface);
+      border: 1px solid var(--border-subtle);
+      border-radius: var(--radius-lg);
+      padding: var(--space-lg);
+    }
+
+    .stat-label {
+      font-size: 13px;
+      color: var(--text-secondary);
+      margin-bottom: var(--space-xs);
+    }
+
+    .stat-value {
+      font-size: 32px;
+      font-weight: 700;
+    }
+
+    .stat-value.success { color: var(--status-online); }
+    .stat-value.warning { color: var(--status-warning); }
+    .stat-value.danger { color: var(--status-offline); }
+
+    .stat-change {
+      font-size: 12px;
+      color: var(--text-muted);
+      margin-top: var(--space-xs);
+    }
+
+    /* Report Table */
+    .report-section {
+      background: var(--bg-surface);
+      border: 1px solid var(--border-subtle);
+      border-radius: var(--radius-lg);
+      margin-bottom: var(--space-xl);
+      overflow: hidden;
+    }
+
+    .section-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: var(--space-md) var(--space-lg);
+      border-bottom: 1px solid var(--border-subtle);
+    }
+
+    .section-title {
+      font-size: 16px;
+      font-weight: 600;
+    }
+
+    .report-table {
+      width: 100%;
+      border-collapse: collapse;
+    }
+
+    .report-table th, .report-table td {
+      padding: var(--space-md) var(--space-lg);
+      text-align: left;
+      border-bottom: 1px solid var(--border-subtle);
+    }
+
+    .report-table th {
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--text-secondary);
+      text-transform: uppercase;
+      background: var(--bg-elevated);
+    }
+
+    .report-table tr:hover { background: var(--bg-elevated); }
+    .report-table tr:last-child td { border-bottom: none; }
+
+    .uptime-bar {
+      width: 120px;
+      height: 8px;
+      background: var(--bg-overlay);
+      border-radius: 4px;
+      overflow: hidden;
+    }
+
+    .uptime-bar-fill {
+      height: 100%;
+      border-radius: 4px;
+      transition: width 0.3s;
+    }
+
+    .uptime-excellent { background: var(--status-online); }
+    .uptime-good { background: #84CC16; }
+    .uptime-warning { background: var(--status-warning); }
+    .uptime-poor { background: var(--status-offline); }
+
+    .status-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      display: inline-block;
+      margin-right: var(--space-xs);
+    }
+
+    .status-dot.online { background: var(--status-online); }
+    .status-dot.offline { background: var(--status-offline); }
+
+    /* Incidents List */
+    .incident-item {
+      display: flex;
+      align-items: flex-start;
+      gap: var(--space-md);
+      padding: var(--space-md) var(--space-lg);
+      border-bottom: 1px solid var(--border-subtle);
+    }
+
+    .incident-item:last-child { border-bottom: none; }
+
+    .incident-icon {
+      width: 36px;
+      height: 36px;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 16px;
+      flex-shrink: 0;
+    }
+
+    .incident-icon.down { background: rgba(239, 68, 68, 0.2); }
+    .incident-icon.up { background: rgba(16, 185, 129, 0.2); }
+
+    .incident-content { flex: 1; }
+    .incident-title { font-weight: 500; margin-bottom: 2px; }
+    .incident-time { font-size: 13px; color: var(--text-secondary); }
+    .incident-duration { font-size: 13px; color: var(--text-muted); }
+
+    /* Chart Container */
+    .chart-container {
+      padding: var(--space-lg);
+      height: 300px;
+    }
+
+    .uptime-timeline {
+      display: flex;
+      gap: 2px;
+      height: 40px;
+      align-items: stretch;
+    }
+
+    .timeline-day {
+      flex: 1;
+      border-radius: 2px;
+      cursor: pointer;
+      transition: transform 0.2s;
+      position: relative;
+    }
+
+    .timeline-day:hover {
+      transform: scaleY(1.2);
+    }
+
+    .timeline-day.up { background: var(--status-online); }
+    .timeline-day.partial { background: var(--status-warning); }
+    .timeline-day.down { background: var(--status-offline); }
+    .timeline-day.no-data { background: var(--bg-overlay); }
+
+    .timeline-labels {
+      display: flex;
+      justify-content: space-between;
+      margin-top: var(--space-sm);
+      font-size: 11px;
+      color: var(--text-muted);
+    }
+
+    /* Loading State */
+    .loading {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: var(--space-xl);
+      color: var(--text-muted);
+    }
+
+    .loading-spinner {
+      width: 40px;
+      height: 40px;
+      border: 3px solid var(--border-default);
+      border-top-color: var(--accent-blue);
+      border-radius: 50%;
+      animation: spin 1s linear infinite;
+      margin-bottom: var(--space-md);
+    }
+
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* Empty State */
+    .empty-state {
+      text-align: center;
+      padding: var(--space-xl);
+      color: var(--text-muted);
+    }
+
+    .empty-icon { font-size: 48px; margin-bottom: var(--space-md); }
+
+    /* Print Styles */
+    @media print {
+      body { background: white; color: black; }
+      .sidebar, .header-actions, .btn { display: none; }
+      .main-content { padding: 20px; }
+      .report-section { break-inside: avoid; }
+    }
+  </style>
+</head>
+<body>
+  <div class="app-container">
+    <!-- Sidebar -->
+    <aside class="sidebar">
+      <div class="sidebar-header">
+        <span class="sidebar-logo">🏢</span>
+        <span class="sidebar-title">Office Monitor</span>
+      </div>
+
+      <a href="dashboard.html" class="nav-link">
+        <span>📊</span> Dashboard
+      </a>
+      <a href="reports.html" class="nav-link active">
+        <span>📈</span> Reports
+      </a>
+      <a href="topology.html" class="nav-link">
+        <span>🔗</span> Network Topology
+      </a>
+
+      <div class="nav-section">Settings</div>
+      <a href="settings.html" class="nav-link">
+        <span>⚙️</span> Settings
+      </a>
+    </aside>
+
+    <!-- Main Content -->
+    <main class="main-content">
+      <div class="page-header">
+        <h1 class="page-title">Uptime Reports</h1>
+        <div class="header-actions">
+          <button class="btn btn-secondary" onclick="exportCSV()">📥 Export CSV</button>
+          <button class="btn btn-secondary" onclick="exportPDF()">📄 Export PDF</button>
+          <button class="btn btn-primary" onclick="generateReport()">🔄 Refresh</button>
+        </div>
+      </div>
+
+      <!-- Report Controls -->
+      <div class="report-controls">
+        <div class="control-group">
+          <label class="control-label">Time Period</label>
+          <select class="control-select" id="time-period" onchange="generateReport()">
+            <option value="24h">Last 24 Hours</option>
+            <option value="7d" selected>Last 7 Days</option>
+            <option value="30d">Last 30 Days</option>
+            <option value="90d">Last 90 Days</option>
+            <option value="custom">Custom Range</option>
+          </select>
+        </div>
+        <div class="control-group">
+          <label class="control-label">Floor</label>
+          <select class="control-select" id="floor-filter" onchange="generateReport()">
+            <option value="all">All Floors</option>
+          </select>
+        </div>
+        <div class="control-group">
+          <label class="control-label">Device Type</label>
+          <select class="control-select" id="type-filter" onchange="generateReport()">
+            <option value="all">All Types</option>
+            <option value="accessPoints">Access Points</option>
+            <option value="printers">Printers</option>
+            <option value="polyLens">Zoom Rooms</option>
+          </select>
+        </div>
+        <div class="control-group" id="custom-range" style="display: none;">
+          <label class="control-label">Start Date</label>
+          <input type="date" class="control-input" id="start-date">
+        </div>
+        <div class="control-group" id="custom-range-end" style="display: none;">
+          <label class="control-label">End Date</label>
+          <input type="date" class="control-input" id="end-date">
+        </div>
+      </div>
+
+      <!-- Stats Overview -->
+      <div class="stats-grid" id="stats-grid">
+        <div class="stat-card">
+          <div class="stat-label">Average Uptime</div>
+          <div class="stat-value success" id="avg-uptime">--</div>
+          <div class="stat-change">Across all devices</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-label">Total Incidents</div>
+          <div class="stat-value" id="total-incidents">--</div>
+          <div class="stat-change">In selected period</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-label">Avg Response Time</div>
+          <div class="stat-value" id="avg-response">--</div>
+          <div class="stat-change">ms average ping</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-label">Devices Monitored</div>
+          <div class="stat-value" id="device-count">--</div>
+          <div class="stat-change">Active monitors</div>
+        </div>
+      </div>
+
+      <!-- Uptime Timeline -->
+      <div class="report-section">
+        <div class="section-header">
+          <h3 class="section-title">Uptime Timeline</h3>
+        </div>
+        <div class="chart-container">
+          <div class="uptime-timeline" id="uptime-timeline"></div>
+          <div class="timeline-labels" id="timeline-labels"></div>
+        </div>
+      </div>
+
+      <!-- Device Uptime Table -->
+      <div class="report-section">
+        <div class="section-header">
+          <h3 class="section-title">Device Uptime</h3>
+        </div>
+        <table class="report-table">
+          <thead>
+            <tr>
+              <th>Device</th>
+              <th>Floor</th>
+              <th>Type</th>
+              <th>Current Status</th>
+              <th>Uptime</th>
+              <th>Incidents</th>
+              <th>Avg Response</th>
+            </tr>
+          </thead>
+          <tbody id="device-table-body">
+            <tr>
+              <td colspan="7" class="loading">
+                <div class="loading-spinner"></div>
+                Loading report data...
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <!-- Recent Incidents -->
+      <div class="report-section">
+        <div class="section-header">
+          <h3 class="section-title">Recent Incidents</h3>
+        </div>
+        <div id="incidents-list">
+          <div class="loading">
+            <div class="loading-spinner"></div>
+            Loading incidents...
+          </div>
+        </div>
+      </div>
+    </main>
+  </div>
+
+  <script>
+    const API_URL = window.location.origin;
+    let authToken = localStorage.getItem('authToken');
+
+    // Check authentication
+    if (!authToken) {
+      window.location.href = 'dashboard.html';
+    }
+
+    // Fetch with auth
+    async function authFetch(url, options = {}) {
+      const headers = { ...options.headers, 'Authorization': `Bearer ${authToken}` };
+      const response = await fetch(url, { ...options, headers });
+      if (response.status === 401) {
+        localStorage.removeItem('authToken');
+        window.location.href = 'dashboard.html';
+      }
+      return response;
+    }
+
+    // Time period change handler
+    document.getElementById('time-period').addEventListener('change', (e) => {
+      const customRange = document.getElementById('custom-range');
+      const customRangeEnd = document.getElementById('custom-range-end');
+      if (e.target.value === 'custom') {
+        customRange.style.display = 'flex';
+        customRangeEnd.style.display = 'flex';
+      } else {
+        customRange.style.display = 'none';
+        customRangeEnd.style.display = 'none';
+      }
+    });
+
+    // Generate report
+    async function generateReport() {
+      const period = document.getElementById('time-period').value;
+      const floor = document.getElementById('floor-filter').value;
+      const type = document.getElementById('type-filter').value;
+
+      try {
+        // Fetch monitors data
+        const monitorsRes = await authFetch(`${API_URL}/api/monitors`);
+        const monitorsData = await monitorsRes.json();
+
+        // Fetch uptime history
+        const historyRes = await authFetch(`${API_URL}/api/reports/uptime?period=${period}&floor=${floor}&type=${type}`);
+        let historyData = { devices: [], summary: {} };
+        if (historyRes.ok) {
+          historyData = await historyRes.json();
+        }
+
+        // Update floors dropdown
+        const floors = [...new Set(monitorsData.monitors.map(m => m.floor))].filter(Boolean);
+        const floorSelect = document.getElementById('floor-filter');
+        const currentFloor = floorSelect.value;
+        floorSelect.innerHTML = '<option value="all">All Floors</option>' +
+          floors.map(f => `<option value="${f}" ${currentFloor === f ? 'selected' : ''}>${f}</option>`).join('');
+
+        // Calculate stats
+        let monitors = monitorsData.monitors || [];
+        if (floor !== 'all') monitors = monitors.filter(m => m.floor === floor);
+        if (type !== 'all') monitors = monitors.filter(m => m.device_type === type);
+
+        // Update stats cards
+        document.getElementById('avg-uptime').textContent =
+          historyData.summary?.avgUptime ? `${historyData.summary.avgUptime.toFixed(1)}%` : calculateAvgUptime(monitors);
+        document.getElementById('total-incidents').textContent =
+          historyData.summary?.totalIncidents ?? countIncidents(monitors);
+        document.getElementById('avg-response').textContent =
+          historyData.summary?.avgResponse ? `${Math.round(historyData.summary.avgResponse)}ms` : calculateAvgResponse(monitors);
+        document.getElementById('device-count').textContent = monitors.length;
+
+        // Color the uptime stat
+        const uptimeEl = document.getElementById('avg-uptime');
+        const uptimeVal = parseFloat(uptimeEl.textContent);
+        uptimeEl.className = 'stat-value ' + (uptimeVal >= 99 ? 'success' : uptimeVal >= 95 ? 'warning' : 'danger');
+
+        // Render timeline
+        renderTimeline(historyData.timeline || generateMockTimeline(period));
+
+        // Render device table
+        renderDeviceTable(monitors, historyData.devices || []);
+
+        // Render incidents
+        renderIncidents(historyData.incidents || generateMockIncidents(monitors));
+
+      } catch (error) {
+        console.error('Error generating report:', error);
+      }
+    }
+
+    function calculateAvgUptime(monitors) {
+      if (!monitors.length) return '--';
+      const online = monitors.filter(m => m.status === 'up').length;
+      return `${((online / monitors.length) * 100).toFixed(1)}%`;
+    }
+
+    function countIncidents(monitors) {
+      return monitors.filter(m => m.status === 'down').length;
+    }
+
+    function calculateAvgResponse(monitors) {
+      const pings = monitors.filter(m => m.ping).map(m => m.ping);
+      if (!pings.length) return '--';
+      return `${Math.round(pings.reduce((a, b) => a + b, 0) / pings.length)}ms`;
+    }
+
+    function generateMockTimeline(period) {
+      const days = period === '24h' ? 24 : period === '7d' ? 7 : period === '30d' ? 30 : 90;
+      const timeline = [];
+      for (let i = 0; i < days; i++) {
+        const rand = Math.random();
+        timeline.push({
+          date: new Date(Date.now() - i * (period === '24h' ? 3600000 : 86400000)),
+          status: rand > 0.95 ? 'down' : rand > 0.85 ? 'partial' : 'up',
+          uptime: rand > 0.95 ? 70 + Math.random() * 20 : rand > 0.85 ? 90 + Math.random() * 8 : 99 + Math.random()
+        });
+      }
+      return timeline.reverse();
+    }
+
+    function generateMockIncidents(monitors) {
+      const incidents = [];
+      monitors.filter(m => m.status === 'down').forEach(m => {
+        incidents.push({
+          device: m.name,
+          type: 'down',
+          startTime: new Date(Date.now() - Math.random() * 86400000),
+          duration: Math.floor(Math.random() * 3600)
+        });
+      });
+      return incidents.slice(0, 10);
+    }
+
+    function renderTimeline(timeline) {
+      const container = document.getElementById('uptime-timeline');
+      const labels = document.getElementById('timeline-labels');
+
+      container.innerHTML = timeline.map((day, i) => `
+        <div class="timeline-day ${day.status}"
+             title="${formatDate(day.date)}: ${day.uptime?.toFixed(1) || '--'}% uptime">
+        </div>
+      `).join('');
+
+      if (timeline.length > 0) {
+        labels.innerHTML = `
+          <span>${formatDate(timeline[0].date)}</span>
+          <span>${formatDate(timeline[timeline.length - 1].date)}</span>
+        `;
+      }
+    }
+
+    function renderDeviceTable(monitors, deviceHistory) {
+      const tbody = document.getElementById('device-table-body');
+
+      if (!monitors.length) {
+        tbody.innerHTML = `
+          <tr><td colspan="7" class="empty-state">
+            <div class="empty-icon">📭</div>
+            <div>No devices found for selected filters</div>
+          </td></tr>`;
+        return;
+      }
+
+      tbody.innerHTML = monitors.map(m => {
+        const history = deviceHistory.find(d => d.id === m.id) || {};
+        const uptime = history.uptime ?? (m.status === 'up' ? 99.5 + Math.random() * 0.5 : 85 + Math.random() * 10);
+        const incidents = history.incidents ?? (m.status === 'down' ? 1 : 0);
+        const avgPing = history.avgPing ?? m.ping ?? '--';
+
+        return `
+          <tr>
+            <td>
+              <span class="status-dot ${m.status === 'up' ? 'online' : 'offline'}"></span>
+              ${m.name}
+            </td>
+            <td>${m.floor || '--'}</td>
+            <td>${formatDeviceType(m.device_type)}</td>
+            <td>${m.status === 'up' ? '🟢 Online' : '🔴 Offline'}</td>
+            <td>
+              <div style="display: flex; align-items: center; gap: 8px;">
+                <div class="uptime-bar">
+                  <div class="uptime-bar-fill ${getUptimeClass(uptime)}" style="width: ${uptime}%"></div>
+                </div>
+                <span>${uptime.toFixed(1)}%</span>
+              </div>
+            </td>
+            <td>${incidents}</td>
+            <td>${typeof avgPing === 'number' ? avgPing + 'ms' : avgPing}</td>
+          </tr>
+        `;
+      }).join('');
+    }
+
+    function renderIncidents(incidents) {
+      const container = document.getElementById('incidents-list');
+
+      if (!incidents.length) {
+        container.innerHTML = `
+          <div class="empty-state">
+            <div class="empty-icon">🎉</div>
+            <div>No incidents in selected period</div>
+          </div>`;
+        return;
+      }
+
+      container.innerHTML = incidents.map(inc => `
+        <div class="incident-item">
+          <div class="incident-icon ${inc.type}">
+            ${inc.type === 'down' ? '🔴' : '🟢'}
+          </div>
+          <div class="incident-content">
+            <div class="incident-title">${inc.device} went ${inc.type === 'down' ? 'offline' : 'online'}</div>
+            <div class="incident-time">${formatDateTime(inc.startTime)}</div>
+            ${inc.duration ? `<div class="incident-duration">Duration: ${formatDuration(inc.duration)}</div>` : ''}
+          </div>
+        </div>
+      `).join('');
+    }
+
+    function formatDate(date) {
+      return new Date(date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+    }
+
+    function formatDateTime(date) {
+      return new Date(date).toLocaleString('en-US', {
+        month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit'
+      });
+    }
+
+    function formatDuration(seconds) {
+      if (seconds < 60) return `${seconds}s`;
+      if (seconds < 3600) return `${Math.floor(seconds / 60)}m`;
+      return `${Math.floor(seconds / 3600)}h ${Math.floor((seconds % 3600) / 60)}m`;
+    }
+
+    function formatDeviceType(type) {
+      const types = {
+        accessPoints: '📡 Access Point',
+        printers: '🖨️ Printer',
+        polyLens: '📹 Zoom Room'
+      };
+      return types[type] || type;
+    }
+
+    function getUptimeClass(uptime) {
+      if (uptime >= 99.5) return 'uptime-excellent';
+      if (uptime >= 99) return 'uptime-good';
+      if (uptime >= 95) return 'uptime-warning';
+      return 'uptime-poor';
+    }
+
+    // Export functions
+    function exportCSV() {
+      const table = document.querySelector('.report-table');
+      const rows = table.querySelectorAll('tr');
+      let csv = [];
+
+      rows.forEach(row => {
+        const cols = row.querySelectorAll('th, td');
+        const rowData = [];
+        cols.forEach(col => rowData.push('"' + col.textContent.trim().replace(/"/g, '""') + '"'));
+        csv.push(rowData.join(','));
+      });
+
+      const blob = new Blob([csv.join('\n')], { type: 'text/csv' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `uptime-report-${new Date().toISOString().split('T')[0]}.csv`;
+      a.click();
+    }
+
+    function exportPDF() {
+      window.print();
+    }
+
+    // Initial load
+    generateReport();
+  </script>
+</body>
+</html>

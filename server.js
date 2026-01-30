@@ -142,6 +142,8 @@ db.exec(`
     floor TEXT NOT NULL,
     pos_x REAL NOT NULL,
     pos_y REAL NOT NULL,
+    tv_pos_x REAL,
+    tv_pos_y REAL,
     updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
   );
 
@@ -193,19 +195,61 @@ db.exec(`
   );
 
   CREATE INDEX IF NOT EXISTS idx_printer_status_monitor_time ON printer_status(monitor_id, time DESC);
+
+  CREATE TABLE IF NOT EXISTS incidents (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    device_id INTEGER,
+    device_name TEXT NOT NULL,
+    device_type TEXT,
+    type TEXT NOT NULL,
+    started_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    resolved_at DATETIME,
+    duration_minutes INTEGER,
+    notes TEXT
+  );
+
+  CREATE INDEX IF NOT EXISTS idx_incidents_started ON incidents(started_at DESC);
+
+  CREATE TABLE IF NOT EXISTS activity_log (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id INTEGER,
+    username TEXT,
+    action TEXT NOT NULL,
+    details TEXT,
+    ip_address TEXT,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+  );
+
+  CREATE INDEX IF NOT EXISTS idx_activity_log_created ON activity_log(created_at DESC);
+
+  CREATE TABLE IF NOT EXISTS zones (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    floor TEXT NOT NULL,
+    name TEXT NOT NULL,
+    x REAL NOT NULL,
+    y REAL NOT NULL,
+    width REAL NOT NULL,
+    height REAL NOT NULL,
+    color TEXT DEFAULT '#3B82F6',
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+  );
 `);
 
 // Run migrations for new columns (safe to run multiple times)
 const migrations = [
   `ALTER TABLE monitors ADD COLUMN pos_x REAL DEFAULT NULL`,
   `ALTER TABLE monitors ADD COLUMN pos_y REAL DEFAULT NULL`,
+  `ALTER TABLE monitors ADD COLUMN tv_pos_x REAL DEFAULT NULL`,
+  `ALTER TABLE monitors ADD COLUMN tv_pos_y REAL DEFAULT NULL`,
   `ALTER TABLE monitors ADD COLUMN maintenance INTEGER DEFAULT 0`,
   `ALTER TABLE monitors ADD COLUMN maintenance_note TEXT DEFAULT NULL`,
   `ALTER TABLE monitors ADD COLUMN maintenance_until DATETIME DEFAULT NULL`,
+  `ALTER TABLE monitors ADD COLUMN disabled INTEGER DEFAULT 0`,
   // Poly devices maintenance columns
   `ALTER TABLE poly_devices ADD COLUMN maintenance INTEGER DEFAULT 0`,
   `ALTER TABLE poly_devices ADD COLUMN maintenance_note TEXT DEFAULT NULL`,
   `ALTER TABLE poly_devices ADD COLUMN maintenance_until DATETIME DEFAULT NULL`,
+  `ALTER TABLE poly_devices ADD COLUMN disabled INTEGER DEFAULT 0`,
   // Threshold alerts dismissed column
   `ALTER TABLE threshold_alerts ADD COLUMN dismissed_at DATETIME DEFAULT NULL`,
   `ALTER TABLE threshold_alerts ADD COLUMN dismissed_by TEXT DEFAULT NULL`,
@@ -214,6 +258,15 @@ const migrations = [
   // Health score columns
   `ALTER TABLE monitors ADD COLUMN health_score INTEGER DEFAULT 100`,
   `ALTER TABLE monitors ADD COLUMN last_health_update DATETIME DEFAULT NULL`,
+  // Room positions TV mode columns
+  `ALTER TABLE room_positions ADD COLUMN tv_pos_x REAL DEFAULT NULL`,
+  `ALTER TABLE room_positions ADD COLUMN tv_pos_y REAL DEFAULT NULL`,
+  // 2FA columns for users
+  `ALTER TABLE users ADD COLUMN totp_secret TEXT DEFAULT NULL`,
+  `ALTER TABLE users ADD COLUMN totp_enabled INTEGER DEFAULT 0`,
+  `ALTER TABLE users ADD COLUMN totp_verified INTEGER DEFAULT 0`,
+  // Custom check interval per device
+  `ALTER TABLE monitors ADD COLUMN check_interval INTEGER DEFAULT NULL`,
 ];
 
 migrations.forEach(sql => {
@@ -1481,12 +1534,29 @@ async function fetchPolyLensDevices() {
 
 // Login
 app.post('/api/auth/login', (req, res) => {
-  const { username, password } = req.body;
+  const { username, password, totp_code } = req.body;
 
   const user = db.prepare('SELECT * FROM users WHERE username = ?').get(username);
 
   if (!user || user.password !== password) {
     return res.status(401).json({ success: false, error: 'Invalid credentials' });
+  }
+
+  // Check if 2FA is enabled
+  if (user.totp_enabled === 1) {
+    if (!totp_code) {
+      // Return that 2FA is required
+      return res.json({
+        success: false,
+        requires_2fa: true,
+        message: 'Two-factor authentication code required'
+      });
+    }
+
+    // Verify the TOTP code
+    if (!verifyTOTP(user.totp_secret, totp_code)) {
+      return res.status(401).json({ success: false, error: 'Invalid 2FA code' });
+    }
   }
 
   const token = createSession(user.id);
@@ -1514,6 +1584,217 @@ app.post('/api/auth/logout', authMiddleware, (req, res) => {
 // Get current user
 app.get('/api/auth/me', authMiddleware, (req, res) => {
   res.json({ success: true, user: req.user });
+});
+
+// ==================== USER MANAGEMENT ROUTES ====================
+
+// Get all users (admin only)
+app.get('/api/users', authMiddleware, (req, res) => {
+  if (req.user.role !== 'admin') {
+    return res.status(403).json({ success: false, error: 'Admin access required' });
+  }
+
+  const users = db.prepare('SELECT id, username, role, created_at FROM users').all();
+  res.json({ success: true, users });
+});
+
+// Create new user (admin only)
+app.post('/api/users', authMiddleware, (req, res) => {
+  if (req.user.role !== 'admin') {
+    return res.status(403).json({ success: false, error: 'Admin access required' });
+  }
+
+  const { username, password, role } = req.body;
+
+  if (!username || !password) {
+    return res.status(400).json({ success: false, error: 'Username and password required' });
+  }
+
+  if (password.length < 6) {
+    return res.status(400).json({ success: false, error: 'Password must be at least 6 characters' });
+  }
+
+  // Check if username exists
+  const existing = db.prepare('SELECT id FROM users WHERE username = ?').get(username);
+  if (existing) {
+    return res.status(400).json({ success: false, error: 'Username already exists' });
+  }
+
+  try {
+    const result = db.prepare('INSERT INTO users (username, password, role) VALUES (?, ?, ?)').run(
+      username,
+      password,
+      role || 'user'
+    );
+    res.json({ success: true, id: result.lastInsertRowid });
+  } catch (e) {
+    res.status(500).json({ success: false, error: 'Failed to create user' });
+  }
+});
+
+// Update user (admin only)
+app.put('/api/users/:id', authMiddleware, (req, res) => {
+  if (req.user.role !== 'admin') {
+    return res.status(403).json({ success: false, error: 'Admin access required' });
+  }
+
+  const userId = parseInt(req.params.id);
+  const { role, password } = req.body;
+
+  // Prevent admin from demoting themselves
+  if (userId === req.user.id && role === 'user') {
+    return res.status(400).json({ success: false, error: 'Cannot demote yourself' });
+  }
+
+  try {
+    if (password) {
+      db.prepare('UPDATE users SET role = ?, password = ? WHERE id = ?').run(role, password, userId);
+    } else {
+      db.prepare('UPDATE users SET role = ? WHERE id = ?').run(role, userId);
+    }
+    res.json({ success: true });
+  } catch (e) {
+    res.status(500).json({ success: false, error: 'Failed to update user' });
+  }
+});
+
+// Delete user (admin only)
+app.delete('/api/users/:id', authMiddleware, (req, res) => {
+  if (req.user.role !== 'admin') {
+    return res.status(403).json({ success: false, error: 'Admin access required' });
+  }
+
+  const userId = parseInt(req.params.id);
+
+  // Prevent admin from deleting themselves
+  if (userId === req.user.id) {
+    return res.status(400).json({ success: false, error: 'Cannot delete yourself' });
+  }
+
+  try {
+    db.prepare('DELETE FROM users WHERE id = ?').run(userId);
+    res.json({ success: true });
+  } catch (e) {
+    res.status(500).json({ success: false, error: 'Failed to delete user' });
+  }
+});
+
+// ==================== INCIDENTS ROUTES ====================
+
+// Get all incidents
+app.get('/api/incidents', authMiddleware, (req, res) => {
+  const limit = parseInt(req.query.limit) || 100;
+  const incidents = db.prepare('SELECT * FROM incidents ORDER BY started_at DESC LIMIT ?').all(limit);
+  res.json({ success: true, incidents });
+});
+
+// Create incident
+app.post('/api/incidents', authMiddleware, (req, res) => {
+  const { device_id, device_name, device_type, type, notes } = req.body;
+  try {
+    const result = db.prepare(`
+      INSERT INTO incidents (device_id, device_name, device_type, type, notes)
+      VALUES (?, ?, ?, ?, ?)
+    `).run(device_id, device_name, device_type, type, notes);
+    res.json({ success: true, id: result.lastInsertRowid });
+  } catch (e) {
+    res.status(500).json({ success: false, error: 'Failed to create incident' });
+  }
+});
+
+// Resolve incident
+app.put('/api/incidents/:id/resolve', authMiddleware, (req, res) => {
+  const id = parseInt(req.params.id);
+  try {
+    const incident = db.prepare('SELECT started_at FROM incidents WHERE id = ?').get(id);
+    if (!incident) {
+      return res.status(404).json({ success: false, error: 'Incident not found' });
+    }
+    const duration = Math.round((Date.now() - new Date(incident.started_at).getTime()) / 60000);
+    db.prepare('UPDATE incidents SET resolved_at = CURRENT_TIMESTAMP, duration_minutes = ? WHERE id = ?').run(duration, id);
+    res.json({ success: true });
+  } catch (e) {
+    res.status(500).json({ success: false, error: 'Failed to resolve incident' });
+  }
+});
+
+// ==================== ACTIVITY LOG ROUTES ====================
+
+// Get activity log
+app.get('/api/activity-log', authMiddleware, (req, res) => {
+  if (req.user.role !== 'admin') {
+    return res.status(403).json({ success: false, error: 'Admin access required' });
+  }
+  const limit = parseInt(req.query.limit) || 100;
+  const logs = db.prepare('SELECT * FROM activity_log ORDER BY created_at DESC LIMIT ?').all(limit);
+  res.json({ success: true, logs });
+});
+
+// Create activity log entry
+app.post('/api/activity-log', authMiddleware, (req, res) => {
+  const { action, details } = req.body;
+  const ip = req.ip || req.connection.remoteAddress;
+  try {
+    db.prepare(`
+      INSERT INTO activity_log (user_id, username, action, details, ip_address)
+      VALUES (?, ?, ?, ?, ?)
+    `).run(req.user.id, req.user.username, action, details, ip);
+    res.json({ success: true });
+  } catch (e) {
+    res.status(500).json({ success: false, error: 'Failed to log activity' });
+  }
+});
+
+// ==================== ZONES ROUTES ====================
+
+// Get zones for a floor
+app.get('/api/zones', (req, res) => {
+  const floor = req.query.floor;
+  let zones;
+  if (floor) {
+    zones = db.prepare('SELECT * FROM zones WHERE floor = ?').all(floor);
+  } else {
+    zones = db.prepare('SELECT * FROM zones').all();
+  }
+  res.json({ success: true, zones });
+});
+
+// Create zone
+app.post('/api/zones', authMiddleware, (req, res) => {
+  const { floor, name, x, y, width, height, color } = req.body;
+  try {
+    const result = db.prepare(`
+      INSERT INTO zones (floor, name, x, y, width, height, color)
+      VALUES (?, ?, ?, ?, ?, ?, ?)
+    `).run(floor, name, x, y, width, height, color || '#3B82F6');
+    res.json({ success: true, id: result.lastInsertRowid });
+  } catch (e) {
+    res.status(500).json({ success: false, error: 'Failed to create zone' });
+  }
+});
+
+// Update zone
+app.put('/api/zones/:id', authMiddleware, (req, res) => {
+  const { name, x, y, width, height, color } = req.body;
+  try {
+    db.prepare(`
+      UPDATE zones SET name = ?, x = ?, y = ?, width = ?, height = ?, color = ?
+      WHERE id = ?
+    `).run(name, x, y, width, height, color, req.params.id);
+    res.json({ success: true });
+  } catch (e) {
+    res.status(500).json({ success: false, error: 'Failed to update zone' });
+  }
+});
+
+// Delete zone
+app.delete('/api/zones/:id', authMiddleware, (req, res) => {
+  try {
+    db.prepare('DELETE FROM zones WHERE id = ?').run(req.params.id);
+    res.json({ success: true });
+  } catch (e) {
+    res.status(500).json({ success: false, error: 'Failed to delete zone' });
+  }
 });
 
 // ==================== API INTEGRATIONS ROUTES ====================
@@ -1722,6 +2003,24 @@ app.get('/api/monitors/:id/history', (req, res) => {
   const heartbeats = db.prepare(`
     SELECT * FROM heartbeats WHERE monitor_id = ? ORDER BY time DESC LIMIT ?
   `).all(req.params.id, limit);
+
+  res.json({ success: true, heartbeats });
+});
+
+// Get all heartbeats (for analytics export)
+app.get('/api/heartbeats', authMiddleware, (req, res) => {
+  const limit = parseInt(req.query.limit) || 1000;
+  const hours = parseInt(req.query.hours) || 24;
+  const since = new Date(Date.now() - hours * 60 * 60 * 1000).toISOString();
+
+  const heartbeats = db.prepare(`
+    SELECT h.*, m.name as monitor_name
+    FROM heartbeats h
+    LEFT JOIN monitors m ON h.monitor_id = m.id
+    WHERE h.time >= ?
+    ORDER BY h.time DESC
+    LIMIT ?
+  `).all(since, limit);
 
   res.json({ success: true, heartbeats });
 });
@@ -2023,6 +2322,24 @@ app.patch('/api/poly-devices/:deviceId/maintenance', authMiddleware, (req, res) 
   res.json({ success: true, maintenance: maintenance ? 1 : 0 });
 });
 
+// Disable/enable a poly device
+app.patch('/api/poly-devices/:deviceId/disable', authMiddleware, (req, res) => {
+  const { disabled } = req.body;
+  const device = db.prepare('SELECT * FROM poly_devices WHERE device_id = ?').get(req.params.deviceId);
+
+  if (!device) {
+    return res.status(404).json({ success: false, error: 'Poly device not found' });
+  }
+
+  db.prepare('UPDATE poly_devices SET disabled = ? WHERE device_id = ?')
+    .run(disabled ? 1 : 0, req.params.deviceId);
+
+  const action = disabled ? 'disabled' : 'enabled';
+  console.log(`Poly device ${device.name} ${action}`);
+
+  res.json({ success: true, disabled: disabled ? 1 : 0 });
+});
+
 
 // Add a new monitor (any authenticated user can add)
 app.post('/api/monitors', authMiddleware, (req, res) => {
@@ -2116,10 +2433,15 @@ app.put('/api/monitors/:id', authMiddleware, (req, res) => {
 
 // Update monitor position (any authenticated user)
 app.patch('/api/monitors/:id/position', authMiddleware, (req, res) => {
-  const { pos_x, pos_y } = req.body;
+  const { pos_x, pos_y, tv_mode } = req.body;
 
-  db.prepare('UPDATE monitors SET pos_x = ?, pos_y = ? WHERE id = ?')
-    .run(pos_x, pos_y, req.params.id);
+  if (tv_mode) {
+    db.prepare('UPDATE monitors SET tv_pos_x = ?, tv_pos_y = ? WHERE id = ?')
+      .run(pos_x, pos_y, req.params.id);
+  } else {
+    db.prepare('UPDATE monitors SET pos_x = ?, pos_y = ? WHERE id = ?')
+      .run(pos_x, pos_y, req.params.id);
+  }
 
   res.json({ success: true });
 });
@@ -2157,6 +2479,33 @@ app.get('/api/monitors/maintenance', (req, res) => {
   const monitors = db.prepare(`
     SELECT id, name, floor, device_type, maintenance_note, maintenance_until
     FROM monitors WHERE maintenance = 1
+  `).all();
+
+  res.json({ success: true, monitors });
+});
+
+// Toggle disabled status for a monitor (non-serviceable devices)
+app.patch('/api/monitors/:id/disable', authMiddleware, (req, res) => {
+  const { disabled } = req.body;
+  const monitor = db.prepare('SELECT * FROM monitors WHERE id = ?').get(req.params.id);
+
+  if (!monitor) {
+    return res.status(404).json({ success: false, error: 'Monitor not found' });
+  }
+
+  db.prepare('UPDATE monitors SET disabled = ? WHERE id = ?')
+    .run(disabled ? 1 : 0, req.params.id);
+
+  console.log(`${monitor.name} ${disabled ? 'disabled' : 'enabled'} (non-serviceable)`);
+
+  res.json({ success: true, disabled: disabled ? 1 : 0 });
+});
+
+// Get all disabled devices
+app.get('/api/monitors/disabled', (req, res) => {
+  const monitors = db.prepare(`
+    SELECT id, name, floor, device_type
+    FROM monitors WHERE disabled = 1
   `).all();
 
   res.json({ success: true, monitors });
@@ -2338,20 +2687,34 @@ app.get('/api/room-positions/:floor', (req, res) => {
   res.json({ success: true, positions: posMap });
 });
 
-// Save room position
+// Save room position (supports both regular and TV mode positions)
 app.patch('/api/room-positions/:roomId', authMiddleware, (req, res) => {
-  const { pos_x, pos_y, floor } = req.body;
+  const { pos_x, pos_y, floor, tv_mode } = req.body;
   const roomId = req.params.roomId;
 
-  db.prepare(`
-    INSERT INTO room_positions (room_id, floor, pos_x, pos_y, updated_at)
-    VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP)
-    ON CONFLICT(room_id) DO UPDATE SET
-      pos_x = excluded.pos_x,
-      pos_y = excluded.pos_y,
-      floor = excluded.floor,
-      updated_at = CURRENT_TIMESTAMP
-  `).run(roomId, floor, pos_x, pos_y);
+  if (tv_mode) {
+    // Update TV mode positions only
+    db.prepare(`
+      INSERT INTO room_positions (room_id, floor, pos_x, pos_y, tv_pos_x, tv_pos_y, updated_at)
+      VALUES (?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+      ON CONFLICT(room_id) DO UPDATE SET
+        tv_pos_x = excluded.tv_pos_x,
+        tv_pos_y = excluded.tv_pos_y,
+        floor = excluded.floor,
+        updated_at = CURRENT_TIMESTAMP
+    `).run(roomId, floor, pos_x, pos_y, pos_x, pos_y);
+  } else {
+    // Update regular positions only
+    db.prepare(`
+      INSERT INTO room_positions (room_id, floor, pos_x, pos_y, updated_at)
+      VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP)
+      ON CONFLICT(room_id) DO UPDATE SET
+        pos_x = excluded.pos_x,
+        pos_y = excluded.pos_y,
+        floor = excluded.floor,
+        updated_at = CURRENT_TIMESTAMP
+    `).run(roomId, floor, pos_x, pos_y);
+  }
 
   res.json({ success: true });
 });
@@ -3749,6 +4112,309 @@ app.post('/api/monitors/bulk-action', authMiddleware, (req, res) => {
 // Serve manifest.json for PWA
 app.get('/manifest.json', (req, res) => {
   res.sendFile(path.join(__dirname, 'manifest.json'));
+});
+
+// ==================== 2FA ENDPOINTS ====================
+
+// Generate 2FA secret for a user
+app.post('/api/2fa/setup', authMiddleware, (req, res) => {
+  try {
+    const userId = req.user.id;
+    const user = db.prepare('SELECT * FROM users WHERE id = ?').get(userId);
+
+    if (!user) {
+      return res.status(404).json({ success: false, error: 'User not found' });
+    }
+
+    // Generate a random secret (base32 encoded)
+    const secret = generateTOTPSecret();
+
+    // Store the secret (not yet verified)
+    db.prepare('UPDATE users SET totp_secret = ?, totp_verified = 0 WHERE id = ?').run(secret, userId);
+
+    // Generate QR code URL for authenticator apps
+    const otpAuthUrl = `otpauth://totp/OfficeMonitor:${user.username}?secret=${secret}&issuer=OfficeMonitor`;
+
+    res.json({
+      success: true,
+      secret,
+      qrCodeUrl: otpAuthUrl,
+      message: 'Scan the QR code with your authenticator app, then verify with a code'
+    });
+  } catch (error) {
+    console.error('2FA setup error:', error);
+    res.status(500).json({ success: false, error: 'Failed to setup 2FA' });
+  }
+});
+
+// Verify and enable 2FA
+app.post('/api/2fa/verify', authMiddleware, (req, res) => {
+  try {
+    const { code } = req.body;
+    const userId = req.user.id;
+    const user = db.prepare('SELECT * FROM users WHERE id = ?').get(userId);
+
+    if (!user || !user.totp_secret) {
+      return res.status(400).json({ success: false, error: '2FA not set up' });
+    }
+
+    // Verify the code
+    if (verifyTOTP(user.totp_secret, code)) {
+      db.prepare('UPDATE users SET totp_enabled = 1, totp_verified = 1 WHERE id = ?').run(userId);
+      logActivity(req, 'enable_2fa', 'user', userId, user.username);
+      res.json({ success: true, message: '2FA enabled successfully' });
+    } else {
+      res.status(400).json({ success: false, error: 'Invalid verification code' });
+    }
+  } catch (error) {
+    console.error('2FA verify error:', error);
+    res.status(500).json({ success: false, error: 'Failed to verify 2FA' });
+  }
+});
+
+// Disable 2FA
+app.post('/api/2fa/disable', authMiddleware, (req, res) => {
+  try {
+    const { code, password } = req.body;
+    const userId = req.user.id;
+    const user = db.prepare('SELECT * FROM users WHERE id = ?').get(userId);
+
+    if (!user) {
+      return res.status(404).json({ success: false, error: 'User not found' });
+    }
+
+    // Verify password
+    if (!bcrypt.compareSync(password, user.password)) {
+      return res.status(401).json({ success: false, error: 'Invalid password' });
+    }
+
+    // Verify TOTP code if 2FA is enabled
+    if (user.totp_enabled && !verifyTOTP(user.totp_secret, code)) {
+      return res.status(400).json({ success: false, error: 'Invalid 2FA code' });
+    }
+
+    db.prepare('UPDATE users SET totp_enabled = 0, totp_secret = NULL, totp_verified = 0 WHERE id = ?').run(userId);
+    logActivity(req, 'disable_2fa', 'user', userId, user.username);
+    res.json({ success: true, message: '2FA disabled successfully' });
+  } catch (error) {
+    console.error('2FA disable error:', error);
+    res.status(500).json({ success: false, error: 'Failed to disable 2FA' });
+  }
+});
+
+// Check 2FA status
+app.get('/api/2fa/status', authMiddleware, (req, res) => {
+  try {
+    const user = db.prepare('SELECT totp_enabled FROM users WHERE id = ?').get(req.user.id);
+    res.json({ success: true, enabled: user?.totp_enabled === 1 });
+  } catch (error) {
+    res.status(500).json({ success: false, error: 'Failed to get 2FA status' });
+  }
+});
+
+// TOTP Helper functions
+function generateTOTPSecret() {
+  const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ234567';
+  let secret = '';
+  for (let i = 0; i < 32; i++) {
+    secret += chars[Math.floor(Math.random() * chars.length)];
+  }
+  return secret;
+}
+
+function verifyTOTP(secret, code) {
+  // Simple TOTP verification (30-second window)
+  const time = Math.floor(Date.now() / 30000);
+
+  // Check current and adjacent time windows
+  for (let i = -1; i <= 1; i++) {
+    const expectedCode = generateTOTPCode(secret, time + i);
+    if (expectedCode === code) {
+      return true;
+    }
+  }
+  return false;
+}
+
+function generateTOTPCode(secret, time) {
+  // Base32 decode
+  const base32Chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ234567';
+  let bits = '';
+  for (const char of secret.toUpperCase()) {
+    const val = base32Chars.indexOf(char);
+    if (val === -1) continue;
+    bits += val.toString(2).padStart(5, '0');
+  }
+
+  const bytes = [];
+  for (let i = 0; i < bits.length; i += 8) {
+    bytes.push(parseInt(bits.substr(i, 8), 2));
+  }
+
+  // Create HMAC-SHA1
+  const crypto = require('crypto');
+  const timeBuffer = Buffer.alloc(8);
+  timeBuffer.writeBigInt64BE(BigInt(time));
+
+  const hmac = crypto.createHmac('sha1', Buffer.from(bytes));
+  hmac.update(timeBuffer);
+  const hash = hmac.digest();
+
+  // Dynamic truncation
+  const offset = hash[hash.length - 1] & 0x0f;
+  const code = ((hash[offset] & 0x7f) << 24) |
+               ((hash[offset + 1] & 0xff) << 16) |
+               ((hash[offset + 2] & 0xff) << 8) |
+               (hash[offset + 3] & 0xff);
+
+  return String(code % 1000000).padStart(6, '0');
+}
+
+// ==================== REPORTS API ====================
+
+// Get uptime report data
+app.get('/api/reports/uptime', authMiddleware, (req, res) => {
+  try {
+    const { period = '7d', floor = 'all', type = 'all' } = req.query;
+
+    // Calculate time range
+    let hoursBack = 24 * 7; // default 7 days
+    if (period === '24h') hoursBack = 24;
+    else if (period === '30d') hoursBack = 24 * 30;
+    else if (period === '90d') hoursBack = 24 * 90;
+
+    const startTime = new Date(Date.now() - hoursBack * 3600000).toISOString();
+
+    // Get monitors
+    let monitors = db.prepare('SELECT * FROM monitors WHERE active = 1').all();
+    if (floor !== 'all') monitors = monitors.filter(m => m.floor === floor);
+    if (type !== 'all') monitors = monitors.filter(m => m.device_type === type);
+
+    // Calculate uptime for each device
+    const devices = monitors.map(m => {
+      const heartbeats = db.prepare(`
+        SELECT status, ping FROM heartbeats
+        WHERE monitor_id = ? AND time > ?
+        ORDER BY time DESC
+      `).all(m.id, startTime);
+
+      const total = heartbeats.length || 1;
+      const upCount = heartbeats.filter(h => h.status === 1).length;
+      const uptime = (upCount / total) * 100;
+
+      const pings = heartbeats.filter(h => h.ping).map(h => h.ping);
+      const avgPing = pings.length ? pings.reduce((a, b) => a + b, 0) / pings.length : null;
+
+      const incidents = db.prepare(`
+        SELECT COUNT(*) as count FROM incidents
+        WHERE monitor_id = ? AND created_at > ?
+      `).get(m.id, startTime)?.count || 0;
+
+      return {
+        id: m.id,
+        name: m.name,
+        floor: m.floor,
+        type: m.device_type,
+        uptime: parseFloat(uptime.toFixed(2)),
+        avgPing: avgPing ? Math.round(avgPing) : null,
+        incidents
+      };
+    });
+
+    // Calculate summary
+    const avgUptime = devices.length ?
+      devices.reduce((a, d) => a + d.uptime, 0) / devices.length : 0;
+    const totalIncidents = devices.reduce((a, d) => a + d.incidents, 0);
+    const avgResponse = devices.filter(d => d.avgPing).length ?
+      devices.filter(d => d.avgPing).reduce((a, d) => a + d.avgPing, 0) /
+      devices.filter(d => d.avgPing).length : null;
+
+    // Generate timeline data
+    const days = Math.min(hoursBack / 24, 90);
+    const timeline = [];
+    for (let i = 0; i < days; i++) {
+      const dayStart = new Date(Date.now() - (i + 1) * 86400000).toISOString();
+      const dayEnd = new Date(Date.now() - i * 86400000).toISOString();
+
+      const dayHeartbeats = db.prepare(`
+        SELECT status FROM heartbeats
+        WHERE time > ? AND time <= ?
+      `).all(dayStart, dayEnd);
+
+      const dayTotal = dayHeartbeats.length || 1;
+      const dayUp = dayHeartbeats.filter(h => h.status === 1).length;
+      const dayUptime = (dayUp / dayTotal) * 100;
+
+      timeline.unshift({
+        date: dayEnd,
+        uptime: parseFloat(dayUptime.toFixed(2)),
+        status: dayUptime >= 99 ? 'up' : dayUptime >= 90 ? 'partial' : 'down'
+      });
+    }
+
+    // Get recent incidents
+    const incidents = db.prepare(`
+      SELECT i.*, m.name as device_name
+      FROM incidents i
+      LEFT JOIN monitors m ON i.monitor_id = m.id
+      WHERE i.created_at > ?
+      ORDER BY i.created_at DESC
+      LIMIT 20
+    `).all(startTime).map(inc => ({
+      device: inc.device_name || 'Unknown',
+      type: inc.incident_type === 'down' ? 'down' : 'up',
+      startTime: inc.created_at,
+      duration: inc.resolved_at ?
+        Math.round((new Date(inc.resolved_at) - new Date(inc.created_at)) / 1000) : null
+    }));
+
+    res.json({
+      success: true,
+      summary: {
+        avgUptime: parseFloat(avgUptime.toFixed(2)),
+        totalIncidents,
+        avgResponse
+      },
+      devices,
+      timeline,
+      incidents
+    });
+
+  } catch (error) {
+    console.error('Report error:', error);
+    res.status(500).json({ success: false, error: 'Failed to generate report' });
+  }
+});
+
+// Get response time history for a device
+app.get('/api/reports/response-time/:id', authMiddleware, (req, res) => {
+  try {
+    const { period = '24h' } = req.query;
+    const monitorId = req.params.id;
+
+    let hoursBack = 24;
+    if (period === '7d') hoursBack = 24 * 7;
+    else if (period === '30d') hoursBack = 24 * 30;
+
+    const startTime = new Date(Date.now() - hoursBack * 3600000).toISOString();
+
+    const heartbeats = db.prepare(`
+      SELECT ping, time FROM heartbeats
+      WHERE monitor_id = ? AND time > ? AND ping IS NOT NULL
+      ORDER BY time ASC
+    `).all(monitorId, startTime);
+
+    res.json({
+      success: true,
+      data: heartbeats.map(h => ({
+        time: h.time,
+        ping: h.ping
+      }))
+    });
+  } catch (error) {
+    console.error('Response time history error:', error);
+    res.status(500).json({ success: false, error: 'Failed to get response time history' });
+  }
 });
 
 // ==================== WEBSOCKET SERVER ====================

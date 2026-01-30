@@ -35,6 +35,3 @@ build/
 # Temp files
 tmp/
 temp/
-
-# Dashboard (user-specific customizations)
-dashboard.html

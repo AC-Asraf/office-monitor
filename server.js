@@ -2748,10 +2748,14 @@ app.get('/api/settings', (req, res) => {
   res.json({ success: true, settings });
 });
 
-// Update settings
-app.put('/api/settings', (req, res) => {
+// Update settings (supports both PUT and POST)
+function updateSettings(req, res) {
   const allowedKeys = [
-    'slack_webhook_url', 'slack_channel', 'slack_enabled',
+    'slack_webhook_url', 'slack_channel', 'slack_enabled', 'slack_username',
+    'slack_notify_offline', 'slack_notify_online', 'slack_notify_maintenance',
+    'slack_notify_slow', 'slack_slow_threshold',
+    'slack_quiet_enabled', 'slack_quiet_start', 'slack_quiet_end',
+    'slack_cooldown',
     'poly_lens_client_id', 'poly_lens_client_secret',
     'check_interval', 'ping_timeout'
   ];
@@ -2771,7 +2775,10 @@ app.put('/api/settings', (req, res) => {
   }
 
   res.json({ success: true });
-});
+}
+
+app.put('/api/settings', updateSettings);
+app.post('/api/settings', updateSettings);
 
 // Test Slack notification
 app.post('/api/settings/test-slack', async (req, res) => {

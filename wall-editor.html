@@ -1,0 +1,1879 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Wall Editor - Office Monitor</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    :root {
+      --bg-base: #0A0F1A;
+      --bg-surface: #111827;
+      --bg-elevated: #1F2937;
+      --bg-overlay: #374151;
+      --text-primary: #F9FAFB;
+      --text-secondary: #9CA3AF;
+      --text-muted: #6B7280;
+      --accent-blue: #3B82F6;
+      --accent-green: #10B981;
+      --accent-red: #EF4444;
+      --accent-yellow: #F59E0B;
+      --border-subtle: rgba(255, 255, 255, 0.06);
+      --border-default: rgba(255, 255, 255, 0.1);
+    }
+
+    body {
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+      background: var(--bg-base);
+      color: var(--text-primary);
+      min-height: 100vh;
+    }
+
+    /* Header */
+    .header {
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      height: 60px;
+      background: rgba(17, 24, 39, 0.95);
+      backdrop-filter: blur(10px);
+      border-bottom: 1px solid var(--border-subtle);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 20px;
+      z-index: 100;
+    }
+
+    .header-left {
+      display: flex;
+      align-items: center;
+      gap: 20px;
+    }
+
+    .logo {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 18px;
+      font-weight: 600;
+    }
+
+    .back-btn {
+      padding: 8px 16px;
+      background: var(--bg-elevated);
+      border: 1px solid var(--border-subtle);
+      color: var(--text-secondary);
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: 14px;
+      transition: all 0.2s;
+    }
+
+    .back-btn:hover {
+      background: var(--accent-blue);
+      color: white;
+      border-color: var(--accent-blue);
+    }
+
+    .floor-select {
+      padding: 8px 16px;
+      background: var(--bg-elevated);
+      border: 1px solid var(--border-subtle);
+      color: var(--text-primary);
+      border-radius: 6px;
+      font-size: 14px;
+      cursor: pointer;
+    }
+
+    .header-right {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .header-btn {
+      padding: 8px 16px;
+      background: var(--bg-elevated);
+      border: 1px solid var(--border-subtle);
+      color: var(--text-secondary);
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: 14px;
+      transition: all 0.2s;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .header-btn:hover {
+      background: var(--bg-overlay);
+      color: var(--text-primary);
+    }
+
+    .header-btn.primary {
+      background: var(--accent-blue);
+      border-color: var(--accent-blue);
+      color: white;
+    }
+
+    .header-btn.primary:hover {
+      background: #2563EB;
+    }
+
+    .header-btn.danger {
+      background: var(--accent-red);
+      border-color: var(--accent-red);
+      color: white;
+    }
+
+    /* Main Layout */
+    .main-container {
+      display: flex;
+      margin-top: 60px;
+      height: calc(100vh - 60px);
+    }
+
+    /* Left Panel - Tools */
+    .tools-panel {
+      width: 280px;
+      background: var(--bg-surface);
+      border-right: 1px solid var(--border-subtle);
+      padding: 20px;
+      overflow-y: auto;
+    }
+
+    .panel-title {
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--text-muted);
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      margin-bottom: 12px;
+    }
+
+    .tool-group {
+      margin-bottom: 24px;
+    }
+
+    .tool-btn {
+      width: 100%;
+      padding: 12px;
+      background: var(--bg-elevated);
+      border: 1px solid var(--border-subtle);
+      color: var(--text-primary);
+      border-radius: 8px;
+      cursor: pointer;
+      font-size: 14px;
+      margin-bottom: 8px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      transition: all 0.2s;
+    }
+
+    .tool-btn:hover {
+      background: var(--bg-overlay);
+      border-color: var(--border-default);
+    }
+
+    .tool-btn.active {
+      background: var(--accent-blue);
+      border-color: var(--accent-blue);
+    }
+
+    .tool-icon {
+      font-size: 18px;
+    }
+
+    .tool-info {
+      flex: 1;
+      text-align: left;
+    }
+
+    .tool-name {
+      font-weight: 500;
+    }
+
+    .tool-desc {
+      font-size: 11px;
+      color: var(--text-muted);
+      margin-top: 2px;
+    }
+
+    .tool-btn.active .tool-desc {
+      color: rgba(255,255,255,0.7);
+    }
+
+    /* Color picker */
+    .color-picker-group {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-bottom: 16px;
+    }
+
+    .color-swatch {
+      width: 32px;
+      height: 32px;
+      border-radius: 6px;
+      cursor: pointer;
+      border: 2px solid transparent;
+      transition: all 0.2s;
+    }
+
+    .color-swatch:hover {
+      transform: scale(1.1);
+    }
+
+    .color-swatch.active {
+      border-color: white;
+      box-shadow: 0 0 0 2px var(--accent-blue);
+    }
+
+    /* Mode Toggle */
+    .mode-toggle {
+      display: flex;
+      gap: 8px;
+      margin-bottom: 8px;
+    }
+
+    .mode-btn {
+      flex: 1;
+      padding: 10px 12px;
+      background: var(--bg-elevated);
+      border: 1px solid var(--border-subtle);
+      color: var(--text-secondary);
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: 13px;
+      font-weight: 500;
+      transition: all 0.15s;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+    }
+
+    .mode-btn:hover {
+      background: var(--bg-hover);
+      color: var(--text-primary);
+    }
+
+    .mode-btn.active {
+      background: var(--accent-blue);
+      border-color: var(--accent-blue);
+      color: white;
+    }
+
+    .mode-hint {
+      font-size: 11px;
+      color: var(--text-muted);
+      text-align: center;
+      padding: 4px;
+    }
+
+    /* Room name input */
+    .input-group {
+      margin-bottom: 16px;
+    }
+
+    .input-label {
+      font-size: 13px;
+      color: var(--text-secondary);
+      margin-bottom: 6px;
+      display: block;
+    }
+
+    .input-field {
+      width: 100%;
+      padding: 10px 12px;
+      background: var(--bg-elevated);
+      border: 1px solid var(--border-subtle);
+      color: var(--text-primary);
+      border-radius: 6px;
+      font-size: 14px;
+    }
+
+    .input-field:focus {
+      outline: none;
+      border-color: var(--accent-blue);
+    }
+
+    /* Rooms list */
+    .rooms-list {
+      max-height: 300px;
+      overflow-y: auto;
+    }
+
+    .room-item {
+      padding: 12px;
+      background: var(--bg-elevated);
+      border: 1px solid var(--border-subtle);
+      border-radius: 8px;
+      margin-bottom: 8px;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+
+    .room-item:hover {
+      border-color: var(--accent-blue);
+    }
+
+    .room-item.active {
+      border-color: var(--accent-blue);
+      background: rgba(59, 130, 246, 0.1);
+    }
+
+    .room-item-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    .room-item-name {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-weight: 500;
+    }
+
+    .room-color-dot {
+      width: 12px;
+      height: 12px;
+      border-radius: 3px;
+    }
+
+    .room-item-actions {
+      display: flex;
+      gap: 4px;
+    }
+
+    .room-action-btn {
+      padding: 4px 8px;
+      background: transparent;
+      border: none;
+      color: var(--text-muted);
+      cursor: pointer;
+      font-size: 14px;
+      border-radius: 4px;
+    }
+
+    .room-action-btn:hover {
+      background: var(--bg-overlay);
+      color: var(--text-primary);
+    }
+
+    .room-action-btn.delete:hover {
+      background: rgba(239, 68, 68, 0.2);
+      color: var(--accent-red);
+    }
+
+    .room-item-points {
+      font-size: 12px;
+      color: var(--text-muted);
+      margin-top: 4px;
+    }
+
+    /* Room Edit Panel */
+    .edit-section {
+      margin-bottom: 16px;
+    }
+
+    .edit-label {
+      display: block;
+      font-size: 12px;
+      color: var(--text-muted);
+      margin-bottom: 6px;
+    }
+
+    .edit-row {
+      display: flex;
+      gap: 8px;
+    }
+
+    .edit-input {
+      flex: 1;
+      background: var(--bg-secondary);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 8px 12px;
+      color: var(--text-primary);
+      font-size: 14px;
+    }
+
+    .edit-input:focus {
+      outline: none;
+      border-color: var(--accent-blue);
+    }
+
+    .edit-btn {
+      background: var(--bg-tertiary);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 8px 12px;
+      color: var(--text-primary);
+      font-size: 13px;
+      cursor: pointer;
+      transition: all 0.15s;
+    }
+
+    .edit-btn:hover {
+      background: var(--bg-hover);
+      border-color: var(--border-hover);
+    }
+
+    .edit-btn.active {
+      background: var(--accent-blue);
+      border-color: var(--accent-blue);
+      color: white;
+    }
+
+    .edit-btn.danger {
+      color: var(--accent-red);
+      border-color: var(--accent-red);
+    }
+
+    .edit-btn.danger:hover {
+      background: var(--accent-red);
+      color: white;
+    }
+
+    .edit-btn.full-width {
+      width: 100%;
+    }
+
+    .edit-color-picker {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+
+    .edit-hint {
+      font-size: 12px;
+      color: var(--text-muted);
+      margin-bottom: 8px;
+    }
+
+    .edit-mode-toggle {
+      margin-top: 8px;
+    }
+
+    .edit-actions {
+      display: flex;
+      gap: 8px;
+      margin-top: 16px;
+      padding-top: 16px;
+      border-top: 1px solid var(--border);
+    }
+
+    .edit-actions .edit-btn {
+      flex: 1;
+    }
+
+    /* Canvas Area */
+    .canvas-area {
+      flex: 1;
+      position: relative;
+      overflow: hidden;
+      background: var(--bg-base);
+    }
+
+    .canvas-container {
+      position: absolute;
+      inset: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    #editor-canvas {
+      max-width: 100%;
+      max-height: 100%;
+      cursor: crosshair;
+    }
+
+    /* Instructions overlay */
+    .instructions-overlay {
+      position: absolute;
+      bottom: 20px;
+      left: 50%;
+      transform: translateX(-50%);
+      background: rgba(17, 24, 39, 0.95);
+      backdrop-filter: blur(10px);
+      border: 1px solid var(--border-subtle);
+      border-radius: 8px;
+      padding: 12px 20px;
+      font-size: 13px;
+      color: var(--text-secondary);
+    }
+
+    .instructions-overlay kbd {
+      background: var(--bg-elevated);
+      padding: 2px 6px;
+      border-radius: 4px;
+      font-family: monospace;
+      margin: 0 2px;
+    }
+
+    /* No floor plan message */
+    .no-floorplan {
+      text-align: center;
+      color: var(--text-muted);
+      padding: 40px;
+    }
+
+    .no-floorplan-icon {
+      font-size: 64px;
+      margin-bottom: 16px;
+    }
+
+    .no-floorplan h2 {
+      margin-bottom: 8px;
+      color: var(--text-secondary);
+    }
+
+    .no-floorplan p {
+      margin-bottom: 20px;
+    }
+
+    /* Toast */
+    .toast {
+      position: fixed;
+      bottom: 80px;
+      left: 50%;
+      transform: translateX(-50%);
+      background: var(--bg-surface);
+      border: 1px solid var(--border-subtle);
+      border-radius: 8px;
+      padding: 12px 24px;
+      z-index: 1000;
+      font-size: 14px;
+      opacity: 0;
+      transition: opacity 0.3s;
+    }
+
+    .toast.visible { opacity: 1; }
+    .toast.success { border-color: var(--accent-green); }
+    .toast.error { border-color: var(--accent-red); }
+
+    /* Loading */
+    .loading {
+      position: fixed;
+      inset: 0;
+      background: var(--bg-base);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-direction: column;
+      gap: 20px;
+      z-index: 1000;
+    }
+
+    .loading-spinner {
+      width: 50px;
+      height: 50px;
+      border: 3px solid var(--bg-elevated);
+      border-top-color: var(--accent-blue);
+      border-radius: 50%;
+      animation: spin 1s linear infinite;
+    }
+
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+
+    /* Zoom controls */
+    .zoom-controls {
+      position: absolute;
+      bottom: 80px;
+      right: 20px;
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+
+    .zoom-btn {
+      width: 36px;
+      height: 36px;
+      background: var(--bg-surface);
+      border: 1px solid var(--border-subtle);
+      color: var(--text-primary);
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: 18px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .zoom-btn:hover {
+      background: var(--bg-elevated);
+    }
+  </style>
+</head>
+<body>
+  <div class="loading" id="loading">
+    <div class="loading-spinner"></div>
+    <div>Loading Wall Editor...</div>
+  </div>
+
+  <div class="header">
+    <div class="header-left">
+      <div class="logo">
+        <span>🏗️</span>
+        <span>Wall Editor</span>
+      </div>
+      <button class="back-btn" onclick="window.location.href='dashboard.html'">← Dashboard</button>
+      <select class="floor-select" id="floor-select" onchange="loadFloor(this.value)">
+        <option value="">Select Floor...</option>
+      </select>
+    </div>
+    <div class="header-right">
+      <button class="header-btn" onclick="undoLastPoint()">
+        ↩️ Undo
+      </button>
+      <button class="header-btn danger" onclick="clearCurrentRoom()">
+        🗑️ Clear
+      </button>
+      <button class="header-btn primary" onclick="saveAllRooms()">
+        💾 Save All
+      </button>
+      <button class="header-btn" onclick="window.location.href='3d-floor-view.html'">
+        🏠 View 3D
+      </button>
+      <button class="header-btn" onclick="window.location.href='reports.html'" title="Uptime Reports">
+        📊 Reports
+      </button>
+      <button class="header-btn" onclick="window.location.href='topology.html'" title="Network Topology">
+        🔗 Topology
+      </button>
+      <button class="header-btn" onclick="window.location.href='settings.html'" title="Settings">
+        ⚙️ Settings
+      </button>
+    </div>
+  </div>
+
+  <div class="main-container">
+    <div class="tools-panel">
+      <div class="tool-group">
+        <div class="panel-title">Drawing Mode</div>
+        <div class="mode-toggle">
+          <button class="mode-btn active" id="mode-room" onclick="setDrawingMode('room')">
+            <span>🏠</span> Room
+          </button>
+          <button class="mode-btn" id="mode-wall" onclick="setDrawingMode('wall')">
+            <span>🧱</span> Wall
+          </button>
+          <button class="mode-btn" id="mode-door" onclick="setDrawingMode('door')">
+            <span>🚪</span> Door
+          </button>
+        </div>
+        <div class="mode-hint" id="mode-hint">
+          Closed polygon for rooms/areas
+        </div>
+      </div>
+
+      <div class="tool-group">
+        <div class="panel-title">Drawing Tools</div>
+        <button class="tool-btn active" id="tool-draw" onclick="setTool('draw')">
+          <span class="tool-icon">✏️</span>
+          <div class="tool-info">
+            <div class="tool-name" id="draw-tool-name">Draw Room</div>
+            <div class="tool-desc">Click to place points</div>
+          </div>
+        </button>
+        <button class="tool-btn" id="tool-select" onclick="setTool('select')">
+          <span class="tool-icon">👆</span>
+          <div class="tool-info">
+            <div class="tool-name">Select</div>
+            <div class="tool-desc">Select and edit items</div>
+          </div>
+        </button>
+      </div>
+
+      <div class="tool-group">
+        <div class="panel-title" id="settings-title">Room Settings</div>
+        <div class="input-group">
+          <label class="input-label" id="name-label">Room Name</label>
+          <input type="text" class="input-field" id="room-name" placeholder="e.g., Conference Room A" value="Room">
+        </div>
+        <div class="input-group">
+          <label class="input-label">Wall Color</label>
+          <div class="color-picker-group" id="color-picker">
+            <div class="color-swatch active" style="background: #3B82F6" data-color="#3B82F6"></div>
+            <div class="color-swatch" style="background: #8B5CF6" data-color="#8B5CF6"></div>
+            <div class="color-swatch" style="background: #10B981" data-color="#10B981"></div>
+            <div class="color-swatch" style="background: #F59E0B" data-color="#F59E0B"></div>
+            <div class="color-swatch" style="background: #EF4444" data-color="#EF4444"></div>
+            <div class="color-swatch" style="background: #EC4899" data-color="#EC4899"></div>
+            <div class="color-swatch" style="background: #6B7280" data-color="#6B7280"></div>
+            <div class="color-swatch" style="background: #F9FAFB" data-color="#F9FAFB"></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="tool-group">
+        <div class="panel-title">Current Points: <span id="point-count">0</span></div>
+        <button class="tool-btn" onclick="finishRoom()" id="finish-room-btn" style="display: none;">
+          <span class="tool-icon">✅</span>
+          <div class="tool-info">
+            <div class="tool-name">Finish Room</div>
+            <div class="tool-desc">Complete the current room</div>
+          </div>
+        </button>
+      </div>
+
+      <div class="tool-group">
+        <div class="panel-title">Rooms on this Floor</div>
+        <div class="rooms-list" id="rooms-list">
+          <div style="color: var(--text-muted); font-size: 13px; padding: 12px;">
+            No rooms defined yet. Start drawing!
+          </div>
+        </div>
+      </div>
+
+      <!-- Room Edit Panel -->
+      <div class="tool-group" id="room-edit-panel" style="display: none;">
+        <div class="panel-title">Edit Selected Room</div>
+        <div class="edit-section">
+          <label class="edit-label">Room Name</label>
+          <div class="edit-row">
+            <input type="text" id="edit-room-name" class="edit-input" placeholder="Room name">
+            <button class="edit-btn" onclick="applyRoomRename()">Apply</button>
+          </div>
+        </div>
+        <div class="edit-section">
+          <label class="edit-label">Room Color</label>
+          <div class="edit-color-picker" id="edit-color-picker">
+            <div class="color-swatch" data-color="#3B82F6" style="background: #3B82F6"></div>
+            <div class="color-swatch" data-color="#10B981" style="background: #10B981"></div>
+            <div class="color-swatch" data-color="#F59E0B" style="background: #F59E0B"></div>
+            <div class="color-swatch" data-color="#EF4444" style="background: #EF4444"></div>
+            <div class="color-swatch" data-color="#8B5CF6" style="background: #8B5CF6"></div>
+            <div class="color-swatch" data-color="#EC4899" style="background: #EC4899"></div>
+            <div class="color-swatch" data-color="#06B6D4" style="background: #06B6D4"></div>
+            <div class="color-swatch" data-color="#84CC16" style="background: #84CC16"></div>
+          </div>
+        </div>
+        <div class="edit-section">
+          <label class="edit-label">Vertices</label>
+          <div class="edit-hint">Click and drag vertices on canvas to resize</div>
+          <div class="edit-mode-toggle">
+            <button class="edit-btn full-width" id="vertex-edit-btn" onclick="toggleVertexEditMode()">
+              Enable Vertex Editing
+            </button>
+          </div>
+        </div>
+        <div class="edit-actions">
+          <button class="edit-btn danger" onclick="deleteSelectedRoom()">Delete Room</button>
+          <button class="edit-btn" onclick="deselectRoom()">Done</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="canvas-area">
+      <div class="canvas-container" id="canvas-container">
+        <canvas id="editor-canvas"></canvas>
+      </div>
+
+      <div class="zoom-controls">
+        <button class="zoom-btn" onclick="zoomIn()">+</button>
+        <button class="zoom-btn" onclick="zoomOut()">-</button>
+        <button class="zoom-btn" onclick="resetZoom()">⟲</button>
+      </div>
+
+      <div class="instructions-overlay" id="instructions">
+        <kbd>Click</kbd> Place point &nbsp; <kbd>Double-click</kbd> Finish room &nbsp; <kbd>Esc</kbd> Cancel &nbsp; <kbd>Scroll</kbd> Zoom
+      </div>
+    </div>
+  </div>
+
+  <div class="toast" id="toast"></div>
+
+  <script>
+    // Configuration
+    const API_URL = window.location.origin;
+    const authToken = localStorage.getItem('authToken');
+
+    // State
+    let currentFloor = null;
+    let floorPlan = null;
+    let currentTool = 'draw';
+    let currentColor = '#3B82F6';
+    let currentPoints = [];
+    let rooms = []; // Rooms for current floor
+    let selectedRoomIndex = -1;
+    let zoom = 1;
+    let pan = { x: 0, y: 0 };
+    let isPanning = false;
+    let lastPanPos = { x: 0, y: 0 };
+    let vertexEditMode = false;
+    let draggingVertexIndex = -1;
+    let pendingRoomChanges = false;
+    let drawingMode = 'room'; // 'room' = closed polygon, 'wall' = open path
+
+    // Canvas
+    let canvas, ctx;
+    let floorPlanImage = null;
+
+    // Initialize
+    async function init() {
+      if (!authToken) {
+        window.location.href = 'dashboard.html';
+        return;
+      }
+
+      canvas = document.getElementById('editor-canvas');
+      ctx = canvas.getContext('2d');
+
+      // Setup color picker
+      document.querySelectorAll('.color-swatch').forEach(swatch => {
+        swatch.addEventListener('click', () => {
+          document.querySelectorAll('.color-swatch').forEach(s => s.classList.remove('active'));
+          swatch.classList.add('active');
+          currentColor = swatch.dataset.color;
+        });
+      });
+
+      // Load floors
+      await loadFloors();
+
+      // Setup event listeners
+      setupCanvasEvents();
+      setupKeyboardShortcuts();
+
+      // Setup edit color picker
+      document.querySelectorAll('#edit-color-picker .color-swatch').forEach(swatch => {
+        swatch.addEventListener('click', () => applyEditColor(swatch.dataset.color));
+      });
+
+      document.getElementById('loading').style.display = 'none';
+    }
+
+    // Load available floors
+    async function loadFloors() {
+      try {
+        const response = await fetch(`${API_URL}/api/floor-plans`, {
+          headers: { 'Authorization': `Bearer ${authToken}` }
+        });
+        const data = await response.json();
+
+        const select = document.getElementById('floor-select');
+        select.innerHTML = '<option value="">Select Floor...</option>';
+
+        (data.plans || []).forEach(plan => {
+          const option = document.createElement('option');
+          option.value = plan.floor;
+          option.textContent = plan.floor;
+          select.appendChild(option);
+        });
+
+        // Also fetch monitors to get floors without plans
+        const monitorsRes = await fetch(`${API_URL}/api/monitors`, {
+          headers: { 'Authorization': `Bearer ${authToken}` }
+        });
+        const monitorsData = await monitorsRes.json();
+
+        const existingFloors = new Set((data.plans || []).map(p => p.floor));
+        const monitorFloors = new Set((monitorsData.monitors || []).map(m => m.floor).filter(f => f));
+
+        monitorFloors.forEach(floor => {
+          if (!existingFloors.has(floor)) {
+            const option = document.createElement('option');
+            option.value = floor;
+            option.textContent = `${floor} (no blueprint)`;
+            select.appendChild(option);
+          }
+        });
+
+      } catch (e) {
+        console.error('Failed to load floors:', e);
+        showToast('Failed to load floors', 'error');
+      }
+    }
+
+    // Load a specific floor
+    async function loadFloor(floor) {
+      if (!floor) {
+        currentFloor = null;
+        floorPlan = null;
+        floorPlanImage = null;
+        rooms = [];
+        currentPoints = [];
+        renderCanvas();
+        renderRoomsList();
+        return;
+      }
+
+      currentFloor = floor;
+
+      // Load floor plan image
+      try {
+        const response = await fetch(`${API_URL}/api/floor-plans/${encodeURIComponent(floor)}`, {
+          headers: { 'Authorization': `Bearer ${authToken}` }
+        });
+        const data = await response.json();
+
+        if (data.success && data.plan && data.plan.image_data) {
+          floorPlan = data.plan;
+          await loadFloorPlanImage(data.plan);
+        } else {
+          floorPlan = null;
+          floorPlanImage = null;
+          // Set default canvas size
+          canvas.width = 800;
+          canvas.height = 600;
+        }
+      } catch (e) {
+        console.error('Failed to load floor plan:', e);
+        floorPlan = null;
+        floorPlanImage = null;
+        canvas.width = 800;
+        canvas.height = 600;
+      }
+
+      // Load existing rooms/zones for this floor
+      await loadRooms();
+
+      currentPoints = [];
+      selectedRoomIndex = -1;
+      zoom = 1;
+      pan = { x: 0, y: 0 };
+
+      renderCanvas();
+      renderRoomsList();
+    }
+
+    // Load floor plan image
+    function loadFloorPlanImage(plan) {
+      return new Promise((resolve, reject) => {
+        const img = new Image();
+        img.onload = () => {
+          floorPlanImage = img;
+
+          // Set canvas size to match image
+          const container = document.getElementById('canvas-container');
+          const maxWidth = container.clientWidth - 40;
+          const maxHeight = container.clientHeight - 40;
+
+          let width = img.width;
+          let height = img.height;
+
+          // Scale down if too large
+          if (width > maxWidth) {
+            height = (maxWidth / width) * height;
+            width = maxWidth;
+          }
+          if (height > maxHeight) {
+            width = (maxHeight / height) * width;
+            height = maxHeight;
+          }
+
+          canvas.width = width;
+          canvas.height = height;
+
+          resolve();
+        };
+        img.onerror = reject;
+        img.src = `data:image/${plan.image_type || 'png'};base64,${plan.image_data}`;
+      });
+    }
+
+    // Load existing rooms from database
+    async function loadRooms() {
+      try {
+        const response = await fetch(`${API_URL}/api/floor-zones?floor=${encodeURIComponent(currentFloor)}`, {
+          headers: { 'Authorization': `Bearer ${authToken}` }
+        });
+        const data = await response.json();
+
+        rooms = (data.zones || []).map(zone => {
+          // Handle double-stringified points from legacy saves
+          let points = zone.points;
+          if (typeof points === 'string') {
+            points = JSON.parse(points);
+            // If still a string (double-stringified), parse again
+            if (typeof points === 'string') {
+              points = JSON.parse(points);
+            }
+          }
+          return {
+            id: zone.id,
+            name: zone.name,
+            color: zone.color || '#3B82F6',
+            points: points,
+            type: zone.type || 'room', // 'room' or 'wall'
+            saved: true
+          };
+        });
+      } catch (e) {
+        console.error('Failed to load rooms:', e);
+        rooms = [];
+      }
+    }
+
+    // Setup canvas events
+    function setupCanvasEvents() {
+      canvas.addEventListener('click', onCanvasClick);
+      canvas.addEventListener('dblclick', onCanvasDoubleClick);
+      canvas.addEventListener('mousemove', onCanvasMouseMove);
+      canvas.addEventListener('mousedown', onCanvasMouseDown);
+      canvas.addEventListener('mouseup', onCanvasMouseUp);
+      canvas.addEventListener('wheel', onCanvasWheel);
+      canvas.addEventListener('contextmenu', e => e.preventDefault());
+    }
+
+    // Setup keyboard shortcuts
+    function setupKeyboardShortcuts() {
+      document.addEventListener('keydown', e => {
+        if (e.key === 'Escape') {
+          cancelCurrentRoom();
+        } else if (e.key === 'Enter') {
+          finishRoom();
+        } else if (e.key === 'z' && (e.ctrlKey || e.metaKey)) {
+          undoLastPoint();
+        } else if (e.key === 'd') {
+          setTool('draw');
+        } else if (e.key === 's' && !e.ctrlKey && !e.metaKey) {
+          setTool('select');
+        }
+      });
+    }
+
+    // Canvas click handler
+    function onCanvasClick(e) {
+      if (currentTool !== 'draw' || !currentFloor) return;
+
+      const rect = canvas.getBoundingClientRect();
+      const x = ((e.clientX - rect.left) / canvas.width) * 100;
+      const y = ((e.clientY - rect.top) / canvas.height) * 100;
+
+      // Check if clicking near first point to close the polygon (rooms only, not walls/doors)
+      if (drawingMode === 'room' && currentPoints.length >= 3) {
+        const firstPoint = currentPoints[0];
+        const dx = x - firstPoint.x;
+        const dy = y - firstPoint.y;
+        const distance = Math.sqrt(dx * dx + dy * dy);
+
+        if (distance < 3) { // Close enough to first point
+          finishRoom();
+          return;
+        }
+      }
+
+      currentPoints.push({ x, y });
+      updatePointCount();
+      renderCanvas();
+
+      // Auto-finish doors after 3 points (opening + swing direction)
+      if (drawingMode === 'door' && currentPoints.length === 3) {
+        finishRoom();
+      }
+    }
+
+    // Canvas double click - finish room/wall
+    function onCanvasDoubleClick(e) {
+      const minPoints = drawingMode === 'wall' ? 2 : 3;
+      if (currentTool === 'draw' && currentPoints.length >= minPoints) {
+        finishRoom();
+      }
+    }
+
+    // Canvas mouse move
+    let hoverPoint = null;
+
+    function onCanvasMouseMove(e) {
+      const rect = canvas.getBoundingClientRect();
+      const x = ((e.clientX - rect.left) / canvas.width) * 100;
+      const y = ((e.clientY - rect.top) / canvas.height) * 100;
+
+      hoverPoint = { x, y };
+
+      if (isPanning) {
+        pan.x += e.clientX - lastPanPos.x;
+        pan.y += e.clientY - lastPanPos.y;
+        lastPanPos = { x: e.clientX, y: e.clientY };
+      }
+
+      // Handle vertex dragging
+      if (draggingVertexIndex >= 0 && selectedRoomIndex >= 0) {
+        const room = rooms[selectedRoomIndex];
+        room.points[draggingVertexIndex] = { x: Math.max(0, Math.min(100, x)), y: Math.max(0, Math.min(100, y)) };
+        room.saved = false;
+        pendingRoomChanges = true;
+      }
+
+      renderCanvas();
+    }
+
+    function onCanvasMouseDown(e) {
+      if (e.button === 1 || (e.button === 0 && e.altKey)) { // Middle click or Alt+click
+        isPanning = true;
+        lastPanPos = { x: e.clientX, y: e.clientY };
+        canvas.style.cursor = 'grabbing';
+        return;
+      }
+
+      // Handle vertex dragging start
+      if (vertexEditMode && selectedRoomIndex >= 0 && e.button === 0) {
+        const rect = canvas.getBoundingClientRect();
+        const clickX = ((e.clientX - rect.left) / canvas.width) * 100;
+        const clickY = ((e.clientY - rect.top) / canvas.height) * 100;
+
+        const room = rooms[selectedRoomIndex];
+        const vertexRadius = 3; // percentage
+
+        for (let i = 0; i < room.points.length; i++) {
+          const p = room.points[i];
+          const dist = Math.sqrt((clickX - p.x) ** 2 + (clickY - p.y) ** 2);
+          if (dist < vertexRadius) {
+            draggingVertexIndex = i;
+            canvas.style.cursor = 'grabbing';
+            return;
+          }
+        }
+      }
+    }
+
+    function onCanvasMouseUp(e) {
+      if (draggingVertexIndex >= 0) {
+        draggingVertexIndex = -1;
+        renderRoomsList();
+        showToast('Vertex moved. Save to persist changes.', 'success');
+      }
+      isPanning = false;
+      canvas.style.cursor = vertexEditMode ? 'crosshair' : (currentTool === 'draw' ? 'crosshair' : 'default');
+    }
+
+    function onCanvasWheel(e) {
+      e.preventDefault();
+      const delta = e.deltaY > 0 ? 0.9 : 1.1;
+      zoom = Math.max(0.5, Math.min(3, zoom * delta));
+      renderCanvas();
+    }
+
+    // Render canvas
+    function renderCanvas() {
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+      // Draw floor plan image
+      if (floorPlanImage) {
+        ctx.drawImage(floorPlanImage, 0, 0, canvas.width, canvas.height);
+      } else {
+        // Draw grid if no image
+        ctx.fillStyle = '#1F2937';
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+        ctx.strokeStyle = '#374151';
+        ctx.lineWidth = 1;
+        const gridSize = 50;
+        for (let x = 0; x < canvas.width; x += gridSize) {
+          ctx.beginPath();
+          ctx.moveTo(x, 0);
+          ctx.lineTo(x, canvas.height);
+          ctx.stroke();
+        }
+        for (let y = 0; y < canvas.height; y += gridSize) {
+          ctx.beginPath();
+          ctx.moveTo(0, y);
+          ctx.lineTo(canvas.width, y);
+          ctx.stroke();
+        }
+
+        // Show message
+        ctx.fillStyle = '#6B7280';
+        ctx.font = '16px Inter, sans-serif';
+        ctx.textAlign = 'center';
+        ctx.fillText('No floor plan uploaded for this floor', canvas.width / 2, canvas.height / 2 - 20);
+        ctx.fillText('You can still draw rooms on this grid', canvas.width / 2, canvas.height / 2 + 10);
+      }
+
+      // Draw existing rooms
+      rooms.forEach((room, index) => {
+        drawRoom(room, index === selectedRoomIndex);
+      });
+
+      // Draw current points being drawn
+      if (currentPoints.length > 0) {
+        drawCurrentRoom();
+      }
+    }
+
+    // Draw a room
+    function drawRoom(room, isSelected) {
+      const isWall = room.type === 'wall';
+      const isDoor = room.type === 'door';
+      const minPoints = (isWall || isDoor) ? 2 : 3;
+      if (!room.points || room.points.length < minPoints) return;
+
+      const points = room.points.map(p => ({
+        x: (p.x / 100) * canvas.width,
+        y: (p.y / 100) * canvas.height
+      }));
+
+      // Draw path
+      ctx.beginPath();
+      ctx.moveTo(points[0].x, points[0].y);
+      for (let i = 1; i < points.length; i++) {
+        ctx.lineTo(points[i].x, points[i].y);
+      }
+
+      // Only close and fill for rooms, not walls/doors
+      if (!isWall && !isDoor) {
+        ctx.closePath();
+        ctx.fillStyle = room.color + '30'; // 30 = ~20% opacity
+        ctx.fill();
+      }
+
+      // Stroke - doors get dashed line
+      ctx.strokeStyle = isSelected ? '#FFFFFF' : room.color;
+      if (isDoor) {
+        ctx.setLineDash([8, 4]);
+        ctx.lineWidth = isSelected ? 5 : 4;
+      } else {
+        ctx.setLineDash([]);
+        ctx.lineWidth = isWall ? (isSelected ? 4 : 3) : (isSelected ? 3 : 2);
+      }
+      ctx.stroke();
+      ctx.setLineDash([]); // Reset dash
+
+      // Draw door arc indicator based on 3rd point (swing direction)
+      if (isDoor && points.length >= 2) {
+        const dx = points[1].x - points[0].x;
+        const dy = points[1].y - points[0].y;
+        const doorWidth = Math.sqrt(dx * dx + dy * dy);
+        const doorAngle = Math.atan2(dy, dx);
+
+        // Determine swing direction from 3rd point
+        let swingAngleStart, swingAngleEnd, hingePoint;
+        if (points.length >= 3) {
+          // Calculate which side of the door line the 3rd point is on
+          const crossProduct = dx * (points[2].y - points[0].y) - dy * (points[2].x - points[0].x);
+          // Determine if hinge is at point 0 or point 1 based on which is closer to 3rd point
+          const dist0 = Math.sqrt((points[2].x - points[0].x) ** 2 + (points[2].y - points[0].y) ** 2);
+          const dist1 = Math.sqrt((points[2].x - points[1].x) ** 2 + (points[2].y - points[1].y) ** 2);
+
+          if (dist0 < dist1) {
+            // Hinge at point 0, swing towards 3rd point
+            hingePoint = points[0];
+            if (crossProduct > 0) {
+              swingAngleStart = doorAngle;
+              swingAngleEnd = doorAngle + Math.PI / 2;
+            } else {
+              swingAngleStart = doorAngle - Math.PI / 2;
+              swingAngleEnd = doorAngle;
+            }
+          } else {
+            // Hinge at point 1, swing towards 3rd point
+            hingePoint = points[1];
+            const reverseAngle = doorAngle + Math.PI;
+            if (crossProduct > 0) {
+              swingAngleStart = reverseAngle - Math.PI / 2;
+              swingAngleEnd = reverseAngle;
+            } else {
+              swingAngleStart = reverseAngle;
+              swingAngleEnd = reverseAngle + Math.PI / 2;
+            }
+          }
+        } else {
+          // Default: hinge at point 0, swing one direction
+          hingePoint = points[0];
+          swingAngleStart = doorAngle;
+          swingAngleEnd = doorAngle + Math.PI / 2;
+        }
+
+        // Draw door swing arc
+        ctx.beginPath();
+        ctx.arc(hingePoint.x, hingePoint.y, doorWidth * 0.8, swingAngleStart, swingAngleEnd, false);
+        ctx.strokeStyle = room.color + '60';
+        ctx.lineWidth = 2;
+        ctx.stroke();
+
+        // Draw swing direction indicator (filled arc)
+        ctx.beginPath();
+        ctx.moveTo(hingePoint.x, hingePoint.y);
+        ctx.arc(hingePoint.x, hingePoint.y, doorWidth * 0.8, swingAngleStart, swingAngleEnd, false);
+        ctx.closePath();
+        ctx.fillStyle = room.color + '20';
+        ctx.fill();
+      }
+
+      // Draw vertices
+      const showEditHandles = isSelected && vertexEditMode;
+      points.forEach((p, idx) => {
+        ctx.beginPath();
+        const radius = showEditHandles ? 10 : (isSelected ? 6 : 4);
+        ctx.arc(p.x, p.y, radius, 0, Math.PI * 2);
+        ctx.fillStyle = showEditHandles ? '#10B981' : room.color;
+        ctx.fill();
+        if (isSelected) {
+          ctx.strokeStyle = showEditHandles ? '#FFFFFF' : '#FFFFFF';
+          ctx.lineWidth = showEditHandles ? 3 : 2;
+          ctx.stroke();
+        }
+        // Show vertex number in edit mode
+        if (showEditHandles) {
+          ctx.fillStyle = '#FFFFFF';
+          ctx.font = 'bold 10px Inter, sans-serif';
+          ctx.textAlign = 'center';
+          ctx.textBaseline = 'middle';
+          ctx.fillText((idx + 1).toString(), p.x, p.y);
+        }
+      });
+
+      // Draw room name
+      const centerX = points.reduce((sum, p) => sum + p.x, 0) / points.length;
+      const centerY = points.reduce((sum, p) => sum + p.y, 0) / points.length;
+
+      ctx.fillStyle = '#FFFFFF';
+      ctx.font = 'bold 12px Inter, sans-serif';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+
+      // Background for text
+      const textWidth = ctx.measureText(room.name).width;
+      ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
+      ctx.fillRect(centerX - textWidth / 2 - 4, centerY - 8, textWidth + 8, 16);
+
+      ctx.fillStyle = '#FFFFFF';
+      ctx.fillText(room.name, centerX, centerY);
+    }
+
+    // Draw current room being drawn
+    function drawCurrentRoom() {
+      const points = currentPoints.map(p => ({
+        x: (p.x / 100) * canvas.width,
+        y: (p.y / 100) * canvas.height
+      }));
+
+      const isDoorDrawing = drawingMode === 'door';
+
+      // Draw lines
+      ctx.beginPath();
+      ctx.moveTo(points[0].x, points[0].y);
+      for (let i = 1; i < points.length; i++) {
+        ctx.lineTo(points[i].x, points[i].y);
+      }
+
+      // Draw line to hover point
+      if (hoverPoint && currentTool === 'draw') {
+        const hx = (hoverPoint.x / 100) * canvas.width;
+        const hy = (hoverPoint.y / 100) * canvas.height;
+
+        // For doors with 2 points, show swing preview
+        if (isDoorDrawing && points.length === 2) {
+          // Don't draw line to hover, just show swing direction
+        } else {
+          ctx.lineTo(hx, hy);
+
+          // Dashed line back to first point if enough points (for rooms only)
+          if (!isDoorDrawing && currentPoints.length >= 2) {
+            ctx.setLineDash([5, 5]);
+            ctx.lineTo(points[0].x, points[0].y);
+            ctx.setLineDash([]);
+          }
+        }
+      }
+
+      ctx.strokeStyle = currentColor;
+      ctx.lineWidth = isDoorDrawing ? 4 : 2;
+      if (isDoorDrawing) {
+        ctx.setLineDash([8, 4]);
+      }
+      ctx.stroke();
+      ctx.setLineDash([]);
+
+      // Draw vertices with labels for doors
+      points.forEach((p, i) => {
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, i === 0 ? 8 : 5, 0, Math.PI * 2);
+        ctx.fillStyle = i === 0 ? '#FFFFFF' : currentColor;
+        ctx.fill();
+        ctx.strokeStyle = currentColor;
+        ctx.lineWidth = 2;
+        ctx.stroke();
+
+        // Door point labels
+        if (isDoorDrawing) {
+          const labels = ['Start', 'End', 'Swing'];
+          if (labels[i]) {
+            ctx.fillStyle = '#FFFFFF';
+            ctx.font = 'bold 11px Inter, sans-serif';
+            ctx.textAlign = 'center';
+            ctx.fillText(labels[i], p.x, p.y - 12);
+          }
+        }
+      });
+
+      // Show door swing preview when placing 3rd point
+      if (isDoorDrawing && points.length === 2 && hoverPoint) {
+        const hx = (hoverPoint.x / 100) * canvas.width;
+        const hy = (hoverPoint.y / 100) * canvas.height;
+
+        // Draw preview swing indicator
+        ctx.beginPath();
+        ctx.setLineDash([3, 3]);
+        ctx.moveTo((points[0].x + points[1].x) / 2, (points[0].y + points[1].y) / 2);
+        ctx.lineTo(hx, hy);
+        ctx.strokeStyle = currentColor + '80';
+        ctx.lineWidth = 2;
+        ctx.stroke();
+        ctx.setLineDash([]);
+
+        // Draw "Click to set swing" text
+        ctx.fillStyle = '#10B981';
+        ctx.font = 'bold 12px Inter, sans-serif';
+        ctx.textAlign = 'center';
+        ctx.fillText('Click to set swing direction', hx, hy - 15);
+
+        // Draw hover circle
+        ctx.beginPath();
+        ctx.arc(hx, hy, 8, 0, Math.PI * 2);
+        ctx.strokeStyle = '#10B981';
+        ctx.lineWidth = 2;
+        ctx.stroke();
+      }
+
+      // First point indicator for rooms
+      if (!isDoorDrawing && points.length >= 3) {
+        ctx.beginPath();
+        ctx.arc(points[0].x, points[0].y, 12, 0, Math.PI * 2);
+        ctx.strokeStyle = '#10B981';
+        ctx.lineWidth = 2;
+        ctx.setLineDash([3, 3]);
+        ctx.stroke();
+        ctx.setLineDash([]);
+      }
+    }
+
+    // Finish current room
+    function finishRoom() {
+      const typeLabels = { room: 'room', wall: 'wall', door: 'door' };
+      const minPointsMap = { room: 3, wall: 2, door: 3 }; // Doors need 3 points: opening (2) + swing direction (1)
+      const minPoints = minPointsMap[drawingMode] || 3;
+      const itemType = typeLabels[drawingMode] || 'room';
+
+      if (currentPoints.length < minPoints) {
+        showToast(`Need at least ${minPoints} points to create a ${itemType}`, 'error');
+        return;
+      }
+
+      // For doors, use all 3 points (first 2 = opening, 3rd = swing direction)
+      const pointsToSave = drawingMode === 'door' ? currentPoints.slice(0, 3) : [...currentPoints];
+
+      const countByType = rooms.filter(r => r.type === drawingMode).length + 1;
+      const defaultNames = {
+        room: `Room ${countByType}`,
+        wall: `Wall ${countByType}`,
+        door: `Door ${countByType}`
+      };
+      const itemName = document.getElementById('room-name').value || defaultNames[drawingMode];
+
+      rooms.push({
+        id: null,
+        name: itemName,
+        color: currentColor,
+        points: pointsToSave,
+        type: drawingMode, // 'room', 'wall', or 'door'
+        saved: false
+      });
+
+      currentPoints = [];
+      updatePointCount();
+      renderCanvas();
+      renderRoomsList();
+
+      // Increment name
+      const match = itemName.match(/^(.+?)(\d+)?$/);
+      if (match) {
+        const base = match[1].trim();
+        const num = parseInt(match[2] || '0') + 1;
+        document.getElementById('room-name').value = `${base} ${num}`;
+      }
+
+      const typeDisplay = itemType.charAt(0).toUpperCase() + itemType.slice(1);
+      showToast(`${typeDisplay} "${itemName}" created. Don't forget to save!`, 'success');
+    }
+
+    // Cancel current room
+    function cancelCurrentRoom() {
+      currentPoints = [];
+      updatePointCount();
+      renderCanvas();
+    }
+
+    // Clear current room
+    function clearCurrentRoom() {
+      if (currentPoints.length > 0) {
+        currentPoints = [];
+        updatePointCount();
+        renderCanvas();
+      } else if (selectedRoomIndex >= 0) {
+        deleteRoom(selectedRoomIndex);
+      }
+    }
+
+    // Undo last point
+    function undoLastPoint() {
+      if (currentPoints.length > 0) {
+        currentPoints.pop();
+        updatePointCount();
+        renderCanvas();
+      }
+    }
+
+    // Update point count display
+    function updatePointCount() {
+      document.getElementById('point-count').textContent = currentPoints.length;
+      // Show finish button: 2 points for walls, 3 for doors/rooms
+      const minPoints = drawingMode === 'wall' ? 2 : 3;
+      document.getElementById('finish-room-btn').style.display = currentPoints.length >= minPoints ? 'block' : 'none';
+    }
+
+    // Set drawing mode (room or wall)
+    function setDrawingMode(mode) {
+      drawingMode = mode;
+      document.getElementById('mode-room').classList.toggle('active', mode === 'room');
+      document.getElementById('mode-wall').classList.toggle('active', mode === 'wall');
+      document.getElementById('mode-door').classList.toggle('active', mode === 'door');
+
+      // Update UI labels based on mode
+      const labels = {
+        room: {
+          hint: 'Closed polygon for rooms/areas',
+          toolName: 'Draw Room',
+          settingsTitle: 'Room Settings',
+          nameLabel: 'Room Name',
+          placeholder: 'e.g., Conference Room A',
+          defaultValue: 'Room',
+          finishBtn: 'Finish Room'
+        },
+        wall: {
+          hint: 'Open path for walls (2+ points)',
+          toolName: 'Draw Wall',
+          settingsTitle: 'Wall Settings',
+          nameLabel: 'Wall Name',
+          placeholder: 'e.g., Outer Wall North',
+          defaultValue: 'Wall',
+          finishBtn: 'Finish Wall'
+        },
+        door: {
+          hint: '1st & 2nd point: door opening, 3rd point: swing direction',
+          toolName: 'Draw Door',
+          settingsTitle: 'Door Settings',
+          nameLabel: 'Door Name',
+          placeholder: 'e.g., Main Entrance',
+          defaultValue: 'Door',
+          finishBtn: 'Finish Door'
+        }
+      };
+
+      const l = labels[mode];
+      document.getElementById('mode-hint').textContent = l.hint;
+      document.getElementById('draw-tool-name').textContent = l.toolName;
+      document.getElementById('settings-title').textContent = l.settingsTitle;
+      document.getElementById('name-label').textContent = l.nameLabel;
+      document.getElementById('room-name').placeholder = l.placeholder;
+      document.getElementById('room-name').value = l.defaultValue;
+
+      // Update finish button text
+      const finishBtn = document.getElementById('finish-room-btn');
+      finishBtn.querySelector('.tool-name').textContent = l.finishBtn;
+
+      // Clear any current drawing
+      if (currentPoints.length > 0) {
+        currentPoints = [];
+        updatePointCount();
+        renderCanvas();
+      }
+
+      // Update tool to draw mode
+      setTool('draw');
+    }
+
+    // Set current tool
+    function setTool(tool) {
+      currentTool = tool;
+      document.getElementById('tool-draw').classList.toggle('active', tool === 'draw');
+      document.getElementById('tool-select').classList.toggle('active', tool === 'select');
+      canvas.style.cursor = tool === 'draw' ? 'crosshair' : 'default';
+
+      if (tool === 'select') {
+        document.getElementById('instructions').innerHTML =
+          '<kbd>Click</kbd> Select item &nbsp; <kbd>Delete</kbd> Remove item';
+      } else {
+        const instructions = {
+          room: '<kbd>Click</kbd> Place point &nbsp; <kbd>Double-click</kbd> Finish room &nbsp; <kbd>Esc</kbd> Cancel',
+          wall: '<kbd>Click</kbd> Place point &nbsp; <kbd>Double-click</kbd> Finish wall &nbsp; <kbd>Esc</kbd> Cancel',
+          door: '<kbd>1st click</kbd> Door start &nbsp; <kbd>2nd click</kbd> Door end &nbsp; <kbd>3rd click</kbd> Swing direction'
+        };
+        document.getElementById('instructions').innerHTML = instructions[drawingMode] || instructions.room;
+      }
+    }
+
+    // Render rooms list
+    function renderRoomsList() {
+      const container = document.getElementById('rooms-list');
+
+      if (rooms.length === 0) {
+        container.innerHTML = `
+          <div style="color: var(--text-muted); font-size: 13px; padding: 12px;">
+            No rooms defined yet. Start drawing!
+          </div>
+        `;
+        return;
+      }
+
+      container.innerHTML = rooms.map((room, index) => {
+        const icons = { room: '🏠', wall: '🧱', door: '🚪' };
+        const icon = icons[room.type] || '🏠';
+        const typeLabel = room.type || 'room';
+        return `
+        <div class="room-item ${index === selectedRoomIndex ? 'active' : ''} ${!room.saved ? 'unsaved' : ''}"
+             onclick="selectRoom(${index})">
+          <div class="room-item-header">
+            <div class="room-item-name">
+              <span style="font-size: 12px; margin-right: 4px;">${icon}</span>
+              <div class="room-color-dot" style="background: ${room.color}"></div>
+              ${room.name}
+              ${!room.saved ? '<span style="color: var(--accent-yellow); font-size: 10px;">●</span>' : ''}
+            </div>
+            <div class="room-item-actions">
+              <button class="room-action-btn delete" onclick="event.stopPropagation(); deleteRoom(${index})">🗑️</button>
+            </div>
+          </div>
+          <div class="room-item-points">${room.type === 'door' ? 'door opening' : room.points.length + ' points'} · ${typeLabel}</div>
+        </div>
+      `}).join('');
+    }
+
+    // Select a room
+    function selectRoom(index) {
+      selectedRoomIndex = index;
+      setTool('select');
+      vertexEditMode = false;
+      document.getElementById('vertex-edit-btn').textContent = 'Enable Vertex Editing';
+      document.getElementById('vertex-edit-btn').classList.remove('active');
+
+      // Show and populate edit panel
+      const panel = document.getElementById('room-edit-panel');
+      panel.style.display = 'block';
+
+      const room = rooms[index];
+      document.getElementById('edit-room-name').value = room.name;
+
+      // Update color picker selection
+      document.querySelectorAll('#edit-color-picker .color-swatch').forEach(swatch => {
+        swatch.classList.toggle('active', swatch.dataset.color === room.color);
+      });
+
+      renderRoomsList();
+      renderCanvas();
+    }
+
+    // Deselect room
+    function deselectRoom() {
+      selectedRoomIndex = -1;
+      vertexEditMode = false;
+      document.getElementById('room-edit-panel').style.display = 'none';
+      renderRoomsList();
+      renderCanvas();
+    }
+
+    // Apply room rename
+    function applyRoomRename() {
+      if (selectedRoomIndex < 0) return;
+
+      const newName = document.getElementById('edit-room-name').value.trim();
+      if (!newName) {
+        showToast('Please enter a room name', 'error');
+        return;
+      }
+
+      const room = rooms[selectedRoomIndex];
+      room.name = newName;
+      room.saved = false;
+      pendingRoomChanges = true;
+
+      renderRoomsList();
+      showToast('Room renamed. Save to persist changes.', 'success');
+    }
+
+    // Apply edit color
+    function applyEditColor(color) {
+      if (selectedRoomIndex < 0) return;
+
+      const room = rooms[selectedRoomIndex];
+      room.color = color;
+      room.saved = false;
+      pendingRoomChanges = true;
+
+      // Update color picker UI
+      document.querySelectorAll('#edit-color-picker .color-swatch').forEach(swatch => {
+        swatch.classList.toggle('active', swatch.dataset.color === color);
+      });
+
+      renderRoomsList();
+      renderCanvas();
+      showToast('Color changed. Save to persist changes.', 'success');
+    }
+
+    // Toggle vertex edit mode
+    function toggleVertexEditMode() {
+      vertexEditMode = !vertexEditMode;
+      const btn = document.getElementById('vertex-edit-btn');
+      btn.textContent = vertexEditMode ? 'Disable Vertex Editing' : 'Enable Vertex Editing';
+      btn.classList.toggle('active', vertexEditMode);
+
+      if (vertexEditMode) {
+        showToast('Drag vertices to resize room', 'success');
+        document.getElementById('instructions').innerHTML =
+          '<kbd>Drag</kbd> Move vertex &nbsp; <kbd>Click empty</kbd> Exit edit mode';
+      } else {
+        document.getElementById('instructions').innerHTML =
+          '<kbd>Click</kbd> Select room &nbsp; <kbd>Delete</kbd> Remove room';
+      }
+
+      renderCanvas();
+    }
+
+    // Delete selected room
+    function deleteSelectedRoom() {
+      if (selectedRoomIndex >= 0) {
+        deleteRoom(selectedRoomIndex);
+        document.getElementById('room-edit-panel').style.display = 'none';
+      }
+    }
+
+    // Delete a room
+    async function deleteRoom(index) {
+      const room = rooms[index];
+
+      if (room.saved && room.id) {
+        // Delete from server
+        try {
+          await fetch(`${API_URL}/api/floor-zones/${room.id}`, {
+            method: 'DELETE',
+            headers: { 'Authorization': `Bearer ${authToken}` }
+          });
+        } catch (e) {
+          showToast('Failed to delete room from server', 'error');
+          return;
+        }
+      }
+
+      rooms.splice(index, 1);
+      if (selectedRoomIndex === index) {
+        selectedRoomIndex = -1;
+      } else if (selectedRoomIndex > index) {
+        selectedRoomIndex--;
+      }
+
+      renderRoomsList();
+      renderCanvas();
+      showToast('Room deleted', 'success');
+    }
+
+    // Save all rooms
+    async function saveAllRooms() {
+      if (!currentFloor) {
+        showToast('Please select a floor first', 'error');
+        return;
+      }
+
+      const unsavedRooms = rooms.filter(r => !r.saved);
+
+      if (unsavedRooms.length === 0) {
+        showToast('No changes to save', 'success');
+        return;
+      }
+
+      let saved = 0;
+      let errors = 0;
+
+      for (const room of unsavedRooms) {
+        try {
+          // Use PUT for existing rooms, POST for new rooms
+          const isUpdate = room.id != null;
+          const url = isUpdate
+            ? `${API_URL}/api/floor-zones/${room.id}`
+            : `${API_URL}/api/floor-zones`;
+
+          const response = await fetch(url, {
+            method: isUpdate ? 'PUT' : 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${authToken}`
+            },
+            body: JSON.stringify({
+              floor: currentFloor,
+              name: room.name,
+              color: room.color,
+              opacity: 0.3,
+              points: room.points,  // Don't stringify - body stringify handles it
+              type: room.type || 'room'
+            })
+          });
+
+          if (response.ok) {
+            const data = await response.json();
+            if (!isUpdate) {
+              room.id = data.id;
+            }
+            room.saved = true;
+            saved++;
+          } else {
+            errors++;
+          }
+        } catch (e) {
+          console.error('Failed to save room:', e);
+          errors++;
+        }
+      }
+
+      pendingRoomChanges = false;
+      renderRoomsList();
+
+      if (errors === 0) {
+        showToast(`Saved ${saved} room${saved !== 1 ? 's' : ''} successfully!`, 'success');
+      } else {
+        showToast(`Saved ${saved}, failed ${errors}`, 'error');
+      }
+    }
+
+    // Zoom controls
+    function zoomIn() {
+      zoom = Math.min(3, zoom * 1.2);
+      renderCanvas();
+    }
+
+    function zoomOut() {
+      zoom = Math.max(0.5, zoom / 1.2);
+      renderCanvas();
+    }
+
+    function resetZoom() {
+      zoom = 1;
+      pan = { x: 0, y: 0 };
+      renderCanvas();
+    }
+
+    // Toast notification
+    function showToast(message, type = '') {
+      const toast = document.getElementById('toast');
+      toast.textContent = message;
+      toast.className = `toast visible ${type}`;
+
+      setTimeout(() => {
+        toast.classList.remove('visible');
+      }, 3000);
+    }
+
+    // Start
+    init();
+  </script>
+</body>
+</html>

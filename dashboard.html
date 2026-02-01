@@ -6061,7 +6061,10 @@
                 <button class="header-btn" onclick="window.location.href='topology.html'" title="Network Topology">
                   🔗
                 </button>
-                <button class="header-btn" onclick="window.location.href='3d-view.html'" title="3D Floor View">
+                <button class="header-btn" onclick="window.location.href='3d-floor-view.html'" title="3D Floor View">
+                  🏠
+                </button>
+                <button class="header-btn" onclick="window.location.href='wall-editor.html'" title="Wall Editor">
                   🏗️
                 </button>
                 <button class="header-btn" onclick="window.location.href='settings.html'" title="Settings">
@@ -6153,7 +6156,6 @@
                        onload="onFloorPlanLoaded(this)"
                        alt="" />
                   <div class="markers-overlay" id="markers-overlay">
-                    ${renderZones(activeFloor)}
                     ${deviceMarkersHTML}
                   </div>
                 ` : `
@@ -7963,20 +7965,28 @@
     }
 
     function renderZones(floor) {
-      const zones = floorZones[floor] || [];
+      // Filter out walls and doors - those are only for 3D view
+      const zones = (floorZones[floor] || []).filter(z => z.type !== 'wall' && z.type !== 'door');
       if (zones.length === 0) return '';
 
       return `
         <svg class="zone-overlay" viewBox="0 0 100 100" preserveAspectRatio="none">
           ${zones.map(zone => {
-            const points = JSON.parse(zone.points || '[]');
-            if (points.length < 3) return '';
+            let points = zone.points || '[]';
+            if (typeof points === 'string') {
+              try {
+                points = JSON.parse(points);
+                // Handle double-stringified
+                if (typeof points === 'string') points = JSON.parse(points);
+              } catch (e) { points = []; }
+            }
+            if (!Array.isArray(points) || points.length < 3) return '';
             const pointsStr = points.map(p => `${p.x},${p.y}`).join(' ');
             const centerX = points.reduce((s, p) => s + p.x, 0) / points.length;
             const centerY = points.reduce((s, p) => s + p.y, 0) / points.length;
             return `
-              <polygon class="zone-polygon" points="${pointsStr}" fill="${zone.color}" stroke="${zone.color}" />
-              <text class="zone-label" x="${centerX}" y="${centerY}">${zone.name}</text>
+              <polygon points="${pointsStr}" fill="${zone.color}" fill-opacity="0.1" stroke="${zone.color}" stroke-opacity="0.3" stroke-width="0.15" />
+              <text x="${centerX}" y="${centerY}" fill="white" fill-opacity="0.7" font-size="2" font-weight="500" text-anchor="middle" dominant-baseline="middle">${zone.name}</text>
             `;
           }).join('')}
         </svg>
@@ -8879,6 +8889,7 @@
 
     // Smart popup positioning - show below if not enough space above
     document.addEventListener('mouseenter', function(e) {
+      if (!e.target || !e.target.closest) return;
       const marker = e.target.closest('.device-marker');
       if (!marker) return;
 

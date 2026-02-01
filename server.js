@@ -267,6 +267,11 @@ const migrations = [
   `ALTER TABLE users ADD COLUMN totp_verified INTEGER DEFAULT 0`,
   // Custom check interval per device
   `ALTER TABLE monitors ADD COLUMN check_interval INTEGER DEFAULT NULL`,
+  // 3D position height (pos_z) for 3D floor view
+  `ALTER TABLE monitors ADD COLUMN pos_z REAL DEFAULT NULL`,
+  `ALTER TABLE room_positions ADD COLUMN pos_z REAL DEFAULT NULL`,
+  // Floor zones type column (room = closed polygon, wall = open path)
+  `ALTER TABLE floor_zones ADD COLUMN type TEXT DEFAULT 'room'`,
 ];
 
 migrations.forEach(sql => {
@@ -2446,6 +2451,37 @@ app.patch('/api/monitors/:id/position', authMiddleware, (req, res) => {
   res.json({ success: true });
 });
 
+// Update monitor 3D position (includes height)
+app.patch('/api/monitors/:id/position-3d', authMiddleware, (req, res) => {
+  const { pos_x, pos_y, pos_z } = req.body;
+
+  db.prepare('UPDATE monitors SET pos_x = ?, pos_y = ?, pos_z = ? WHERE id = ?')
+    .run(pos_x, pos_y, pos_z, req.params.id);
+
+  logActivity(req, 'update_3d_position', 'monitor', req.params.id);
+  res.json({ success: true });
+});
+
+// Update room 3D position (includes height)
+app.patch('/api/room-positions/:roomId/position-3d', authMiddleware, (req, res) => {
+  const { pos_x, pos_y, pos_z, floor } = req.body;
+  const roomId = req.params.roomId;
+
+  db.prepare(`
+    INSERT INTO room_positions (room_id, floor, pos_x, pos_y, pos_z, updated_at)
+    VALUES (?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+    ON CONFLICT(room_id) DO UPDATE SET
+      pos_x = excluded.pos_x,
+      pos_y = excluded.pos_y,
+      pos_z = excluded.pos_z,
+      floor = excluded.floor,
+      updated_at = CURRENT_TIMESTAMP
+  `).run(roomId, floor, pos_x, pos_y, pos_z);
+
+  logActivity(req, 'update_3d_position', 'room', roomId);
+  res.json({ success: true });
+});
+
 // Toggle maintenance mode for a monitor
 app.patch('/api/monitors/:id/maintenance', authMiddleware, (req, res) => {
   const { maintenance, note, until } = req.body;
@@ -3949,12 +3985,12 @@ app.post('/api/floor-zones', authMiddleware, (req, res) => {
     return res.status(403).json({ success: false, error: 'Admin access required' });
   }
 
-  const { floor, name, color, opacity, points } = req.body;
+  const { floor, name, color, opacity, points, type } = req.body;
 
   const result = db.prepare(`
-    INSERT INTO floor_zones (floor, name, color, opacity, points)
-    VALUES (?, ?, ?, ?, ?)
-  `).run(floor, name, color || '#3B82F6', opacity || 0.2, JSON.stringify(points));
+    INSERT INTO floor_zones (floor, name, color, opacity, points, type)
+    VALUES (?, ?, ?, ?, ?, ?)
+  `).run(floor, name, color || '#3B82F6', opacity || 0.2, JSON.stringify(points), type || 'room');
 
   logActivity(req, 'create', 'floor_zone', result.lastInsertRowid, name);
   res.json({ success: true, id: result.lastInsertRowid });
@@ -3966,12 +4002,12 @@ app.put('/api/floor-zones/:id', authMiddleware, (req, res) => {
     return res.status(403).json({ success: false, error: 'Admin access required' });
   }
 
-  const { name, color, opacity, points } = req.body;
+  const { name, color, opacity, points, type } = req.body;
 
   db.prepare(`
-    UPDATE floor_zones SET name = ?, color = ?, opacity = ?, points = ?
+    UPDATE floor_zones SET name = ?, color = ?, opacity = ?, points = ?, type = ?
     WHERE id = ?
-  `).run(name, color, opacity, JSON.stringify(points), req.params.id);
+  `).run(name, color, opacity, JSON.stringify(points), type || 'room', req.params.id);
 
   res.json({ success: true });
 });

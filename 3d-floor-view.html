@@ -943,10 +943,10 @@
       wall: 0x4a4a6a,            // Medium gray walls
       wallEdge: 0x5a5a7a,        // Wall edges
       wallInterior: 0x3a3a5a,    // Wall interior
-      accessPoints: 0x00d4ff,    // Bright cyan for APs
-      printers: 0xa855f7,        // Purple for printers
-      polyLens: 0x22c55e,        // Green for Poly/Zoom
-      camera: 0x06b6d4,          // Cyan for cameras
+      accessPoints: 0x00bfff,    // Bright blue for APs
+      printers: 0xff6b35,        // Bright orange for printers
+      polyLens: 0x10b981,        // Teal green for Poly/Zoom
+      camera: 0xf472b6,          // Pink for cameras
       offline: 0xef4444,         // Red for offline
       selected: 0xfbbf24,        // Yellow for selected
       dragHighlight: 0x22c55e,
@@ -1248,10 +1248,11 @@
 
       // Event listeners
       window.addEventListener('resize', onWindowResize);
-      renderer.domElement.addEventListener('mousedown', onMouseDown);
-      renderer.domElement.addEventListener('mousemove', onMouseMove);
-      renderer.domElement.addEventListener('mouseup', onMouseUp);
-      renderer.domElement.addEventListener('click', onClick);
+
+      // Use pointer events which work better with OrbitControls
+      renderer.domElement.addEventListener('pointerdown', onMouseDown);
+      renderer.domElement.addEventListener('pointermove', onMouseMove);
+      renderer.domElement.addEventListener('pointerup', onMouseUp);
     }
 
     // Render a floor
@@ -1315,28 +1316,62 @@
         }
       });
 
-      // Position Poly devices in their corresponding rooms
+      // Position Poly devices in their corresponding rooms - GROUP BY ROOM
       const polyFloorDevs = polyDevices[floor] || [];
+
+      // Group devices by room
+      const roomGroups = {};
       polyFloorDevs.forEach(device => {
-        device._autoIndex = autoIndex++;
-
-        // Try to find matching room
-        const roomName = device.room || device.name || '';
-        const roomCenter = findRoomCenter(roomName, floor);
-
-        if (roomCenter) {
-          // Create enhanced Poly device group positioned in room
-          const group = createPolyDeviceGroup(device, roomCenter);
-          if (group) {
-            scene.add(group);
-            deviceMeshes.push(group);
-          }
-        } else {
-          // Fallback to regular device creation
+        const roomName = device.room || '';
+        if (!roomName) {
+          // No room - render separately
+          device._autoIndex = autoIndex++;
           const mesh = createDevice(device, 'polyLens');
           if (mesh) {
             scene.add(mesh);
             deviceMeshes.push(mesh);
+          }
+          return;
+        }
+
+        if (!roomGroups[roomName]) {
+          roomGroups[roomName] = { videoBar: null, tablets: [], allDevices: [] };
+        }
+
+        // Classify device - TC8/TC10 are tablets, others are video bars
+        const model = (device.hardware_model || '').toLowerCase();
+        if (model.includes('tc8') || model.includes('tc10')) {
+          roomGroups[roomName].tablets.push(device);
+        } else {
+          roomGroups[roomName].videoBar = device;
+        }
+        roomGroups[roomName].allDevices.push(device);
+      });
+
+      // Create one group per room with all devices
+      Object.entries(roomGroups).forEach(([roomName, devices]) => {
+        const roomCenter = findRoomCenter(roomName, floor);
+        if (roomCenter) {
+          // Use video bar as primary, or first tablet if no video bar
+          const primaryDevice = devices.videoBar || devices.tablets[0];
+          if (primaryDevice) {
+            primaryDevice._autoIndex = autoIndex++;
+            const group = createPolyDeviceGroup(primaryDevice, roomCenter, devices.tablets, devices.allDevices);
+            if (group) {
+              scene.add(group);
+              deviceMeshes.push(group);
+            }
+          }
+        } else {
+          // No room found - render primary device only
+          const primaryDevice = devices.videoBar || devices.tablets[0];
+          if (primaryDevice) {
+            primaryDevice._autoIndex = autoIndex++;
+            const mesh = createDevice(primaryDevice, 'polyLens');
+            if (mesh) {
+              scene.add(mesh);
+              deviceMeshes.push(mesh);
+            }
           }
         }
       });
@@ -1752,17 +1787,18 @@
       };
 
       // Subtle status indicator ring (only for online devices)
+      // Ring stays close to device center so rotation doesn't cause position shift
       if (!isOffline) {
         const ringGeometry = new THREE.RingGeometry(0.15, 0.18, 16);
         const ringMaterial = new THREE.MeshBasicMaterial({
           color: color,
           transparent: true,
-          opacity: 0.4,
+          opacity: 0.5,
           side: THREE.DoubleSide
         });
         const ring = new THREE.Mesh(ringGeometry, ringMaterial);
         ring.rotation.x = -Math.PI / 2;
-        ring.position.y = -y + 0.01; // Place on floor beneath device
+        ring.position.y = -0.02; // Just below device center to avoid rotation swing
         mesh.add(ring);
       }
 
@@ -1869,72 +1905,130 @@
     }
 
     // Create Poly device group (camera + tablet together)
-    function createPolyDeviceGroup(device, roomCenter) {
-      const group = new THREE.Group();
-
+    // Uses pivot-centered structure so rotation doesn't shift position
+    function createPolyDeviceGroup(device, roomCenter, tablets = [], allDevices = []) {
       // Convert room center to world coords
       const centerX = (roomCenter.x / 100) * FLOOR_SIZE - FLOOR_HALF;
       const centerZ = (roomCenter.y / 100) * FLOOR_SIZE - FLOOR_HALF;
 
-      const isConnected = device.connected;
-      const color = isConnected ? COLORS.polyLens : COLORS.offline;
+      // Check if ANY device in the group is connected
+      const anyConnected = allDevices.length > 0
+        ? allDevices.some(d => d.connected)
+        : device.connected;
+      const color = anyConnected ? COLORS.polyLens : COLORS.offline;
 
-      // Main device (TV/display on wall)
-      const tvGeometry = new THREE.BoxGeometry(1.2, 0.7, 0.05);
-      const tvMaterial = new THREE.MeshStandardMaterial({
-        color: 0x1f2937,
-        roughness: 0.3,
-        metalness: 0.5
-      });
-      const tv = new THREE.Mesh(tvGeometry, tvMaterial);
-      tv.position.set(0, wallHeight * 0.6, 0);
-      tv.castShadow = true;
-      group.add(tv);
+      // Main device (TV/display on wall) - only if video bar exists
+      const model = (device.hardware_model || '').toLowerCase();
+      const isVideoBar = !model.includes('tc8') && !model.includes('tc10');
 
-      // Screen glow
-      const screenGeometry = new THREE.PlaneGeometry(1.1, 0.6);
-      const screenMaterial = new THREE.MeshBasicMaterial({
-        color: color,
-        transparent: true,
-        opacity: isConnected ? 0.8 : 0.3
-      });
-      const screen = new THREE.Mesh(screenGeometry, screenMaterial);
-      screen.position.set(0, wallHeight * 0.6, 0.03);
-      group.add(screen);
+      // Calculate the visual center height for rotation pivot
+      const pivotHeight = isVideoBar ? wallHeight * 0.5 : 0.8;
 
-      // Camera (small sphere on top)
-      const cameraGeometry = new THREE.SphereGeometry(0.08, 16, 16);
-      const cameraMaterial = new THREE.MeshStandardMaterial({
-        color: color,
-        emissive: color,
-        emissiveIntensity: isConnected ? 0.5 : 0.1
-      });
-      const cameraMesh = new THREE.Mesh(cameraGeometry, cameraMaterial);
-      cameraMesh.position.set(0, wallHeight * 0.6 + 0.45, 0.05);
-      group.add(cameraMesh);
+      // Create outer group for position, inner group for rotation (pivot-centered)
+      const positionGroup = new THREE.Group();
+      const rotationGroup = new THREE.Group();
+      positionGroup.add(rotationGroup);
 
-      // Status indicator light
-      const lightGeometry = new THREE.SphereGeometry(0.03, 8, 8);
+      if (isVideoBar) {
+        const tvGeometry = new THREE.BoxGeometry(1.2, 0.7, 0.05);
+        const tvMaterial = new THREE.MeshStandardMaterial({
+          color: 0x1f2937,
+          roughness: 0.3,
+          metalness: 0.5,
+          emissive: color,
+          emissiveIntensity: 0.1
+        });
+        const tv = new THREE.Mesh(tvGeometry, tvMaterial);
+        tv.position.set(0, wallHeight * 0.6 - pivotHeight, 0);
+        tv.castShadow = true;
+        rotationGroup.add(tv);
+
+        // Screen glow
+        const screenGeometry = new THREE.PlaneGeometry(1.1, 0.6);
+        const screenMaterial = new THREE.MeshBasicMaterial({
+          color: color,
+          transparent: true,
+          opacity: device.connected ? 0.8 : 0.3
+        });
+        const screen = new THREE.Mesh(screenGeometry, screenMaterial);
+        screen.position.set(0, wallHeight * 0.6 - pivotHeight, 0.03);
+        rotationGroup.add(screen);
+
+        // Camera (small sphere on top)
+        const cameraGeometry = new THREE.SphereGeometry(0.08, 16, 16);
+        const cameraMaterial = new THREE.MeshStandardMaterial({
+          color: color,
+          emissive: color,
+          emissiveIntensity: device.connected ? 0.5 : 0.1
+        });
+        const cameraMesh = new THREE.Mesh(cameraGeometry, cameraMaterial);
+        cameraMesh.position.set(0, wallHeight * 0.6 + 0.45 - pivotHeight, 0.05);
+        rotationGroup.add(cameraMesh);
+      }
+
+      // Add tablet representation if tablets exist
+      if (tablets.length > 0 || !isVideoBar) {
+        const tabletConnected = tablets.length > 0 ? tablets.some(t => t.connected) : device.connected;
+        const tabletColor = tabletConnected ? COLORS.polyLens : COLORS.offline;
+
+        // Tablet on table/stand
+        const tabletGeometry = new THREE.BoxGeometry(0.25, 0.15, 0.02);
+        const tabletMaterial = new THREE.MeshStandardMaterial({
+          color: 0x1f2937,
+          roughness: 0.3,
+          metalness: 0.5,
+          emissive: tabletColor,
+          emissiveIntensity: 0.3
+        });
+        const tablet = new THREE.Mesh(tabletGeometry, tabletMaterial);
+        tablet.position.set(isVideoBar ? 0.5 : 0, 0.8 - pivotHeight, isVideoBar ? 0.3 : 0);
+        tablet.rotation.x = -0.3; // Slight tilt
+        tablet.castShadow = true;
+        rotationGroup.add(tablet);
+
+        // Tablet screen
+        const tabletScreenGeometry = new THREE.PlaneGeometry(0.22, 0.12);
+        const tabletScreenMaterial = new THREE.MeshBasicMaterial({
+          color: tabletColor,
+          transparent: true,
+          opacity: tabletConnected ? 0.9 : 0.3
+        });
+        const tabletScreen = new THREE.Mesh(tabletScreenGeometry, tabletScreenMaterial);
+        tabletScreen.position.set(isVideoBar ? 0.5 : 0, 0.81 - pivotHeight, isVideoBar ? 0.31 : 0.01);
+        tabletScreen.rotation.x = -0.3;
+        rotationGroup.add(tabletScreen);
+      }
+
+      // Status indicator light (overall system status)
+      const lightGeometry = new THREE.SphereGeometry(0.05, 8, 8);
       const lightMaterial = new THREE.MeshBasicMaterial({
-        color: isConnected ? 0x22c55e : 0xef4444
+        color: anyConnected ? 0x22c55e : 0xef4444
       });
       const light = new THREE.Mesh(lightGeometry, lightMaterial);
-      light.position.set(0.5, wallHeight * 0.6 + 0.3, 0.04);
-      group.add(light);
+      light.position.set(0, wallHeight * 0.6 + (isVideoBar ? 0.5 : 0.2) - pivotHeight, 0.1);
+      rotationGroup.add(light);
 
-      // Position group at room center, facing center of floor
-      group.position.set(centerX, 0, centerZ);
-      group.lookAt(0, wallHeight * 0.6, 0);
+      // Position outer group at room center, with Y at pivot height
+      positionGroup.position.set(centerX, pivotHeight, centerZ);
 
-      group.userData = {
+      // Make rotationGroup face center of floor (horizontal rotation only)
+      const lookTarget = new THREE.Vector3(0, 0, 0);
+      const direction = new THREE.Vector3().subVectors(lookTarget, positionGroup.position);
+      rotationGroup.rotation.y = Math.atan2(direction.x, direction.z);
+
+      // Store all devices in userData for the info panel
+      positionGroup.userData = {
         type: 'device',
         deviceType: 'polyLens',
         data: device,
+        allDevices: allDevices.length > 0 ? allDevices : [device],
+        tablets: tablets,
         originalColor: color,
-        originalPosition: { x: centerX, y: 0, z: centerZ }
+        originalPosition: { x: centerX, y: pivotHeight, z: centerZ },
+        rotationGroup: rotationGroup  // Reference for rotation controls
       };
 
-      return group;
+      return positionGroup;
     }
 
     // Add furniture to scene
@@ -2414,7 +2508,6 @@
 
         document.getElementById('device-details').innerHTML = `
           <div class="device-info-row"><span class="device-info-label">Type</span><span class="device-info-value">${furnitureType ? furnitureType.name : device.type}</span></div>
-          <div class="device-info-row"><span class="device-info-label">Position</span><span class="device-info-value">${device.pos_x?.toFixed(1)}, ${device.pos_y?.toFixed(1)}</span></div>
 
           <div style="margin-top: 12px;">
             <label class="control-label">
@@ -2426,15 +2519,7 @@
                    oninput="resizeSelectedFurniture(this.value)">
           </div>
 
-          <div style="margin-top: 12px;">
-            <label class="control-label">
-              Rotation
-              <span class="control-value" id="furniture-rotation-value">${((device.rotation || 0) * 180 / Math.PI).toFixed(0)}°</span>
-            </label>
-            <input type="range" class="control-slider" id="furniture-rotation"
-                   min="0" max="6.28" step="0.1" value="${device.rotation || 0}"
-                   oninput="rotateSelectedFurniture(this.value)">
-          </div>
+          ${generateControlsHTML(selectedDevice)}
 
           <div style="margin-top: 12px;">
             <button class="device-action-btn" onclick="deleteSelectedFurniture()" style="background: var(--status-offline); width: 100%;">
@@ -2448,7 +2533,7 @@
 
       const isOnline = deviceType === 'polyLens' ? device.connected : device.status === 'up';
 
-      document.getElementById('device-name').textContent = device.name || device.hostname || 'Unknown Device';
+      document.getElementById('device-name').textContent = device.name || device.hostname || device.room || 'Unknown Device';
 
       const statusEl = document.getElementById('device-status');
       statusEl.className = `device-panel-status ${isOnline ? 'online' : 'offline'}`;
@@ -2456,23 +2541,234 @@
 
       let detailsHTML = '';
       if (deviceType === 'polyLens') {
-        detailsHTML = `
-          <div class="device-info-row"><span class="device-info-label">Type</span><span class="device-info-value">Zoom Room</span></div>
-          <div class="device-info-row"><span class="device-info-label">Model</span><span class="device-info-value">${device.hardwareModel || 'Unknown'}</span></div>
-          <div class="device-info-row"><span class="device-info-label">Room</span><span class="device-info-value">${device.room || 'Unassigned'}</span></div>
-          <div class="device-info-row"><span class="device-info-label">Floor</span><span class="device-info-value">${device.floor || currentFloor}</span></div>
-        `;
+        // Check if this is a grouped device (from selectedDevice.userData)
+        const allDevices = selectedDevice?.userData?.allDevices || [device];
+        const tablets = selectedDevice?.userData?.tablets || [];
+
+        // Get current rotation for Poly device
+        const currentRotation = selectedDevice?.rotation?.y || 0;
+
+        if (allDevices.length > 1) {
+          // Show grouped devices
+          const anyOnline = allDevices.some(d => d.connected);
+          statusEl.className = `device-panel-status ${anyOnline ? 'online' : 'offline'}`;
+          statusEl.innerHTML = `<span class="status-dot ${anyOnline ? 'online' : 'offline'}"></span> ${anyOnline ? 'System Online' : 'System Offline'}`;
+
+          document.getElementById('device-name').textContent = device.room || device.name || 'Zoom Room';
+
+          detailsHTML = `
+            <div class="device-info-row"><span class="device-info-label">Room</span><span class="device-info-value">${device.room || 'Unassigned'}</span></div>
+            <div class="device-info-row"><span class="device-info-label">Floor</span><span class="device-info-value">${device.floor || currentFloor}</span></div>
+            <div style="margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--border-subtle);">
+              <div style="font-size: 12px; color: var(--text-muted); margin-bottom: 8px;">Devices in this room:</div>
+              ${allDevices.map(d => `
+                <div class="device-info-row" style="padding: 4px 0;">
+                  <span class="device-info-label">${d.hardware_model || 'Device'}</span>
+                  <span class="device-info-value">
+                    <span class="status-dot ${d.connected ? 'online' : 'offline'}" style="width: 6px; height: 6px;"></span>
+                    ${d.connected ? 'Online' : 'Offline'}
+                  </span>
+                </div>
+              `).join('')}
+            </div>
+            ${generateControlsHTML(selectedDevice)}
+          `;
+        } else {
+          // Single device
+          detailsHTML = `
+            <div class="device-info-row"><span class="device-info-label">Type</span><span class="device-info-value">Zoom Room</span></div>
+            <div class="device-info-row"><span class="device-info-label">Model</span><span class="device-info-value">${device.hardware_model || 'Unknown'}</span></div>
+            <div class="device-info-row"><span class="device-info-label">Room</span><span class="device-info-value">${device.room || 'Unassigned'}</span></div>
+            <div class="device-info-row"><span class="device-info-label">Floor</span><span class="device-info-value">${device.floor || currentFloor}</span></div>
+            <div class="device-info-row"><span class="device-info-label">IP</span><span class="device-info-value">${device.ip_address || 'N/A'}</span></div>
+            ${generateControlsHTML(selectedDevice)}
+          `;
+        }
       } else {
+        // Get device type label
+        const typeLabels = {
+          'accessPoints': 'Access Point',
+          'printers': 'Printer',
+          'polyLens': 'Zoom Room'
+        };
+        const typeLabel = typeLabels[deviceType] || deviceType;
+
         detailsHTML = `
-          <div class="device-info-row"><span class="device-info-label">Type</span><span class="device-info-value">${deviceType === 'printers' ? 'Printer' : 'Access Point'}</span></div>
+          <div class="device-info-row"><span class="device-info-label">Type</span><span class="device-info-value">${typeLabel}</span></div>
+          <div class="device-info-row"><span class="device-info-label">Name</span><span class="device-info-value">${device.name || 'N/A'}</span></div>
           <div class="device-info-row"><span class="device-info-label">Hostname</span><span class="device-info-value">${device.hostname || 'N/A'}</span></div>
           <div class="device-info-row"><span class="device-info-label">Floor</span><span class="device-info-value">${device.floor || currentFloor}</span></div>
           ${device.ping ? `<div class="device-info-row"><span class="device-info-label">Response</span><span class="device-info-value">${device.ping}ms</span></div>` : ''}
+          ${generateControlsHTML(selectedDevice)}
         `;
       }
 
       document.getElementById('device-details').innerHTML = detailsHTML;
       panel.classList.add('visible');
+    }
+
+    // Generate position/rotation controls HTML
+    function generateControlsHTML(mesh) {
+      const posX = ((mesh.position.x + FLOOR_HALF) / FLOOR_SIZE) * 100;
+      const posY = ((mesh.position.z + FLOOR_HALF) / FLOOR_SIZE) * 100;
+      // Get rotation from rotationGroup for Poly devices, otherwise from mesh
+      const rotTarget = mesh.userData.rotationGroup || mesh;
+      const rotX = rotTarget.rotation.x || 0;
+      const rotY = rotTarget.rotation.y || 0;
+
+      return `
+        <div style="margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--border-subtle);">
+          <div style="font-size: 11px; color: var(--text-muted); margin-bottom: 8px; font-weight: 600;">POSITION</div>
+          <div style="margin-bottom: 8px;">
+            <label class="control-label">
+              X Position
+              <span class="control-value" id="pos-x-value">${posX.toFixed(1)}%</span>
+            </label>
+            <input type="range" class="control-slider" id="pos-x-slider"
+                   min="0" max="100" step="0.5" value="${posX}"
+                   oninput="updateSelectedPosition('x', this.value)">
+          </div>
+          <div style="margin-bottom: 8px;">
+            <label class="control-label">
+              Y Position
+              <span class="control-value" id="pos-y-value">${posY.toFixed(1)}%</span>
+            </label>
+            <input type="range" class="control-slider" id="pos-y-slider"
+                   min="0" max="100" step="0.5" value="${posY}"
+                   oninput="updateSelectedPosition('y', this.value)">
+          </div>
+        </div>
+        <div style="margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--border-subtle);">
+          <div style="font-size: 11px; color: var(--text-muted); margin-bottom: 8px; font-weight: 600;">ROTATION</div>
+          <div style="margin-bottom: 8px;">
+            <label class="control-label">
+              Horizontal
+              <span class="control-value" id="rot-y-value">${(rotY * 180 / Math.PI).toFixed(0)}°</span>
+            </label>
+            <input type="range" class="control-slider" id="rot-y-slider"
+                   min="0" max="6.28" step="0.1" value="${rotY}"
+                   oninput="updateSelectedRotation('y', this.value)">
+          </div>
+          <div style="margin-bottom: 8px;">
+            <label class="control-label">
+              Tilt
+              <span class="control-value" id="rot-x-value">${(rotX * 180 / Math.PI).toFixed(0)}°</span>
+            </label>
+            <input type="range" class="control-slider" id="rot-x-slider"
+                   min="-1.57" max="1.57" step="0.1" value="${rotX}"
+                   oninput="updateSelectedRotation('x', this.value)">
+          </div>
+        </div>
+      `;
+    }
+
+    // Update selected object position
+    function updateSelectedPosition(axis, value) {
+      if (!selectedDevice) return;
+      const v = parseFloat(value);
+
+      if (axis === 'x') {
+        selectedDevice.position.x = (v / 100) * FLOOR_SIZE - FLOOR_HALF;
+        document.getElementById('pos-x-value').textContent = v.toFixed(1) + '%';
+      } else {
+        selectedDevice.position.z = (v / 100) * FLOOR_SIZE - FLOOR_HALF;
+        document.getElementById('pos-y-value').textContent = v.toFixed(1) + '%';
+      }
+
+      saveSelectedObjectPosition();
+    }
+
+    // Update selected object rotation
+    // Uses rotationGroup for Poly devices to maintain position during rotation
+    function updateSelectedRotation(axis, value) {
+      if (!selectedDevice) return;
+      const r = parseFloat(value);
+
+      // Check if this is a Poly device with a rotationGroup
+      const rotTarget = selectedDevice.userData.rotationGroup || selectedDevice;
+
+      if (axis === 'x') {
+        rotTarget.rotation.x = r;
+        document.getElementById('rot-x-value').textContent = (r * 180 / Math.PI).toFixed(0) + '°';
+      } else {
+        rotTarget.rotation.y = r;
+        document.getElementById('rot-y-value').textContent = (r * 180 / Math.PI).toFixed(0) + '°';
+      }
+
+      saveSelectedObjectPosition();
+    }
+
+    // Save selected object position/rotation
+    function saveSelectedObjectPosition() {
+      if (!selectedDevice) return;
+
+      const userData = selectedDevice.userData;
+
+      if (userData.type === 'furniture') {
+        // Save furniture
+        const id = userData.data.id;
+        const furniture = furnitureData.find(f => f.id === id);
+        if (furniture) {
+          furniture.pos_x = ((selectedDevice.position.x + FLOOR_HALF) / FLOOR_SIZE) * 100;
+          furniture.pos_y = ((selectedDevice.position.z + FLOOR_HALF) / FLOOR_SIZE) * 100;
+          furniture.rotation = selectedDevice.rotation.y;
+          furniture.rotationX = selectedDevice.rotation.x;
+          userData.data.pos_x = furniture.pos_x;
+          userData.data.pos_y = furniture.pos_y;
+          userData.data.rotation = furniture.rotation;
+          userData.data.rotationX = furniture.rotationX;
+        }
+        saveFurnitureData(currentFloor);
+      } else if (userData.type === 'device') {
+        // Save device position
+        const device = userData.data;
+        const deviceType = userData.deviceType;
+        const pos_x = ((selectedDevice.position.x + FLOOR_HALF) / FLOOR_SIZE) * 100;
+        const pos_y = ((selectedDevice.position.z + FLOOR_HALF) / FLOOR_SIZE) * 100;
+
+        // Get rotation from rotationGroup if exists (Poly devices)
+        const rotTarget = userData.rotationGroup || selectedDevice;
+
+        pendingChanges.set(device.id, {
+          id: device.id,
+          type: deviceType,
+          pos_x: pos_x,
+          pos_y: pos_y,
+          pos_z: selectedDevice.position.y / wallHeight * 100,
+          rotation: rotTarget.rotation.y,
+          rotationX: rotTarget.rotation.x
+        });
+        updatePendingCount();
+      }
+    }
+
+    // Rotate selected device (legacy - now uses updateSelectedRotation)
+    function rotateSelectedDevice(rotation) {
+      if (selectedDevice && selectedDevice.userData.type === 'device') {
+        const r = parseFloat(rotation);
+        selectedDevice.rotation.y = r;
+        if (document.getElementById('device-rotation-value')) {
+          document.getElementById('device-rotation-value').textContent = (r * 180 / Math.PI).toFixed(0) + '°';
+        }
+
+        // Save position with rotation
+        const device = selectedDevice.userData.data;
+        const deviceType = selectedDevice.userData.deviceType;
+
+        // Convert world position back to percentage
+        const pos_x = ((selectedDevice.position.x + FLOOR_HALF) / FLOOR_SIZE) * 100;
+        const pos_y = ((selectedDevice.position.z + FLOOR_HALF) / FLOOR_SIZE) * 100;
+
+        pendingChanges.set(device.id, {
+          id: device.id,
+          type: deviceType,
+          pos_x: pos_x,
+          pos_y: pos_y,
+          pos_z: selectedDevice.position.y / wallHeight * 100,
+          rotation: r
+        });
+        updatePendingCount();
+      }
     }
 
     function closeDevicePanel() {

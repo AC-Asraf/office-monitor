@@ -272,6 +272,8 @@ const migrations = [
   `ALTER TABLE room_positions ADD COLUMN pos_z REAL DEFAULT NULL`,
   // Floor zones type column (room = closed polygon, wall = open path)
   `ALTER TABLE floor_zones ADD COLUMN type TEXT DEFAULT 'room'`,
+  // Serial number for printers and devices
+  `ALTER TABLE monitors ADD COLUMN serial_number TEXT DEFAULT NULL`,
 ];
 
 migrations.forEach(sql => {
@@ -4034,6 +4036,32 @@ app.patch('/api/monitors/:id/notes', authMiddleware, (req, res) => {
   res.json({ success: true });
 });
 
+// General update endpoint for monitor fields (floor, serial_number, etc.)
+app.patch('/api/monitors/:id', authMiddleware, (req, res) => {
+  const { floor, serial_number } = req.body;
+  const updates = [];
+  const values = [];
+
+  if (floor !== undefined) {
+    updates.push('floor = ?');
+    values.push(floor);
+  }
+  if (serial_number !== undefined) {
+    updates.push('serial_number = ?');
+    values.push(serial_number);
+  }
+
+  if (updates.length === 0) {
+    return res.status(400).json({ success: false, message: 'No fields to update' });
+  }
+
+  values.push(req.params.id);
+  db.prepare(`UPDATE monitors SET ${updates.join(', ')} WHERE id = ?`).run(...values);
+  logActivity(req, 'update_monitor', 'monitor', req.params.id);
+
+  res.json({ success: true });
+});
+
 // ==================== HEALTH SCORES ====================
 
 // Calculate and update health scores for all monitors
@@ -4073,7 +4101,7 @@ function calculateHealthScores() {
       score = Math.min(100, score + 10);
     }
 
-    db.prepare('UPDATE monitors SET health_score = ?, last_health_update = datetime("now") WHERE id = ?')
+    db.prepare("UPDATE monitors SET health_score = ?, last_health_update = datetime('now') WHERE id = ?")
       .run(score, monitor.id);
   });
 }

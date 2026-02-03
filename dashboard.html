@@ -2883,6 +2883,47 @@
     .sidebar-toner-dot.yellow { background: #EAB308; }
     .sidebar-toner-dot.low { opacity: 0.3; }
 
+    /* Printer sidebar edit controls */
+    .printer-floor-select {
+      background: var(--bg-secondary);
+      border: 1px solid var(--border-subtle);
+      border-radius: 4px;
+      color: var(--text-secondary);
+      font-size: 10px;
+      padding: 2px 4px;
+      cursor: pointer;
+      min-width: 45px;
+    }
+    .printer-floor-select:hover {
+      border-color: var(--accent);
+    }
+    .printer-floor-select:focus {
+      outline: none;
+      border-color: var(--accent);
+    }
+    .printer-serial-input {
+      background: var(--bg-secondary);
+      border: 1px solid var(--border-subtle);
+      border-radius: 4px;
+      color: var(--text-secondary);
+      font-size: 10px;
+      padding: 2px 6px;
+      width: 90px;
+      font-family: monospace;
+    }
+    .printer-serial-input:hover {
+      border-color: var(--accent);
+    }
+    .printer-serial-input:focus {
+      outline: none;
+      border-color: var(--accent);
+      background: var(--bg-primary);
+    }
+    .printer-serial-input::placeholder {
+      color: var(--text-muted);
+      opacity: 0.6;
+    }
+
     /* ==================== DASHBOARD WIDGETS ==================== */
     .widgets-row {
       display: flex;
@@ -4219,6 +4260,98 @@
       }
     }
 
+    // Update printer floor
+    async function updatePrinterFloor(id, floor) {
+      try {
+        const response = await authFetch(`${API_URL}/api/monitors/${id}`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ floor })
+        });
+        if (response.ok) {
+          showAlert('Floor updated', 'success');
+          await fetchAllMonitors();
+          await fetchAllData();
+          render();
+        } else {
+          showAlert('Failed to update floor', 'error');
+        }
+      } catch (e) {
+        console.error('Failed to update floor:', e);
+        showAlert('Failed to update floor', 'error');
+      }
+    }
+
+    // Update printer serial number
+    async function updatePrinterSerial(id, serialNumber) {
+      try {
+        const response = await authFetch(`${API_URL}/api/monitors/${id}`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ serial_number: serialNumber })
+        });
+        if (response.ok) {
+          showAlert('Serial number updated', 'success');
+          await fetchAllMonitors();
+        } else {
+          showAlert('Failed to update serial', 'error');
+        }
+      } catch (e) {
+        console.error('Failed to update serial:', e);
+        showAlert('Failed to update serial', 'error');
+      }
+    }
+
+    // Enable serial number editing in analytics panel
+    function enableSerialEdit(id) {
+      const viewEl = document.getElementById(`serial-view-${id}`);
+      const editEl = document.getElementById(`serial-edit-${id}`);
+      const inputEl = document.getElementById(`analytics-serial-${id}`);
+      if (viewEl && editEl) {
+        viewEl.style.display = 'none';
+        editEl.style.display = 'flex';
+        if (inputEl) inputEl.focus();
+      }
+    }
+
+    // Save serial number from analytics panel (device click panel)
+    async function saveAnalyticsSerial(id, serialNumber) {
+      if (!serialNumber || !serialNumber.trim()) {
+        showAlert('Please enter a serial number', 'error');
+        return;
+      }
+      try {
+        const response = await authFetch(`${API_URL}/api/monitors/${id}`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ serial_number: serialNumber.trim() })
+        });
+        if (response.ok) {
+          showAlert('Serial number saved', 'success');
+          // Update local data
+          const monitor = allMonitors.find(m => m.id == id);
+          if (monitor) {
+            monitor.serial_number = serialNumber.trim();
+          }
+          // Toggle to view mode
+          const viewEl = document.getElementById(`serial-view-${id}`);
+          const editEl = document.getElementById(`serial-edit-${id}`);
+          const displayEl = document.getElementById(`serial-display-${id}`);
+          if (viewEl && editEl && displayEl) {
+            displayEl.textContent = serialNumber.trim();
+            viewEl.style.display = 'flex';
+            editEl.style.display = 'none';
+          }
+          await fetchAllMonitors();
+        } else {
+          showAlert('Failed to save serial', 'error');
+        }
+      } catch (e) {
+        console.error('Failed to save serial:', e);
+        showAlert('Failed to save serial', 'error');
+      }
+    }
+
     async function uploadFloorPlan(floor, file) {
       return new Promise((resolve) => {
         const reader = new FileReader();
@@ -5193,6 +5326,19 @@
         // Get monitor info for maintenance/disabled status
         const monitor = allMonitors.find(m => m.id == deviceId);
 
+        // Also look up from uptimeKumaData for IP (sidebar data has ip field)
+        let sidebarDevice = null;
+        Object.values(uptimeKumaData).forEach(floorData => {
+          if (floorData.accessPoints) {
+            const found = floorData.accessPoints.find(d => d.id == deviceId);
+            if (found) sidebarDevice = found;
+          }
+          if (floorData.printers) {
+            const found = floorData.printers.find(d => d.id == deviceId);
+            if (found) sidebarDevice = found;
+          }
+        });
+
         // Fetch uptime stats
         const uptimeRes = await fetch(`${API_URL}/api/monitors/${deviceId}/uptime?hours=24`);
         const uptimeData = uptimeRes.ok ? await uptimeRes.json() : null;
@@ -5209,6 +5355,16 @@
         const uptime30dRes = await fetch(`${API_URL}/api/monitors/${deviceId}/uptime?hours=720`);
         const uptime30dData = uptime30dRes.ok ? await uptime30dRes.json() : null;
 
+        // For printers, also fetch printer status which contains serial number from SNMP
+        let printerSerial = null;
+        if (monitor?.device_type === 'printers') {
+          const printerStatusRes = await fetch(`${API_URL}/api/printers/${deviceId}/status`);
+          if (printerStatusRes.ok) {
+            const printerStatusData = await printerStatusRes.json();
+            printerSerial = printerStatusData?.info?.serialNumber || null;
+          }
+        }
+
         return {
           uptime24h: uptimeData?.uptime || 0,
           uptime7d: uptime7dData?.uptime || 0,
@@ -5216,7 +5372,12 @@
           totalChecks: uptimeData?.total || 0,
           heartbeats: historyData?.heartbeats || [],
           maintenance: monitor?.maintenance || 0,
-          disabled: monitor?.disabled || 0
+          disabled: monitor?.disabled || 0,
+          // Device info fields
+          name: monitor?.name || sidebarDevice?.name || null,
+          hostname: sidebarDevice?.ip || monitor?.hostname || null,
+          floor: monitor?.floor || null,
+          serial_number: printerSerial || monitor?.serial_number || null
         };
       } catch (e) {
         console.error('Failed to fetch analytics:', e);
@@ -5686,6 +5847,53 @@
               ${device.type === 'printers' ? renderPrinterConsumables(device.id) : ''}
 
               <div class="analytics-section">
+                <div class="analytics-section-title">Device Information</div>
+                <div style="background: rgba(30, 41, 59, 0.5); border-radius: 8px; padding: 16px;">
+                  <div style="display: grid; gap: 12px;">
+                    <div style="display: flex; justify-content: space-between; padding-bottom: 12px; border-bottom: 1px solid rgba(148,163,184,0.1);">
+                      <span style="color: #64748B;">Device Name</span>
+                      <span style="color: #E2E8F0; font-weight: 500;">${data.name || device.name}</span>
+                    </div>
+                    <div style="display: flex; justify-content: space-between; padding-bottom: 12px; border-bottom: 1px solid rgba(148,163,184,0.1);">
+                      <span style="color: #64748B;">IP Address</span>
+                      <span style="color: #60A5FA; font-family: monospace;">${data.hostname || 'N/A'}</span>
+                    </div>
+                    <div style="display: flex; justify-content: space-between; padding-bottom: 12px; border-bottom: 1px solid rgba(148,163,184,0.1);">
+                      <span style="color: #64748B;">Floor</span>
+                      <span style="color: #E2E8F0;">${data.floor || 'Unknown'}</span>
+                    </div>
+                    ${device.type === 'printers' ? `
+                      <div style="display: flex; justify-content: space-between; align-items: center;" id="serial-container-${device.id}">
+                        <span style="color: #64748B;">Serial Number</span>
+                        <!-- View Mode -->
+                        <div id="serial-view-${device.id}" style="display: ${data.serial_number ? 'flex' : 'none'}; align-items: center; gap: 8px;">
+                          <span style="color: #E2E8F0; font-family: monospace; font-size: 11px;" id="serial-display-${device.id}">${data.serial_number || ''}</span>
+                          <button onclick="enableSerialEdit(${device.id})"
+                            style="background: #475569; border: none; border-radius: 4px; padding: 4px 10px; color: white; cursor: pointer; font-size: 12px;">Edit</button>
+                        </div>
+                        <!-- Edit Mode -->
+                        <div id="serial-edit-${device.id}" style="display: ${data.serial_number ? 'none' : 'flex'}; align-items: center; gap: 8px;">
+                          <input type="text"
+                            id="analytics-serial-${device.id}"
+                            value="${data.serial_number || ''}"
+                            placeholder="Enter serial #"
+                            style="background: var(--bg-elevated); border: 1px solid var(--border-default); border-radius: 4px; padding: 4px 8px; color: #E2E8F0; font-family: monospace; font-size: 11px; width: 140px;"
+                            onkeydown="if(event.key==='Enter') saveAnalyticsSerial(${device.id}, this.value)">
+                          <button onclick="saveAnalyticsSerial(${device.id}, document.getElementById('analytics-serial-${device.id}').value)"
+                            style="background: var(--accent); border: none; border-radius: 4px; padding: 4px 10px; color: white; cursor: pointer; font-size: 12px;">Save</button>
+                        </div>
+                      </div>
+                    ` : data.serial_number ? `
+                      <div style="display: flex; justify-content: space-between;">
+                        <span style="color: #64748B;">Serial Number</span>
+                        <span style="color: #E2E8F0; font-family: monospace; font-size: 11px;">${data.serial_number}</span>
+                      </div>
+                    ` : ''}
+                  </div>
+                </div>
+              </div>
+
+              <div class="analytics-section">
                 <div class="analytics-section-title">24 Hour Uptime</div>
                 <div class="uptime-bar">
                   ${uptimeSegments.map(seg => `
@@ -6001,6 +6209,7 @@
                       <span>${device.ip}</span>
                       ${device.ping ? `<span>${device.ping}ms</span>` : ''}
                     </div>
+                    ${device.serial_number ? `<div class="device-meta" style="font-size: 10px; opacity: 0.7;">SN: ${device.serial_number}</div>` : ''}
                   </div>
                 </div>
               `).join('')}
@@ -6026,14 +6235,29 @@
                 const ps = printerStatusData[device.id];
                 const toner = ps?.toner || {};
                 const hasLowToner = [toner.black, toner.cyan, toner.magenta, toner.yellow].some(v => v !== null && v < 20);
+                const monitor = allMonitors.find(m => m.id == device.id) || {};
+                const currentFloor = monitor.floor || activeFloor;
+                const serialNum = monitor.serial_number || '';
                 return `
-                <div class="device-item clickable ${device.status === 'down' ? 'down' : ''}" onclick="highlightDevice('${device.id}'); openAnalytics('${device.id}', '${device.name.replace(/'/g, "\\'")}', 'printers')">
-                  <div class="device-status-dot ${device.status}"></div>
-                  <div class="device-info">
-                    <div class="device-name">${device.name} ${hasLowToner ? '<span style="color: var(--status-warning);" title="Low toner">⚠️</span>' : ''}</div>
+                <div class="device-item ${device.status === 'down' ? 'down' : ''}">
+                  <div class="device-status-dot ${device.status}" onclick="highlightDevice('${device.id}'); openAnalytics('${device.id}', '${device.name.replace(/'/g, "\\'")}', 'printers')"></div>
+                  <div class="device-info" style="flex: 1;">
+                    <div class="device-name clickable" onclick="highlightDevice('${device.id}'); openAnalytics('${device.id}', '${device.name.replace(/'/g, "\\'")}', 'printers')">${device.name} ${hasLowToner ? '<span style="color: var(--status-warning);" title="Low toner">⚠️</span>' : ''}</div>
                     <div class="device-meta">
                       <span>${device.ip}</span>
                       ${ps ? `<span style="margin-left: 8px;">📄 ${ps.paper?.level || 0}%</span>` : ''}
+                    </div>
+                    <div class="device-meta" style="margin-top: 4px; display: flex; gap: 8px; align-items: center;">
+                      <select class="printer-floor-select" onchange="updatePrinterFloor(${device.id}, this.value)" onclick="event.stopPropagation()">
+                        <option value="1st Floor" ${currentFloor === '1st Floor' ? 'selected' : ''}>1st</option>
+                        <option value="2nd Floor" ${currentFloor === '2nd Floor' ? 'selected' : ''}>2nd</option>
+                        <option value="3rd Floor" ${currentFloor === '3rd Floor' ? 'selected' : ''}>3rd</option>
+                        <option value="5th Floor" ${currentFloor === '5th Floor' ? 'selected' : ''}>5th</option>
+                      </select>
+                      <input type="text" class="printer-serial-input" placeholder="Serial #" value="${serialNum}"
+                             onclick="event.stopPropagation()"
+                             onblur="updatePrinterSerial(${device.id}, this.value)"
+                             onkeypress="if(event.key==='Enter'){this.blur();}">
                     </div>
                   </div>
                   ${ps ? `
@@ -6095,6 +6319,7 @@
                               <span class="device-model">${device.hardwareModel || 'Unknown'}</span>
                               <span>${device.ip || 'No IP'}</span>
                             </div>
+                            ${device.serialNumber ? `<div class="device-meta" style="font-size: 10px; opacity: 0.7;">SN: ${device.serialNumber}</div>` : ''}
                           </div>
                         </div>
                       `).join('')}
@@ -7380,6 +7605,7 @@
 
       loadDashboardConfig(); // Load user's dashboard customization
       await fetchAllData();
+      await fetchAllMonitors(); // Fetch full monitor data including serial numbers
       await fetchFloorPlans();
       await fetchCustomDeviceTypes();
       await initNewFeatures();

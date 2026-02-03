@@ -2919,8 +2919,8 @@ setTimeout(async () => {
   }
 }, 2000);
 
-// Refresh Poly Lens every 5 minutes
-setInterval(fetchPolyLensDevices, 5 * 60 * 1000);
+// Refresh Poly Lens every 30 seconds
+setInterval(fetchPolyLensDevices, 30 * 1000);
 
 // ==================== ACTIVITY LOG ====================
 
@@ -4060,6 +4060,47 @@ app.patch('/api/monitors/:id', authMiddleware, (req, res) => {
   logActivity(req, 'update_monitor', 'monitor', req.params.id);
 
   res.json({ success: true });
+});
+
+// Manual ping endpoint - trigger immediate check for a device
+app.post('/api/monitors/:id/ping', authMiddleware, async (req, res) => {
+  try {
+    const monitor = db.prepare('SELECT * FROM monitors WHERE id = ?').get(req.params.id);
+    if (!monitor) {
+      return res.status(404).json({ success: false, error: 'Monitor not found' });
+    }
+
+    const { status, pingTime, message } = await checkMonitor(monitor);
+
+    // Record the heartbeat
+    db.prepare(`
+      INSERT INTO heartbeats (monitor_id, status, ping, message, time)
+      VALUES (?, ?, ?, ?, datetime('now'))
+    `).run(monitor.id, status, pingTime, message);
+
+    // Update monitor status cache
+    monitorStatus.set(monitor.id, {
+      status: status === 1 ? 'up' : 'down',
+      lastCheck: new Date().toISOString(),
+      ping: pingTime,
+      message
+    });
+
+    logActivity(req, 'manual_ping', 'monitor', monitor.id, monitor.name);
+
+    res.json({
+      success: true,
+      result: {
+        status: status === 1 ? 'up' : 'down',
+        ping: pingTime,
+        message,
+        timestamp: new Date().toISOString()
+      }
+    });
+  } catch (e) {
+    console.error('Manual ping error:', e);
+    res.status(500).json({ success: false, error: e.message });
+  }
 });
 
 // ==================== HEALTH SCORES ====================

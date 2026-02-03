@@ -3764,6 +3764,18 @@
     // API Configuration
     const API_URL = window.location.origin;
 
+    // Israel Standard Time formatting helpers
+    const ISRAEL_TZ = 'Asia/Jerusalem';
+    function formatIsraelTime(date) {
+      return new Date(date).toLocaleString('en-IL', { timeZone: ISRAEL_TZ });
+    }
+    function formatIsraelTimeOnly(date) {
+      return new Date(date).toLocaleTimeString('en-IL', { timeZone: ISRAEL_TZ });
+    }
+    function formatIsraelDate(date) {
+      return new Date(date).toLocaleDateString('en-IL', { timeZone: ISRAEL_TZ });
+    }
+
     // Auth state
     let authToken = localStorage.getItem('authToken');
     let currentUser = JSON.parse(localStorage.getItem('currentUser') || 'null');
@@ -4349,6 +4361,43 @@
       } catch (e) {
         console.error('Failed to save serial:', e);
         showAlert('Failed to save serial', 'error');
+      }
+    }
+
+    // Manual ping device
+    async function manualPingDevice(id) {
+      const btn = document.getElementById(`ping-btn-${id}`);
+      if (btn) {
+        btn.disabled = true;
+        btn.innerHTML = '⏳ Pinging...';
+      }
+      try {
+        const response = await authFetch(`${API_URL}/api/monitors/${id}/ping`, {
+          method: 'POST'
+        });
+        const result = await response.json();
+        if (result.success) {
+          const status = result.result.status;
+          const ping = result.result.ping;
+          showAlert(`Ping ${status === 'up' ? 'successful' : 'failed'}: ${ping ? ping + 'ms' : result.result.message}`, status === 'up' ? 'success' : 'error');
+          // Refresh the analytics panel to show updated data
+          if (analyticsDevice) {
+            await openAnalytics(analyticsDevice.id, analyticsDevice.name, analyticsDevice.type);
+          }
+          // Also refresh main data
+          await fetchAllData();
+          render();
+        } else {
+          showAlert('Ping failed: ' + (result.error || 'Unknown error'), 'error');
+        }
+      } catch (e) {
+        console.error('Manual ping error:', e);
+        showAlert('Ping failed: ' + e.message, 'error');
+      } finally {
+        if (btn) {
+          btn.disabled = false;
+          btn.innerHTML = '📡 Ping Now';
+        }
       }
     }
 
@@ -5032,7 +5081,7 @@
                   ${change.entity_type}: ${changeData.name || `ID ${change.entity_id}`}
                 </div>
                 <div class="device-meta">
-                  Requested by: ${change.requested_by} · ${new Date(change.created_at).toLocaleString()}
+                  Requested by: ${change.requested_by} · ${formatIsraelTime(change.created_at)}
                 </div>
               </div>
               <div class="device-actions">
@@ -5538,6 +5587,9 @@
 
           ${!loading && !device.isRoom && !device.isPolyDevice ? `
             <div class="analytics-actions" style="display: flex; gap: 8px; padding: 12px 16px; border-bottom: 1px solid var(--border-subtle); flex-wrap: wrap;">
+              <button onclick="manualPingDevice(${device.id})" class="btn btn-sm btn-primary" style="flex: 1; min-width: 100px;" id="ping-btn-${device.id}">
+                📡 Ping Now
+              </button>
               <button onclick="toggleMaintenanceFromAnalytics(${device.id})" class="btn btn-sm ${data?.maintenance ? 'btn-warning' : 'btn-secondary'}" style="flex: 1; min-width: 120px;">
                 🔧 ${data?.maintenance ? 'End Maintenance' : 'Maintenance'}
               </button>
@@ -5714,7 +5766,7 @@
                         }
                       }
                       return segments.map(seg =>
-                        '<div class="uptime-segment ' + seg.status + '" data-tooltip="' + new Date(seg.time).toLocaleTimeString() + ' - ' + seg.status.toUpperCase() + '" style="flex: 1;"></div>'
+                        '<div class="uptime-segment ' + seg.status + '" data-tooltip="' + formatIsraelTimeOnly(seg.time) + ' - ' + seg.status.toUpperCase() + '" style="flex: 1;"></div>'
                       ).join('');
                     })()}
                   </div>
@@ -5731,7 +5783,7 @@
                       <div class="history-item">
                         <div class="history-status ${h.status === 1 ? 'up' : 'down'}"></div>
                         <div class="history-info">
-                          <div class="history-time">${new Date(h.time).toLocaleString()}</div>
+                          <div class="history-time">${formatIsraelTime(h.time)}</div>
                           <div class="history-message">${h.status === 1 ? 'Connected' : 'Disconnected'}${h.ip ? ' • IP: ' + h.ip : ''}</div>
                         </div>
                       </div>
@@ -5792,7 +5844,7 @@
                     ${data.lastSeen ? `
                       <div style="display: flex; justify-content: space-between;">
                         <span style="color: #64748B;">Last Seen</span>
-                        <span style="color: ${data.connected ? '#94A3B8' : '#F87171'};">${new Date(data.lastSeen).toLocaleString()}</span>
+                        <span style="color: ${data.connected ? '#94A3B8' : '#F87171'};">${formatIsraelTime(data.lastSeen)}</span>
                       </div>
                     ` : ''}
                   </div>
@@ -5898,7 +5950,7 @@
                 <div class="uptime-bar">
                   ${uptimeSegments.map(seg => `
                     <div class="uptime-segment ${seg.status}"
-                      data-tooltip="${new Date(seg.time).toLocaleTimeString()} - ${seg.status.toUpperCase()}"
+                      data-tooltip="${formatIsraelTimeOnly(seg.time)} - ${seg.status.toUpperCase()}"
                       style="flex: 1;"></div>
                   `).join('')}
                 </div>
@@ -5919,7 +5971,7 @@
                       const timeout = h.status === 0;
                       return `<div class="response-bar ${timeout ? 'timeout' : slow ? 'slow' : ''}"
                         style="height: ${timeout ? 100 : height}%;"
-                        title="${h.ping ? h.ping + 'ms' : 'Timeout'} at ${new Date(h.time).toLocaleTimeString()}"></div>`;
+                        title="${h.ping ? h.ping + 'ms' : 'Timeout'} at ${formatIsraelTimeOnly(h.time)}"></div>`;
                     }).join('')}
                   </div>
                 </div>
@@ -5932,7 +5984,7 @@
                     <div class="history-item">
                       <div class="history-status ${h.status === 1 ? 'up' : 'down'}"></div>
                       <div class="history-info">
-                        <div class="history-time">${new Date(h.time).toLocaleString()}</div>
+                        <div class="history-time">${formatIsraelTime(h.time)}</div>
                         ${h.message ? `<div class="history-message">${h.message}</div>` : ''}
                       </div>
                       ${h.ping ? `<div class="history-ping">${h.ping}ms</div>` : ''}
@@ -5955,7 +6007,7 @@
       const currentFloorData = uptimeKumaData[activeFloor] || { accessPoints: [], printers: [], polyLens: [] };
       const currentPolyData = polyLensData[activeFloor] || [];
       const currentCounts = getStatusCounts(currentFloorData, currentPolyData);
-      const now = new Date().toLocaleTimeString();
+      const now = formatIsraelTimeOnly(new Date());
 
       // Build device markers for floor plan
       let deviceMarkersHTML = '';
@@ -7282,7 +7334,7 @@
           ? Math.round((new Date(i.resolved_at) - new Date(i.started_at)) / 60000) + ' min'
           : 'Ongoing';
         return i.device_name + ' went ' + (i.type === 'down' ? 'offline' : 'online') +
-          ' (' + new Date(i.started_at).toLocaleString() + ', ' + duration + ')';
+          ' (' + formatIsraelTime(i.started_at) + ', ' + duration + ')';
       }).join('\\n');
 
       showAlert('Recent Incidents:\\n' + html, 'info');

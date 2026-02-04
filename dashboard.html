@@ -1300,6 +1300,15 @@
       max-height: calc(90vh - 140px);
     }
 
+    /* Status list items in modals */
+    .status-list-item:hover {
+      background: var(--bg-elevated) !important;
+    }
+
+    .status-list-item:active {
+      background: var(--bg-overlay) !important;
+    }
+
     .modal-section {
       margin-bottom: var(--space-lg);
     }
@@ -2559,9 +2568,21 @@
       z-index: 1000;
     }
 
-    .device-marker:hover .device-popup {
+    .device-marker:hover .device-popup,
+    .device-popup.force-show {
       opacity: 1;
       visibility: visible;
+    }
+
+    .device-popup.force-show {
+      animation: popupPulse 0.5s ease-out;
+      box-shadow: 0 0 20px rgba(59, 130, 246, 0.5);
+    }
+
+    @keyframes popupPulse {
+      0% { transform: translateX(-50%) scale(0.9); opacity: 0; }
+      50% { transform: translateX(-50%) scale(1.05); }
+      100% { transform: translateX(-50%) scale(1); opacity: 1; }
     }
 
     .popup-header {
@@ -7095,34 +7116,135 @@
       Object.entries(printerStatusData).forEach(([id, ps]) => {
         if (ps?.toner) {
           const low = [];
-          if (ps.toner.black !== null && ps.toner.black < 20) low.push('Black: ' + ps.toner.black + '%');
-          if (ps.toner.cyan !== null && ps.toner.cyan < 20) low.push('Cyan: ' + ps.toner.cyan + '%');
-          if (ps.toner.magenta !== null && ps.toner.magenta < 20) low.push('Magenta: ' + ps.toner.magenta + '%');
-          if (ps.toner.yellow !== null && ps.toner.yellow < 20) low.push('Yellow: ' + ps.toner.yellow + '%');
+          let printer = null;
+          // Find printer info
+          Object.values(uptimeKumaData).forEach(floor => {
+            if (floor.printers) {
+              const p = floor.printers.find(pr => pr.id == id);
+              if (p) printer = p;
+            }
+          });
+          if (ps.toner.black !== null && ps.toner.black < 20) low.push({ color: 'black', level: ps.toner.black });
+          if (ps.toner.cyan !== null && ps.toner.cyan < 20) low.push({ color: 'cyan', level: ps.toner.cyan });
+          if (ps.toner.magenta !== null && ps.toner.magenta < 20) low.push({ color: 'magenta', level: ps.toner.magenta });
+          if (ps.toner.yellow !== null && ps.toner.yellow < 20) low.push({ color: 'yellow', level: ps.toner.yellow });
           if (low.length > 0) {
-            // Find printer name
-            let name = 'Printer ' + id;
-            Object.values(uptimeKumaData).forEach(floor => {
-              if (floor.printers) {
-                const p = floor.printers.find(pr => pr.id == id);
-                if (p) name = p.name;
-              }
-            });
-            lowToner.push({ id, name, low });
+            lowToner.push({ id, name: printer?.name || 'Printer ' + id, floor: printer?.floor || '', low });
           }
         }
       });
 
-      showAlert(lowToner.length > 0
-        ? 'Low Toner Printers:\\n' + lowToner.map(p => p.name + ': ' + p.low.join(', ')).join('\\n')
-        : 'All printers have sufficient toner!', lowToner.length > 0 ? 'warning' : 'success');
+      if (lowToner.length === 0) {
+        showAlert('All printers have sufficient toner!', 'success');
+        return;
+      }
+
+      // Show modal with clickable list
+      document.getElementById('modal-container').innerHTML = `
+        <div class="modal open" onclick="if(event.target === this) closeStatusModal()">
+          <div class="modal-content" style="max-width: 450px;">
+            <div class="modal-header">
+              <h3 class="modal-title">⚠️ Low Toner Printers (${lowToner.length})</h3>
+              <button class="admin-close" onclick="closeStatusModal()">&times;</button>
+            </div>
+            <div style="max-height: 400px; overflow-y: auto;">
+              ${lowToner.map(p => `
+                <div class="status-list-item" onclick="closeStatusModal(); highlightDevice('${p.id}');" style="cursor: pointer; padding: 12px 16px; border-bottom: 1px solid var(--border-subtle); display: flex; justify-content: space-between; align-items: center; transition: background 0.15s;">
+                  <div>
+                    <div style="font-weight: 600; color: var(--text-primary);">${p.name}</div>
+                    <div style="font-size: 11px; color: var(--text-muted);">${p.floor || 'Unknown floor'}</div>
+                  </div>
+                  <div style="display: flex; gap: 6px; align-items: center;">
+                    ${p.low.map(l => `
+                      <div style="display: flex; flex-direction: column; align-items: center; min-width: 28px;">
+                        <div style="width: 12px; height: 12px; border-radius: 50%; background: ${l.color === 'black' ? '#374151' : l.color}; border: 1px solid rgba(255,255,255,0.2);"></div>
+                        <span style="font-size: 9px; color: var(--status-warning); font-weight: 600;">${l.level}%</span>
+                      </div>
+                    `).join('')}
+                    <span style="color: var(--accent); font-size: 16px; margin-left: 8px;">📍</span>
+                  </div>
+                </div>
+              `).join('')}
+            </div>
+            <div style="padding: 12px 16px; background: var(--bg-secondary); border-radius: 0 0 8px 8px; font-size: 11px; color: var(--text-muted); text-align: center;">
+              Click a printer to locate it on the map
+            </div>
+          </div>
+        </div>
+      `;
+    }
+
+    function closeStatusModal() {
+      document.getElementById('modal-container').innerHTML = '';
     }
 
     // Show health details
     function showHealthDetails() {
       const total = totalStats.online + totalStats.offline;
       const health = total > 0 ? Math.round((totalStats.online / total) * 100) : 100;
-      showAlert('Network Health: ' + health + '%\\n' + totalStats.online + ' online, ' + totalStats.offline + ' offline', 'info');
+
+      // Get devices with low health scores
+      const lowHealthDevices = [];
+      Object.values(uptimeKumaData).forEach(floor => {
+        Object.values(floor).forEach(cat => {
+          if (Array.isArray(cat)) {
+            cat.forEach(d => {
+              if (d.health_score !== null && d.health_score < 90) {
+                lowHealthDevices.push(d);
+              }
+            });
+          }
+        });
+      });
+      lowHealthDevices.sort((a, b) => (a.health_score || 0) - (b.health_score || 0));
+
+      document.getElementById('modal-container').innerHTML = `
+        <div class="modal open" onclick="if(event.target === this) closeStatusModal()">
+          <div class="modal-content" style="max-width: 450px;">
+            <div class="modal-header">
+              <h3 class="modal-title">💚 Network Health</h3>
+              <button class="admin-close" onclick="closeStatusModal()">&times;</button>
+            </div>
+            <div style="padding: 20px; text-align: center; border-bottom: 1px solid var(--border-subtle);">
+              <div style="font-size: 48px; font-weight: 700; color: ${health >= 90 ? 'var(--status-online)' : health >= 70 ? 'var(--status-warning)' : 'var(--status-offline)'};">${health}%</div>
+              <div style="display: flex; justify-content: center; gap: 30px; margin-top: 12px;">
+                <div style="text-align: center;">
+                  <div style="font-size: 20px; font-weight: 600; color: var(--status-online);">${totalStats.online}</div>
+                  <div style="font-size: 11px; color: var(--text-muted);">Online</div>
+                </div>
+                <div style="text-align: center;">
+                  <div style="font-size: 20px; font-weight: 600; color: var(--status-offline);">${totalStats.offline}</div>
+                  <div style="font-size: 11px; color: var(--text-muted);">Offline</div>
+                </div>
+                <div style="text-align: center;">
+                  <div style="font-size: 20px; font-weight: 600; color: var(--text-primary);">${total}</div>
+                  <div style="font-size: 11px; color: var(--text-muted);">Total</div>
+                </div>
+              </div>
+            </div>
+            ${lowHealthDevices.length > 0 ? `
+              <div style="padding: 12px 16px; background: var(--bg-secondary);">
+                <div style="font-size: 12px; font-weight: 600; color: var(--text-muted); margin-bottom: 8px;">⚠️ Devices Needing Attention</div>
+              </div>
+              <div style="max-height: 200px; overflow-y: auto;">
+                ${lowHealthDevices.slice(0, 10).map(d => `
+                  <div class="status-list-item" onclick="closeStatusModal(); highlightDevice('${d.id}');" style="cursor: pointer; padding: 10px 16px; border-bottom: 1px solid var(--border-subtle); display: flex; justify-content: space-between; align-items: center;">
+                    <div style="font-weight: 500; color: var(--text-primary);">${d.name}</div>
+                    <div style="display: flex; align-items: center; gap: 8px;">
+                      <span style="font-size: 12px; color: ${d.health_score >= 70 ? 'var(--status-warning)' : 'var(--status-offline)'}; font-weight: 600;">${d.health_score}%</span>
+                      <span style="color: var(--accent);">📍</span>
+                    </div>
+                  </div>
+                `).join('')}
+              </div>
+            ` : `
+              <div style="padding: 20px; text-align: center; color: var(--text-muted);">
+                All devices are healthy!
+              </div>
+            `}
+          </div>
+        </div>
+      `;
     }
 
     // ==================== GLOBAL SEARCH ====================
@@ -7617,30 +7739,34 @@
         });
       }
 
-      // Show modal with device list
-      const modal = document.createElement('div');
-      modal.className = 'modal-overlay open';
-      modal.innerHTML = `
-        <div class="modal">
-          <div class="modal-header">
-            <h2 class="modal-title">${type === 'online' ? '✅ Online Devices' : type === 'offline' ? '❌ Offline Devices' : '📹 Zoom Devices'} (${devices.length})</h2>
-            <button class="modal-close" onclick="this.closest('.modal-overlay').remove()">×</button>
-          </div>
-          <div class="modal-body" style="max-height: 400px; overflow-y: auto;">
-            ${devices.map(d => `
-              <div class="device-item" style="margin-bottom: 8px;">
-                <span class="device-status-dot ${d.status === 'up' || d.connected ? 'online' : 'offline'}"></span>
-                <div class="device-info">
-                  <div class="device-name">${d.name}</div>
-                  <div class="device-meta">${d.floor} • ${d.ip || 'No IP'}</div>
+      // Show modal with clickable device list
+      document.getElementById('modal-container').innerHTML = `
+        <div class="modal open" onclick="if(event.target === this) closeStatusModal()">
+          <div class="modal-content" style="max-width: 500px;">
+            <div class="modal-header">
+              <h3 class="modal-title">${type === 'online' ? '✅ Online Devices' : type === 'offline' ? '❌ Offline Devices' : '📹 Zoom Devices'} (${devices.length})</h3>
+              <button class="admin-close" onclick="closeStatusModal()">&times;</button>
+            </div>
+            <div style="max-height: 400px; overflow-y: auto;">
+              ${devices.length > 0 ? devices.map(d => `
+                <div class="status-list-item" onclick="closeStatusModal(); highlightDevice('${d.id}');" style="cursor: pointer; padding: 12px 16px; border-bottom: 1px solid var(--border-subtle); display: flex; justify-content: space-between; align-items: center; transition: background 0.15s;">
+                  <div style="display: flex; align-items: center; gap: 10px;">
+                    <span class="device-status-dot ${d.status === 'up' || d.connected ? 'online' : 'offline'}" style="width: 10px; height: 10px; border-radius: 50%;"></span>
+                    <div>
+                      <div style="font-weight: 600; color: var(--text-primary);">${d.name}</div>
+                      <div style="font-size: 11px; color: var(--text-muted);">${d.floor} • ${d.ip || d.hostname || 'No IP'}</div>
+                    </div>
+                  </div>
+                  <span style="color: var(--accent); font-size: 16px;">📍</span>
                 </div>
-              </div>
-            `).join('') || '<p style="color: var(--text-muted); text-align: center;">No devices found</p>'}
+              `).join('') : '<p style="color: var(--text-muted); text-align: center; padding: 20px;">No devices found</p>'}
+            </div>
+            <div style="padding: 12px 16px; background: var(--bg-secondary); border-radius: 0 0 8px 8px; font-size: 11px; color: var(--text-muted); text-align: center;">
+              Click a device to locate it on the map
+            </div>
           </div>
         </div>
       `;
-      modal.onclick = (e) => { if (e.target === modal) modal.remove(); };
-      document.body.appendChild(modal);
     }
 
     // Data source info modal
@@ -8103,9 +8229,26 @@
 
     // Highlight device on map when clicked from sidebar
     function highlightDevice(deviceId) {
+      // Find the device to get its floor
+      const device = Object.values(uptimeKumaData).flat().find(d => d.id == deviceId);
+      const polyRoom = currentPolyData.find(p => p.room === deviceId || p.id === deviceId);
+
+      // Get the floor and switch to it if needed
+      let deviceFloor = device?.floor || polyRoom?.floor;
+      if (deviceFloor && deviceFloor !== currentFloor) {
+        setFloor(deviceFloor);
+        // Wait for floor to render, then highlight
+        setTimeout(() => highlightDeviceOnMap(deviceId), 100);
+      } else {
+        highlightDeviceOnMap(deviceId);
+      }
+    }
+
+    function highlightDeviceOnMap(deviceId) {
       // Remove previous highlight
       document.querySelectorAll('.device-marker.highlighted').forEach(el => {
         el.classList.remove('highlighted');
+        el.querySelector('.device-popup')?.classList.remove('force-show');
       });
 
       // Find and highlight the marker
@@ -8113,15 +8256,22 @@
       if (marker) {
         marker.classList.add('highlighted');
 
+        // Force show the popup
+        const popup = marker.querySelector('.device-popup');
+        if (popup) {
+          popup.classList.add('force-show');
+        }
+
         // Scroll the marker into view
         marker.scrollIntoView({ behavior: 'smooth', block: 'center', inline: 'center' });
 
-        // Remove highlight after 5 seconds
+        // Remove highlight and popup after 5 seconds
         setTimeout(() => {
           marker.classList.remove('highlighted');
+          if (popup) popup.classList.remove('force-show');
         }, 5000);
       } else {
-        console.log('Device not found on map:', deviceId);
+        showAlert('Device not found on current floor map', 'info');
       }
     }
 

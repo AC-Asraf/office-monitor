@@ -4103,6 +4103,34 @@ app.post('/api/monitors/:id/ping', authMiddleware, async (req, res) => {
   }
 });
 
+// Manual ping by IP address (for Poly devices)
+app.post('/api/ping', authMiddleware, async (req, res) => {
+  try {
+    const { ip } = req.body;
+    if (!ip) {
+      return res.status(400).json({ success: false, error: 'IP address required' });
+    }
+
+    const result = await ping.promise.probe(ip, {
+      timeout: 10,
+      extra: ['-c', '1']
+    });
+
+    res.json({
+      success: true,
+      result: {
+        status: result.alive ? 'up' : 'down',
+        ping: result.time === 'unknown' ? null : parseFloat(result.time),
+        message: result.alive ? '' : 'Host unreachable',
+        timestamp: new Date().toISOString()
+      }
+    });
+  } catch (e) {
+    console.error('Ping by IP error:', e);
+    res.status(500).json({ success: false, error: e.message });
+  }
+});
+
 // ==================== HEALTH SCORES ====================
 
 // Calculate and update health scores for all monitors

@@ -3764,16 +3764,15 @@
     // API Configuration
     const API_URL = window.location.origin;
 
-    // Israel Standard Time formatting helpers
-    const ISRAEL_TZ = 'Asia/Jerusalem';
+    // Local time formatting helpers (uses browser's local timezone)
     function formatIsraelTime(date) {
-      return new Date(date).toLocaleString('en-IL', { timeZone: ISRAEL_TZ });
+      return new Date(date).toLocaleString();
     }
     function formatIsraelTimeOnly(date) {
-      return new Date(date).toLocaleTimeString('en-IL', { timeZone: ISRAEL_TZ });
+      return new Date(date).toLocaleTimeString();
     }
     function formatIsraelDate(date) {
-      return new Date(date).toLocaleDateString('en-IL', { timeZone: ISRAEL_TZ });
+      return new Date(date).toLocaleDateString();
     }
 
     // Auth state

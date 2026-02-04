@@ -3764,15 +3764,24 @@
     // API Configuration
     const API_URL = window.location.origin;
 
-    // Local time formatting helpers (uses browser's local timezone)
+    // Local time formatting helpers (converts UTC timestamps to local timezone)
+    function parseUTCDate(date) {
+      // Server returns timestamps without timezone (e.g., "2026-02-04 07:11:05")
+      // These are stored in UTC, so we need to parse them as UTC
+      if (typeof date === 'string' && !date.includes('T') && !date.includes('Z')) {
+        // Add 'Z' to indicate UTC
+        return new Date(date.replace(' ', 'T') + 'Z');
+      }
+      return new Date(date);
+    }
     function formatIsraelTime(date) {
-      return new Date(date).toLocaleString();
+      return parseUTCDate(date).toLocaleString();
     }
     function formatIsraelTimeOnly(date) {
-      return new Date(date).toLocaleTimeString();
+      return parseUTCDate(date).toLocaleTimeString();
     }
     function formatIsraelDate(date) {
-      return new Date(date).toLocaleDateString();
+      return parseUTCDate(date).toLocaleDateString();
     }
 
     // Auth state

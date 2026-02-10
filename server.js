@@ -11,13 +11,43 @@ const snmp = require('net-snmp');
 const WebSocket = require('ws');
 const bcrypt = require('bcrypt');
 
-// Create HTTPS agent that ignores self-signed certificates
-const httpsAgent = new https.Agent({ rejectUnauthorized: false });
+// Create HTTPS agent - respects NODE_TLS_REJECT_UNAUTHORIZED env var for development
+// In production, leave NODE_TLS_REJECT_UNAUTHORIZED unset (defaults to validating certificates)
+const httpsAgent = new https.Agent({
+  rejectUnauthorized: process.env.NODE_TLS_REJECT_UNAUTHORIZED !== '0'
+});
 
 const app = express();
 
 // Disable X-Powered-By header for security
 app.disable('x-powered-by');
+
+// Simple logger utility - sanitizes sensitive data and errors
+const IS_PRODUCTION = process.env.NODE_ENV === 'production';
+const logger = {
+  info: (...args) => console.log('[INFO]', ...args),
+  warn: (...args) => console.warn('[WARN]', ...args),
+  error: (message, error) => {
+    // In production, don't log full stack traces
+    if (IS_PRODUCTION && error instanceof Error) {
+      console.error('[ERROR]', message, error.message);
+    } else {
+      console.error('[ERROR]', message, error);
+    }
+  },
+  // Sanitize potentially sensitive data from objects before logging
+  sanitize: (obj) => {
+    if (!obj || typeof obj !== 'object') return obj;
+    const sanitized = { ...obj };
+    const sensitiveKeys = ['password', 'token', 'secret', 'key', 'authorization', 'cookie'];
+    for (const key of Object.keys(sanitized)) {
+      if (sensitiveKeys.some(sk => key.toLowerCase().includes(sk))) {
+        sanitized[key] = '[REDACTED]';
+      }
+    }
+    return sanitized;
+  }
+};
 
 // CORS configuration - restrict to specific origins
 const allowedOrigins = process.env.ALLOWED_ORIGINS?.split(',') || [
@@ -27,15 +57,21 @@ const allowedOrigins = process.env.ALLOWED_ORIGINS?.split(',') || [
 ];
 app.use(cors({
   origin: function(origin, callback) {
-    // Allow requests with no origin (like mobile apps, curl, or same-origin)
-    if (!origin) return callback(null, true);
+    // Same-origin requests (from static files served by this server) have no origin
+    // These are safe as they're not cross-origin. Only block cross-origin requests from unknown origins.
+    if (!origin) {
+      // Log for monitoring but allow same-origin requests
+      return callback(null, true);
+    }
     if (allowedOrigins.some(allowed => origin.startsWith(allowed.replace(':3002', '')))) {
       return callback(null, true);
     }
     console.warn(`CORS blocked origin: ${origin}`);
     return callback(new Error('Not allowed by CORS'), false);
   },
-  credentials: true
+  credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization']
 }));
 
 // Security headers middleware
@@ -400,6 +436,12 @@ const migrations = [
   `ALTER TABLE monitors ADD COLUMN tags TEXT DEFAULT NULL`,
   // Room positions tags
   `ALTER TABLE room_positions ADD COLUMN tags TEXT DEFAULT NULL`,
+  // Account lockout columns
+  `ALTER TABLE users ADD COLUMN failed_login_attempts INTEGER DEFAULT 0`,
+  `ALTER TABLE users ADD COLUMN locked_until DATETIME DEFAULT NULL`,
+  // Session token rotation columns
+  `ALTER TABLE sessions ADD COLUMN created_at DATETIME DEFAULT CURRENT_TIMESTAMP`,
+  `ALTER TABLE sessions ADD COLUMN last_rotated_at DATETIME DEFAULT NULL`,
 ];
 
 // Create zoom meeting utilization table
@@ -695,8 +737,8 @@ const defaultAdminPassword = process.env.DEFAULT_ADMIN_PASSWORD || 'changeme123'
 const existingAdmin = db.prepare('SELECT id, password FROM users WHERE username = ?').get(defaultAdminUsername);
 if (!existingAdmin) {
   const hashedPassword = bcrypt.hashSync(defaultAdminPassword, 10);
-  db.prepare('INSERT INTO users (username, password, role) VALUES (?, ?, ?)').run(defaultAdminUsername, hashedPassword, 'admin');
-  console.log('Created default admin user with hashed password');
+  db.prepare('INSERT INTO users (username, password, role, password_reset_required) VALUES (?, ?, ?, 1)').run(defaultAdminUsername, hashedPassword, 'admin');
+  console.log('Created default admin user (password change required on first login)');
 } else if (!existingAdmin.password.startsWith('$2')) {
   // Migrate existing plain text password to hashed
   const hashedPassword = bcrypt.hashSync(existingAdmin.password, 10);
@@ -806,10 +848,66 @@ function generateToken() {
   return crypto.randomBytes(32).toString('hex');
 }
 
+// Generate secure random password for password resets
+function generateSecurePassword(length = 12) {
+  const uppercase = 'ABCDEFGHJKLMNPQRSTUVWXYZ';  // Removed I and O to avoid confusion
+  const lowercase = 'abcdefghjkmnpqrstuvwxyz';   // Removed i, l, o to avoid confusion
+  const numbers = '23456789';                     // Removed 0, 1 to avoid confusion
+  const symbols = '!@#$%&*';
+
+  // Ensure at least one of each type
+  let password = '';
+  password += uppercase[Math.floor(Math.random() * uppercase.length)];
+  password += lowercase[Math.floor(Math.random() * lowercase.length)];
+  password += numbers[Math.floor(Math.random() * numbers.length)];
+  password += symbols[Math.floor(Math.random() * symbols.length)];
+
+  // Fill the rest with random characters from all sets
+  const allChars = uppercase + lowercase + numbers + symbols;
+  for (let i = password.length; i < length; i++) {
+    password += allChars[Math.floor(Math.random() * allChars.length)];
+  }
+
+  // Shuffle the password to randomize position of required characters
+  return password.split('').sort(() => Math.random() - 0.5).join('');
+}
+
+// Validate password meets security requirements
+function validatePassword(password) {
+  const errors = [];
+
+  if (!password || typeof password !== 'string') {
+    return { valid: false, errors: ['Password is required'] };
+  }
+
+  if (password.length < 12) {
+    errors.push('at least 12 characters');
+  }
+  if (!/[A-Z]/.test(password)) {
+    errors.push('one uppercase letter');
+  }
+  if (!/[a-z]/.test(password)) {
+    errors.push('one lowercase letter');
+  }
+  if (!/[0-9]/.test(password)) {
+    errors.push('one number');
+  }
+  if (!/[!@#$%^&*()_+\-=\[\]{}|;:,.<>?]/.test(password)) {
+    errors.push('one special character (!@#$%^&*()_+-=[]{}|;:,.<>?)');
+  }
+
+  if (errors.length > 0) {
+    return { valid: false, errors: errors, message: `Password must contain ${errors.join(', ')}` };
+  }
+
+  return { valid: true };
+}
+
 function createSession(userId) {
   const token = generateToken();
+  const now = new Date().toISOString();
   const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(); // 24 hours
-  db.prepare('INSERT INTO sessions (user_id, token, expires_at) VALUES (?, ?, ?)').run(userId, token, expiresAt);
+  db.prepare('INSERT INTO sessions (user_id, token, expires_at, created_at, last_rotated_at) VALUES (?, ?, ?, ?, ?)').run(userId, token, expiresAt, now, now);
   return token;
 }
 
@@ -826,6 +924,32 @@ function deleteSession(token) {
   db.prepare('DELETE FROM sessions WHERE token = ?').run(token);
 }
 
+// Rotate session token (returns new token)
+const TOKEN_ROTATION_INTERVAL = 60 * 60 * 1000; // 1 hour
+function rotateSessionIfNeeded(session) {
+  if (!session || !session.last_rotated_at) return null;
+
+  const lastRotated = new Date(session.last_rotated_at).getTime();
+  const now = Date.now();
+
+  // Check if rotation is needed (more than 1 hour since last rotation)
+  if (now - lastRotated < TOKEN_ROTATION_INTERVAL) {
+    return null; // No rotation needed
+  }
+
+  // Generate new token
+  const newToken = generateToken();
+  const newExpiresAt = new Date(now + 24 * 60 * 60 * 1000).toISOString();
+
+  // Update session with new token
+  db.prepare(`
+    UPDATE sessions SET token = ?, expires_at = ?, last_rotated_at = ?
+    WHERE id = ?
+  `).run(newToken, newExpiresAt, new Date(now).toISOString(), session.id);
+
+  return newToken;
+}
+
 // Auth middleware - only accepts tokens in Authorization header (not URL for security)
 function authMiddleware(req, res, next) {
   const token = req.headers.authorization?.replace('Bearer ', '');
@@ -837,6 +961,13 @@ function authMiddleware(req, res, next) {
   const session = getSession(token);
   if (!session) {
     return res.status(401).json({ success: false, error: 'Invalid or expired session' });
+  }
+
+  // Check if token should be rotated
+  const newToken = rotateSessionIfNeeded(session);
+  if (newToken) {
+    // Set header to inform client of new token
+    res.setHeader('X-New-Token', newToken);
   }
 
   req.user = {
@@ -1123,7 +1254,7 @@ async function checkMonitor(monitor) {
           headers: { 'User-Agent': 'OfficeMonitor/1.0' }
         };
 
-        // For HTTPS with self-signed certs, use node's http module
+        // For HTTPS URLs, use node's https module
         if (isHttps) {
           const url = new URL(monitor.url);
           const result = await new Promise((resolve, reject) => {
@@ -1132,7 +1263,7 @@ async function checkMonitor(monitor) {
               port: url.port || 443,
               path: url.pathname || '/',
               method: 'GET',
-              rejectUnauthorized: false,
+              rejectUnauthorized: process.env.NODE_TLS_REJECT_UNAUTHORIZED !== '0',
               timeout: PING_TIMEOUT
             }, (res) => {
               resolve({ ok: res.statusCode >= 200 && res.statusCode < 400, status: res.statusCode, statusText: res.statusMessage });
@@ -2153,10 +2284,69 @@ app.post('/api/auth/login', async (req, res) => {
     return res.status(401).json({ success: false, error: 'Invalid credentials' });
   }
 
+  // Check if account is locked
+  if (user.locked_until) {
+    const lockedUntil = new Date(user.locked_until);
+    if (lockedUntil > new Date()) {
+      const minutesRemaining = Math.ceil((lockedUntil - new Date()) / 60000);
+      return res.status(423).json({
+        success: false,
+        error: `Account is locked. Please try again in ${minutesRemaining} minute${minutesRemaining !== 1 ? 's' : ''}.`,
+        locked_until: user.locked_until
+      });
+    } else {
+      // Lock has expired, reset it
+      db.prepare('UPDATE users SET locked_until = NULL, failed_login_attempts = 0 WHERE id = ?').run(user.id);
+    }
+  }
+
   // Compare password using bcrypt
   const passwordValid = await bcrypt.compare(password, user.password);
   if (!passwordValid) {
-    return res.status(401).json({ success: false, error: 'Invalid credentials' });
+    // Increment failed attempts
+    const newAttempts = (user.failed_login_attempts || 0) + 1;
+    const MAX_FAILED_ATTEMPTS = 5;
+    const LOCKOUT_DURATION_MINUTES = 30;
+
+    if (newAttempts >= MAX_FAILED_ATTEMPTS) {
+      // Lock the account
+      const lockedUntil = new Date(Date.now() + LOCKOUT_DURATION_MINUTES * 60 * 1000);
+      db.prepare('UPDATE users SET failed_login_attempts = ?, locked_until = ? WHERE id = ?')
+        .run(newAttempts, lockedUntil.toISOString(), user.id);
+
+      // Send Slack notification about account lockout
+      const webhookUrl = SLACK_APPROVAL_WEBHOOK_URL || SLACK_WEBHOOK_URL;
+      if (webhookUrl) {
+        fetch(webhookUrl, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            text: `🔒 *Account Locked*`,
+            blocks: [
+              { type: 'header', text: { type: 'plain_text', text: '🔒 Account Locked', emoji: true } },
+              { type: 'section', fields: [
+                { type: 'mrkdwn', text: `*User:*\n${username}` },
+                { type: 'mrkdwn', text: `*IP:*\n${clientIp}` }
+              ]},
+              { type: 'section', text: { type: 'mrkdwn', text: `Account locked for ${LOCKOUT_DURATION_MINUTES} minutes after ${MAX_FAILED_ATTEMPTS} failed login attempts.` }}
+            ]
+          })
+        }).catch(err => console.error('Failed to send lockout notification:', err));
+      }
+
+      return res.status(423).json({
+        success: false,
+        error: `Account locked after ${MAX_FAILED_ATTEMPTS} failed attempts. Please try again in ${LOCKOUT_DURATION_MINUTES} minutes.`,
+        locked_until: lockedUntil.toISOString()
+      });
+    } else {
+      db.prepare('UPDATE users SET failed_login_attempts = ? WHERE id = ?').run(newAttempts, user.id);
+      return res.status(401).json({
+        success: false,
+        error: 'Invalid credentials',
+        attempts_remaining: MAX_FAILED_ATTEMPTS - newAttempts
+      });
+    }
   }
 
   // Check if TOTP 2FA is enabled
@@ -2285,6 +2475,11 @@ app.post('/api/auth/login', async (req, res) => {
       pending_token: pendingToken,
       message: 'Login requires approval. Please wait for an admin to approve your login via Slack.'
     });
+  }
+
+  // Reset failed login attempts on successful login
+  if (user.failed_login_attempts > 0 || user.locked_until) {
+    db.prepare('UPDATE users SET failed_login_attempts = 0, locked_until = NULL WHERE id = ?').run(user.id);
   }
 
   const token = createSession(user.id);
@@ -2502,8 +2697,9 @@ app.post('/api/auth/change-password', authMiddleware, async (req, res) => {
     return res.status(400).json({ success: false, error: 'Current password and new password are required' });
   }
 
-  if (typeof new_password !== 'string' || new_password.length < 6) {
-    return res.status(400).json({ success: false, error: 'New password must be at least 6 characters' });
+  const passwordValidation = validatePassword(new_password);
+  if (!passwordValidation.valid) {
+    return res.status(400).json({ success: false, error: passwordValidation.message });
   }
 
   // Get user from database
@@ -2524,17 +2720,34 @@ app.post('/api/auth/change-password', authMiddleware, async (req, res) => {
     db.prepare('UPDATE users SET password = ?, password_reset_required = 0 WHERE id = ?').run(hashedPassword, req.user.id);
     res.json({ success: true, message: 'Password changed successfully' });
   } catch (e) {
-    console.error('Failed to change password:', e);
+    logger.error('Failed to change password', e);
     res.status(500).json({ success: false, error: 'Failed to change password' });
   }
 });
 
-// Forgot password - sends Slack notification and resets to default password
+// Forgot password - sends Slack notification and resets to random password
 app.post('/api/auth/forgot-password', async (req, res) => {
   const { username } = req.body;
+  const clientIp = req.ip || req.connection?.remoteAddress || 'unknown';
 
   if (!username) {
     return res.status(400).json({ success: false, error: 'Username is required' });
+  }
+
+  // Rate limiting - 5 requests per hour per IP
+  const ipRateLimit = checkRateLimit(`pwd-reset-ip:${clientIp}`, 5);
+  if (!ipRateLimit.allowed) {
+    return res.status(429).json({
+      success: false,
+      error: 'Too many password reset requests. Please try again later.'
+    });
+  }
+
+  // Rate limiting - 3 requests per hour per username
+  const userRateLimit = checkRateLimit(`pwd-reset-user:${username.toLowerCase()}`, 3);
+  if (!userRateLimit.allowed) {
+    // Return generic message to not reveal if username exists
+    return res.json({ success: true, message: 'If the username exists, a password reset has been initiated' });
   }
 
   // Find user
@@ -2545,9 +2758,9 @@ app.post('/api/auth/forgot-password', async (req, res) => {
   }
 
   try {
-    // Reset password to default
-    const defaultPassword = 'ob123456';
-    const hashedPassword = await bcrypt.hash(defaultPassword, 10);
+    // Generate secure random temporary password
+    const tempPassword = generateSecurePassword(12);
+    const hashedPassword = await bcrypt.hash(tempPassword, 10);
     db.prepare('UPDATE users SET password = ?, password_reset_required = 1 WHERE id = ?').run(hashedPassword, user.id);
 
     // Send Slack notification to BOTH channels
@@ -2579,7 +2792,7 @@ app.post('/api/auth/forgot-password', async (req, res) => {
           type: 'section',
           text: {
             type: 'mrkdwn',
-            text: `Password has been reset to the default temporary password. User will be required to change it on next login.`
+            text: `Password has been reset. Temporary password: \`${tempPassword}\`\n\n_User will be required to change it on next login._`
           }
         }
       ]
@@ -2597,7 +2810,7 @@ app.post('/api/auth/forgot-password', async (req, res) => {
 
     res.json({ success: true, message: 'If the username exists, a password reset has been initiated' });
   } catch (e) {
-    console.error('Failed to reset password:', e);
+    logger.error('Failed to reset password', e);
     res.status(500).json({ success: false, error: 'Failed to process request' });
   }
 });
@@ -2617,7 +2830,7 @@ app.post('/api/auth/admin-password-reset/:userId', authMiddleware, (req, res) =>
     db.prepare('UPDATE users SET password_reset_required = 1 WHERE id = ?').run(userId);
     res.json({ success: true });
   } catch (e) {
-    console.error('Failed to mark password reset:', e);
+    logger.error('Failed to mark password reset', e);
     res.status(500).json({ success: false, error: 'Failed to mark password reset' });
   }
 });
@@ -2630,8 +2843,40 @@ app.get('/api/users', authMiddleware, (req, res) => {
     return res.status(403).json({ success: false, error: 'Admin access required' });
   }
 
-  const users = db.prepare('SELECT id, username, role, created_at, slack_2fa_enabled FROM users').all();
-  res.json({ success: true, users });
+  const users = db.prepare('SELECT id, username, role, created_at, slack_2fa_enabled, locked_until, failed_login_attempts FROM users').all();
+  // Add computed locked status
+  const now = new Date();
+  const usersWithStatus = users.map(u => ({
+    ...u,
+    is_locked: u.locked_until && new Date(u.locked_until) > now
+  }));
+  res.json({ success: true, users: usersWithStatus });
+});
+
+// Unlock user account (admin only)
+app.post('/api/users/:id/unlock', authMiddleware, (req, res) => {
+  if (req.user.role !== 'admin') {
+    return res.status(403).json({ success: false, error: 'Admin access required' });
+  }
+
+  const userId = parseInt(req.params.id);
+  if (isNaN(userId)) {
+    return res.status(400).json({ success: false, error: 'Invalid user ID' });
+  }
+
+  try {
+    const user = db.prepare('SELECT username FROM users WHERE id = ?').get(userId);
+    if (!user) {
+      return res.status(404).json({ success: false, error: 'User not found' });
+    }
+
+    db.prepare('UPDATE users SET locked_until = NULL, failed_login_attempts = 0 WHERE id = ?').run(userId);
+    console.log(`Account unlocked: ${user.username} by admin ${req.user.username}`);
+    res.json({ success: true, message: `Account ${user.username} has been unlocked` });
+  } catch (e) {
+    logger.error('Failed to unlock user', e);
+    res.status(500).json({ success: false, error: 'Failed to unlock user' });
+  }
 });
 
 // Create new user (admin only)
@@ -2656,8 +2901,9 @@ app.post('/api/users', authMiddleware, async (req, res) => {
     return res.status(400).json({ success: false, error: 'Username must be 3-50 characters (letters, numbers, dots, hyphens, underscores)' });
   }
 
-  if (password.length < 6) {
-    return res.status(400).json({ success: false, error: 'Password must be at least 6 characters' });
+  const passwordValidation = validatePassword(password);
+  if (!passwordValidation.valid) {
+    return res.status(400).json({ success: false, error: passwordValidation.message });
   }
 
   // Validate role
@@ -2682,7 +2928,7 @@ app.post('/api/users', authMiddleware, async (req, res) => {
     );
     res.json({ success: true, id: result.lastInsertRowid });
   } catch (e) {
-    console.error('Failed to create user:', e);
+    logger.error('Failed to create user', e);
     res.status(500).json({ success: false, error: 'Failed to create user' });
   }
 });
@@ -2707,8 +2953,11 @@ app.put('/api/users/:id', authMiddleware, async (req, res) => {
   }
 
   // Validate password if provided
-  if (password && (typeof password !== 'string' || password.length < 6)) {
-    return res.status(400).json({ success: false, error: 'Password must be at least 6 characters' });
+  if (password) {
+    const passwordValidation = validatePassword(password);
+    if (!passwordValidation.valid) {
+      return res.status(400).json({ success: false, error: passwordValidation.message });
+    }
   }
 
   // Prevent admin from demoting themselves
@@ -2726,7 +2975,7 @@ app.put('/api/users/:id', authMiddleware, async (req, res) => {
     }
     res.json({ success: true });
   } catch (e) {
-    console.error('Failed to update user:', e);
+    logger.error('Failed to update user', e);
     res.status(500).json({ success: false, error: 'Failed to update user' });
   }
 });
@@ -2757,7 +3006,7 @@ app.patch('/api/users/:id/slack-2fa', authMiddleware, (req, res) => {
     console.log(`Slack 2FA ${enabled ? 'enabled' : 'disabled'} for user ${user.username}`);
     res.json({ success: true, slack_2fa_enabled: enabled });
   } catch (e) {
-    console.error('Failed to toggle Slack 2FA:', e);
+    logger.error('Failed to toggle Slack 2FA', e);
     res.status(500).json({ success: false, error: 'Failed to toggle Slack 2FA' });
   }
 });
@@ -4302,13 +4551,58 @@ app.get('/api/floor-plans/:floor', (req, res) => {
   res.json({ success: true, plan });
 });
 
-// Upload/update floor plan
-app.put('/api/floor-plans/:floor', (req, res) => {
+// Upload/update floor plan (requires authentication)
+app.put('/api/floor-plans/:floor', authMiddleware, (req, res) => {
   const { image_data, image_type } = req.body;
   const floor = req.params.floor;
 
   if (!image_data || !image_type) {
     return res.status(400).json({ success: false, error: 'image_data and image_type required' });
+  }
+
+  // Validate image type
+  const allowedTypes = ['image/png', 'image/jpeg', 'image/gif', 'image/webp'];
+  if (!allowedTypes.includes(image_type)) {
+    return res.status(400).json({ success: false, error: 'Invalid image type. Allowed: PNG, JPEG, GIF, WebP' });
+  }
+
+  // Validate base64 data format and size
+  const base64Match = image_data.match(/^data:(image\/\w+);base64,(.+)$/);
+  if (!base64Match) {
+    return res.status(400).json({ success: false, error: 'Invalid image data format' });
+  }
+
+  const [, dataType, base64Content] = base64Match;
+
+  // Verify declared type matches data
+  if (dataType !== image_type) {
+    return res.status(400).json({ success: false, error: 'Image type mismatch' });
+  }
+
+  // Check file size (5MB max, base64 is ~33% larger than binary)
+  const MAX_SIZE_BYTES = 5 * 1024 * 1024; // 5MB
+  const estimatedSize = (base64Content.length * 3) / 4; // Approximate decoded size
+  if (estimatedSize > MAX_SIZE_BYTES) {
+    return res.status(400).json({ success: false, error: 'Image too large. Maximum size is 5MB' });
+  }
+
+  // Validate base64 content is valid
+  try {
+    const buffer = Buffer.from(base64Content, 'base64');
+    // Check magic bytes for image types
+    const magicBytes = {
+      'image/png': [0x89, 0x50, 0x4E, 0x47],
+      'image/jpeg': [0xFF, 0xD8, 0xFF],
+      'image/gif': [0x47, 0x49, 0x46],
+      'image/webp': [0x52, 0x49, 0x46, 0x46] // RIFF header
+    };
+    const expectedMagic = magicBytes[image_type];
+    const actualMagic = [...buffer.slice(0, expectedMagic.length)];
+    if (!expectedMagic.every((byte, i) => byte === actualMagic[i])) {
+      return res.status(400).json({ success: false, error: 'Invalid image content' });
+    }
+  } catch (e) {
+    return res.status(400).json({ success: false, error: 'Invalid base64 encoding' });
   }
 
   db.prepare(`
@@ -4320,6 +4614,7 @@ app.put('/api/floor-plans/:floor', (req, res) => {
       updated_at = CURRENT_TIMESTAMP
   `).run(floor, image_data, image_type);
 
+  console.log(`Floor plan uploaded: ${floor} by ${req.user.username}`);
   res.json({ success: true });
 });
 
@@ -5829,7 +6124,7 @@ app.post('/api/2fa/setup', authMiddleware, (req, res) => {
       message: 'Scan the QR code with your authenticator app, then verify with a code'
     });
   } catch (error) {
-    console.error('2FA setup error:', error);
+    logger.error('2FA setup error', error);
     res.status(500).json({ success: false, error: 'Failed to setup 2FA' });
   }
 });
@@ -5854,7 +6149,7 @@ app.post('/api/2fa/verify', authMiddleware, (req, res) => {
       res.status(400).json({ success: false, error: 'Invalid verification code' });
     }
   } catch (error) {
-    console.error('2FA verify error:', error);
+    logger.error('2FA verify error', error);
     res.status(500).json({ success: false, error: 'Failed to verify 2FA' });
   }
 });
@@ -5884,7 +6179,7 @@ app.post('/api/2fa/disable', authMiddleware, (req, res) => {
     logActivity(req, 'disable_2fa', 'user', userId, user.username);
     res.json({ success: true, message: '2FA disabled successfully' });
   } catch (error) {
-    console.error('2FA disable error:', error);
+    logger.error('2FA disable error', error);
     res.status(500).json({ success: false, error: 'Failed to disable 2FA' });
   }
 });
@@ -6113,9 +6408,30 @@ const wss = new WebSocket.Server({ server });
 // Track connected clients
 const wsClients = new Set();
 
-wss.on('connection', (ws) => {
+wss.on('connection', (ws, req) => {
+  // Authenticate WebSocket connection
+  const url = new URL(req.url, `http://${req.headers.host}`);
+  const token = url.searchParams.get('token');
+
+  if (!token) {
+    ws.close(4001, 'Authentication required');
+    console.log('WebSocket connection rejected: no token');
+    return;
+  }
+
+  const session = getSession(token);
+  if (!session) {
+    ws.close(4002, 'Invalid or expired token');
+    console.log('WebSocket connection rejected: invalid token');
+    return;
+  }
+
+  // Store user info on the WebSocket for potential future use
+  ws.userId = session.user_id;
+  ws.username = session.username;
+
   wsClients.add(ws);
-  console.log(`WebSocket client connected. Total: ${wsClients.size}`);
+  console.log(`WebSocket client connected (${session.username}). Total: ${wsClients.size}`);
 
   // Send initial connection acknowledgment
   ws.send(JSON.stringify({ type: 'connected', message: 'WebSocket connected' }));

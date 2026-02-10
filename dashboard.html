@@ -4501,13 +4501,28 @@
     // Notifications state
     let unreadNotifications = 0;
 
-    // Auth helper for fetch
-    function authFetch(url, options = {}) {
+    // Auth helper for fetch with automatic token rotation handling
+    async function authFetch(url, options = {}) {
       const headers = { ...options.headers };
       if (authToken) {
         headers['Authorization'] = `Bearer ${authToken}`;
       }
-      return fetch(url, { ...options, headers });
+      const response = await fetch(url, { ...options, headers });
+
+      // Check for token rotation
+      const newToken = response.headers.get('X-New-Token');
+      if (newToken) {
+        console.log('Token rotated, updating stored token');
+        authToken = newToken;
+        localStorage.setItem('authToken', newToken);
+        // Also reconnect WebSocket with new token
+        if (ws && ws.readyState === WebSocket.OPEN) {
+          ws.close();
+          connectWebSocket();
+        }
+      }
+
+      return response;
     }
 
     // Login function
@@ -4811,11 +4826,14 @@
               </div>
               <div style="margin-bottom: 12px;">
                 <label style="display: block; font-size: 12px; color: var(--text-secondary); margin-bottom: 4px;">New Password</label>
-                <input type="password" id="new-password" class="login-input" style="width: 100%;" required minlength="6">
+                <input type="password" id="new-password" class="login-input" style="width: 100%;" required minlength="12">
+                <div style="font-size: 11px; color: var(--text-muted); margin-top: 4px; line-height: 1.4;">
+                  Must be 12+ characters with uppercase, lowercase, number, and special character
+                </div>
               </div>
               <div style="margin-bottom: 16px;">
                 <label style="display: block; font-size: 12px; color: var(--text-secondary); margin-bottom: 4px;">Confirm New Password</label>
-                <input type="password" id="confirm-password" class="login-input" style="width: 100%;" required minlength="6">
+                <input type="password" id="confirm-password" class="login-input" style="width: 100%;" required minlength="12">
               </div>
               <button type="submit" class="login-btn" style="width: 100%;">Change Password</button>
             </form>
@@ -6209,13 +6227,15 @@
           <div class="device-info">
             <div class="device-name">
               <span style="color: var(--accent-blue);">👤</span>
-              ${user.username}
+              ${sanitizeHTML(user.username)}
               ${user.id === currentUser.id ? '<span style="font-size: 11px; color: var(--text-muted); margin-left: 8px;">(you)</span>' : ''}
+              ${user.is_locked ? '<span style="font-size: 11px; background: var(--status-offline); color: white; padding: 2px 6px; border-radius: 4px; margin-left: 8px;">🔒 Locked</span>' : ''}
             </div>
             <div class="device-meta">
               Role: <strong>${user.role}</strong> ·
               Created: ${formatIsraelTime(user.created_at)}
               ${user.slack_2fa_enabled ? '· <span style="color: var(--status-online);">🔐 Slack 2FA enabled</span>' : ''}
+              ${user.is_locked ? `· <span style="color: var(--status-offline);">Locked until ${formatIsraelTime(user.locked_until)}</span>` : ''}
             </div>
           </div>
           <div class="device-actions" style="display: flex; align-items: center; gap: 12px;">
@@ -6226,9 +6246,12 @@
               <span class="toggle-slider"></span>
             </label>
             <span style="font-size: 11px; color: var(--text-muted); min-width: 60px;">Slack 2FA</span>
+            ${user.is_locked ? `
+              <button class="btn btn-warning btn-sm" onclick="unlockUser(${user.id}, '${sanitizeHTML(user.username)}')">🔓 Unlock</button>
+            ` : ''}
             ${user.id !== currentUser.id ? `
-              <button class="btn btn-secondary btn-sm" onclick="resetUserPassword(${user.id}, '${user.username}')">🔑 Reset</button>
-              <button class="btn btn-danger btn-sm" onclick="deleteUser(${user.id}, '${user.username}')">🗑️</button>
+              <button class="btn btn-secondary btn-sm" onclick="resetUserPassword(${user.id}, '${sanitizeHTML(user.username)}')">🔑 Reset</button>
+              <button class="btn btn-danger btn-sm" onclick="deleteUser(${user.id}, '${sanitizeHTML(user.username)}')">🗑️</button>
             ` : ''}
           </div>
         </div>
@@ -6285,16 +6308,59 @@
       }
     }
 
-    async function resetUserPassword(userId, username) {
-      if (!confirm(`Reset password for "${username}" to "ob123456"? They will be required to change it on next login.`)) {
+    async function unlockUser(userId, username) {
+      if (!confirm(`Unlock account for "${username}"?`)) {
         return;
       }
+
+      try {
+        const response = await authFetch(`${API_URL}/api/users/${userId}/unlock`, {
+          method: 'POST'
+        });
+
+        const data = await response.json();
+
+        if (data.success) {
+          showAlert(`Account "${username}" unlocked successfully`, 'success');
+          loadUsers();
+        } else {
+          throw new Error(data.error || 'Failed to unlock user');
+        }
+      } catch (e) {
+        showAlert('Failed to unlock user: ' + e.message, 'error');
+      }
+    }
+
+    // Generate a secure random password for admin reset
+    function generateTempPassword() {
+      const upper = 'ABCDEFGHJKLMNPQRSTUVWXYZ';
+      const lower = 'abcdefghjkmnpqrstuvwxyz';
+      const nums = '23456789';
+      const special = '!@#$%&*';
+      let pwd = '';
+      pwd += upper[Math.floor(Math.random() * upper.length)];
+      pwd += lower[Math.floor(Math.random() * lower.length)];
+      pwd += nums[Math.floor(Math.random() * nums.length)];
+      pwd += special[Math.floor(Math.random() * special.length)];
+      const all = upper + lower + nums + special;
+      for (let i = pwd.length; i < 12; i++) {
+        pwd += all[Math.floor(Math.random() * all.length)];
+      }
+      return pwd.split('').sort(() => Math.random() - 0.5).join('');
+    }
+
+    async function resetUserPassword(userId, username) {
+      if (!confirm(`Reset password for "${username}"? A new random password will be generated and they will be required to change it on next login.`)) {
+        return;
+      }
+
+      const tempPassword = generateTempPassword();
 
       try {
         const response = await authFetch(`${API_URL}/api/users/${userId}`, {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ password: 'ob123456', role: allUsers.find(u => u.id === userId)?.role || 'user' })
+          body: JSON.stringify({ password: tempPassword, role: allUsers.find(u => u.id === userId)?.role || 'user' })
         });
 
         const data = await response.json();
@@ -6305,7 +6371,9 @@
             method: 'POST'
           }).catch(() => {});
 
-          showAlert(`Password for "${username}" has been reset to "ob123456"`, 'success');
+          // Show password in a modal so admin can copy it
+          alert(`Password for "${username}" has been reset.\n\nTemporary password: ${tempPassword}\n\nPlease share this securely with the user. They will be required to change it on next login.`);
+          showAlert(`Password for "${username}" has been reset`, 'success');
         } else {
           throw new Error(data.error || 'Failed to reset password');
         }
@@ -6331,7 +6399,10 @@
             </div>
             <div class="form-group">
               <label class="form-label">Password</label>
-              <input type="password" class="form-input" id="new-user-password" placeholder="Enter password (min 6 chars)" required>
+              <input type="password" class="form-input" id="new-user-password" placeholder="Enter password (min 12 chars)" required minlength="12">
+              <div style="font-size: 11px; color: var(--text-muted); margin-top: 4px;">
+                12+ chars with uppercase, lowercase, number, and special character
+              </div>
             </div>
             <div class="form-group">
               <label class="form-label">Role</label>
@@ -12244,10 +12315,15 @@
         ws.close();
       }
 
+      if (!authToken) {
+        console.log('WebSocket: No auth token, skipping connection');
+        return;
+      }
+
       wsReconnecting = wsReconnectAttempts > 0;
       updateConnectionStatus();
 
-      const wsUrl = API_URL.replace('http', 'ws');
+      const wsUrl = `${API_URL.replace('http', 'ws')}?token=${encodeURIComponent(authToken)}`;
       try {
         ws = new WebSocket(wsUrl);
 

@@ -10,6 +10,68 @@ const crypto = require('crypto');
 const snmp = require('net-snmp');
 const WebSocket = require('ws');
 const bcrypt = require('bcrypt');
+const fs = require('fs');
+
+// ==================== ENVIRONMENT VALIDATION ====================
+// Validate required and optional environment variables on startup
+const ENV_CONFIG = {
+  required: [], // No strictly required vars - app works with defaults
+  recommended: ['SLACK_WEBHOOK_URL', 'POLY_LENS_CLIENT_ID', 'ZOOM_ACCOUNT_ID'],
+  sensitive: ['SLACK_WEBHOOK_URL', 'SLACK_APPROVAL_WEBHOOK_URL', 'POLY_LENS_CLIENT_SECRET', 'ZOOM_CLIENT_SECRET', 'DEFAULT_ADMIN_PASSWORD']
+};
+
+// Warn about missing recommended variables
+const missingRecommended = ENV_CONFIG.recommended.filter(key => !process.env[key]);
+if (missingRecommended.length > 0) {
+  console.warn(`[WARN] Missing recommended environment variables: ${missingRecommended.join(', ')}`);
+  console.warn('[WARN] Some features may not work properly');
+}
+
+// Validate sensitive variables aren't exposed in logs
+ENV_CONFIG.sensitive.forEach(key => {
+  if (process.env[key] && process.env.LOG_LEVEL === 'debug') {
+    console.warn(`[WARN] Sensitive variable ${key} is set - ensure debug logging doesn't expose it`);
+  }
+});
+
+// ==================== AUDIT LOGGING ====================
+// Comprehensive audit logging for security events
+const AUDIT_LOG_FILE = process.env.AUDIT_LOG_FILE || path.join(__dirname, 'logs', 'audit.log');
+const AUDIT_LOG_ENABLED = process.env.AUDIT_LOG_ENABLED !== 'false';
+
+// Ensure logs directory exists
+const logsDir = path.dirname(AUDIT_LOG_FILE);
+if (AUDIT_LOG_ENABLED && !fs.existsSync(logsDir)) {
+  try {
+    fs.mkdirSync(logsDir, { recursive: true, mode: 0o750 });
+  } catch (e) {
+    console.warn(`[WARN] Could not create audit log directory: ${e.message}`);
+  }
+}
+
+function auditLog(event, details = {}) {
+  if (!AUDIT_LOG_ENABLED) return;
+
+  const entry = {
+    timestamp: new Date().toISOString(),
+    event,
+    ...details
+  };
+
+  const logLine = JSON.stringify(entry) + '\n';
+
+  // Log to console in development
+  if (process.env.NODE_ENV !== 'production') {
+    console.log(`[AUDIT] ${event}:`, JSON.stringify(details));
+  }
+
+  // Append to audit log file
+  try {
+    fs.appendFileSync(AUDIT_LOG_FILE, logLine, { mode: 0o640 });
+  } catch (e) {
+    console.error('[ERROR] Failed to write audit log:', e.message);
+  }
+}
 
 // Create HTTPS agent - respects NODE_TLS_REJECT_UNAUTHORIZED env var for development
 // In production, leave NODE_TLS_REJECT_UNAUTHORIZED unset (defaults to validating certificates)
@@ -74,14 +136,90 @@ app.use(cors({
   allowedHeaders: ['Content-Type', 'Authorization']
 }));
 
-// Security headers middleware
+// Security headers middleware with Content Security Policy
 app.use((req, res, next) => {
   res.setHeader('X-Content-Type-Options', 'nosniff');
   res.setHeader('X-Frame-Options', 'SAMEORIGIN');
   res.setHeader('X-XSS-Protection', '1; mode=block');
   res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
+  // Content Security Policy - prevents XSS by controlling resource loading
+  res.setHeader('Content-Security-Policy', [
+    "default-src 'self'",
+    "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://cdnjs.cloudflare.com https://cdn.jsdelivr.net https://unpkg.com",
+    "style-src 'self' 'unsafe-inline' https://cdnjs.cloudflare.com https://fonts.googleapis.com",
+    "font-src 'self' https://fonts.gstatic.com https://cdnjs.cloudflare.com",
+    "img-src 'self' data: blob: https:",
+    "connect-src 'self' ws: wss:",
+    "frame-ancestors 'self'",
+    "base-uri 'self'",
+    "form-action 'self'"
+  ].join('; '));
   next();
 });
+
+// Request timeout middleware - prevents slow loris attacks
+const REQUEST_TIMEOUT = parseInt(process.env.REQUEST_TIMEOUT) || 30000; // 30 seconds default
+app.use((req, res, next) => {
+  req.setTimeout(REQUEST_TIMEOUT, () => {
+    if (!res.headersSent) {
+      auditLog('REQUEST_TIMEOUT', { path: req.path, method: req.method, ip: req.ip });
+      res.status(408).json({ success: false, error: 'Request timeout' });
+    }
+  });
+  next();
+});
+
+// ==================== INPUT VALIDATION UTILITIES ====================
+// Sanitize and validate inputs to prevent injection attacks
+const inputValidation = {
+  // Sanitize string input - remove control characters and trim
+  sanitizeString: (str, maxLength = 500) => {
+    if (typeof str !== 'string') return '';
+    // Remove control characters except newlines/tabs, trim, and limit length
+    return str.replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g, '').trim().slice(0, maxLength);
+  },
+
+  // Validate and sanitize hostname/IP
+  isValidHostname: (hostname) => {
+    if (!hostname || typeof hostname !== 'string') return false;
+    // Allow hostnames, IPs, and simple domains
+    const hostnameRegex = /^[a-zA-Z0-9]([a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?(\.[a-zA-Z0-9]([a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)*$/;
+    const ipRegex = /^(\d{1,3}\.){3}\d{1,3}$/;
+    return hostnameRegex.test(hostname) || ipRegex.test(hostname);
+  },
+
+  // Validate URL
+  isValidUrl: (url) => {
+    if (!url || typeof url !== 'string') return false;
+    try {
+      const parsed = new URL(url);
+      return ['http:', 'https:'].includes(parsed.protocol);
+    } catch {
+      return false;
+    }
+  },
+
+  // Validate integer in range
+  isValidInt: (value, min = 0, max = Number.MAX_SAFE_INTEGER) => {
+    const num = parseInt(value);
+    return !isNaN(num) && num >= min && num <= max;
+  },
+
+  // Check for potentially dangerous patterns (SQL injection, XSS)
+  hasDangerousPatterns: (str) => {
+    if (typeof str !== 'string') return false;
+    const patterns = [
+      /<script/i,
+      /javascript:/i,
+      /on\w+=/i,  // onclick, onerror, etc
+      /union\s+select/i,
+      /;\s*drop\s+table/i,
+      /--\s*$/,
+      /\/\*.*\*\//
+    ];
+    return patterns.some(p => p.test(str));
+  }
+};
 
 // Rate limiting storage (in-memory)
 const rateLimitStore = new Map();
@@ -171,6 +309,28 @@ const ZOOM_API_URL = 'https://api.zoom.us/v2';
 
 const dbPath = path.join(__dirname, 'monitor.db');
 const db = new Database(dbPath);
+
+// Check and set database file permissions (Unix only)
+if (process.platform !== 'win32') {
+  try {
+    const stats = fs.statSync(dbPath);
+    const mode = stats.mode & 0o777;
+    // Warn if database is world-readable or world-writable
+    if (mode & 0o044) {
+      console.warn('[SECURITY] Database file has overly permissive read permissions');
+      // Try to fix permissions to owner-only (0600)
+      try {
+        fs.chmodSync(dbPath, 0o600);
+        console.log('[SECURITY] Database file permissions corrected to 600');
+        auditLog('DB_PERMISSIONS_FIXED', { path: dbPath, oldMode: mode.toString(8), newMode: '600' });
+      } catch (e) {
+        console.warn('[SECURITY] Could not fix database permissions:', e.message);
+      }
+    }
+  } catch (e) {
+    // File might not exist yet on first run
+  }
+}
 
 // Create tables
 db.exec(`
@@ -2334,6 +2494,9 @@ app.post('/api/auth/login', async (req, res) => {
         }).catch(err => console.error('Failed to send lockout notification:', err));
       }
 
+      // Audit log account lockout
+      auditLog('ACCOUNT_LOCKED', { userId: user.id, username: user.username, ip: clientIp, attempts: newAttempts });
+
       return res.status(423).json({
         success: false,
         error: `Account locked after ${MAX_FAILED_ATTEMPTS} failed attempts. Please try again in ${LOCKOUT_DURATION_MINUTES} minutes.`,
@@ -2341,6 +2504,8 @@ app.post('/api/auth/login', async (req, res) => {
       });
     } else {
       db.prepare('UPDATE users SET failed_login_attempts = ? WHERE id = ?').run(newAttempts, user.id);
+      // Audit log failed login attempt
+      auditLog('LOGIN_FAILED', { userId: user.id, username: user.username, ip: clientIp, attemptsRemaining: MAX_FAILED_ATTEMPTS - newAttempts });
       return res.status(401).json({
         success: false,
         error: 'Invalid credentials',
@@ -2484,6 +2649,9 @@ app.post('/api/auth/login', async (req, res) => {
 
   const token = createSession(user.id);
 
+  // Audit log successful login
+  auditLog('LOGIN_SUCCESS', { userId: user.id, username: user.username, ip: clientIp });
+
   res.json({
     success: true,
     token,
@@ -2502,6 +2670,7 @@ app.post('/api/auth/logout', authMiddleware, (req, res) => {
   if (token) {
     deleteSession(token);
   }
+  auditLog('LOGOUT', { userId: req.user.id, username: req.user.username, ip: req.ip });
   res.json({ success: true });
 });
 
@@ -2718,6 +2887,7 @@ app.post('/api/auth/change-password', authMiddleware, async (req, res) => {
     // Hash new password and update
     const hashedPassword = await bcrypt.hash(new_password, 10);
     db.prepare('UPDATE users SET password = ?, password_reset_required = 0 WHERE id = ?').run(hashedPassword, req.user.id);
+    auditLog('PASSWORD_CHANGED', { userId: req.user.id, username: req.user.username, ip: req.ip });
     res.json({ success: true, message: 'Password changed successfully' });
   } catch (e) {
     logger.error('Failed to change password', e);
@@ -2871,7 +3041,7 @@ app.post('/api/users/:id/unlock', authMiddleware, (req, res) => {
     }
 
     db.prepare('UPDATE users SET locked_until = NULL, failed_login_attempts = 0 WHERE id = ?').run(userId);
-    console.log(`Account unlocked: ${user.username} by admin ${req.user.username}`);
+    auditLog('ACCOUNT_UNLOCKED', { userId, username: user.username, unlockedBy: req.user.username, ip: req.ip });
     res.json({ success: true, message: `Account ${user.username} has been unlocked` });
   } catch (e) {
     logger.error('Failed to unlock user', e);
@@ -2926,6 +3096,7 @@ app.post('/api/users', authMiddleware, async (req, res) => {
       hashedPassword,
       role || 'user'
     );
+    auditLog('USER_CREATED', { newUserId: result.lastInsertRowid, username, role: role || 'user', createdBy: req.user.username, ip: req.ip });
     res.json({ success: true, id: result.lastInsertRowid });
   } catch (e) {
     logger.error('Failed to create user', e);
@@ -3025,7 +3196,9 @@ app.delete('/api/users/:id', authMiddleware, (req, res) => {
   }
 
   try {
+    const deletedUser = db.prepare('SELECT username FROM users WHERE id = ?').get(userId);
     db.prepare('DELETE FROM users WHERE id = ?').run(userId);
+    auditLog('USER_DELETED', { deletedUserId: userId, username: deletedUser?.username, deletedBy: req.user.username, ip: req.ip });
     res.json({ success: true });
   } catch (e) {
     res.status(500).json({ success: false, error: 'Failed to delete user' });
@@ -3984,8 +4157,15 @@ app.post('/api/monitors', authMiddleware, (req, res) => {
     return res.status(400).json({ success: false, error: 'Name is required' });
   }
 
+  // Check for dangerous patterns in all string inputs
+  const stringInputs = [name, hostname, url, floor, device_type].filter(Boolean);
+  if (stringInputs.some(s => inputValidation.hasDangerousPatterns(s))) {
+    auditLog('DANGEROUS_INPUT_BLOCKED', { endpoint: '/api/monitors', ip: req.ip, user: req.user?.username });
+    return res.status(400).json({ success: false, error: 'Invalid characters in input' });
+  }
+
   // Sanitize name - remove potential XSS
-  const sanitizedName = name.trim().substring(0, 100).replace(/[<>]/g, '');
+  const sanitizedName = inputValidation.sanitizeString(name, 100);
   if (sanitizedName.length === 0) {
     return res.status(400).json({ success: false, error: 'Name cannot be empty' });
   }

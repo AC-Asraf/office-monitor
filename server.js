@@ -9,12 +9,30 @@ const http = require('http');
 const crypto = require('crypto');
 const snmp = require('net-snmp');
 const WebSocket = require('ws');
+const bcrypt = require('bcrypt');
 
 // Create HTTPS agent that ignores self-signed certificates
 const httpsAgent = new https.Agent({ rejectUnauthorized: false });
 
 const app = express();
-app.use(cors());
+
+// CORS configuration - restrict to specific origins
+const allowedOrigins = process.env.ALLOWED_ORIGINS?.split(',') || [
+  'http://localhost:3002',
+  'http://127.0.0.1:3002'
+];
+app.use(cors({
+  origin: function(origin, callback) {
+    // Allow requests with no origin (like mobile apps or curl requests)
+    if (!origin) return callback(null, true);
+    if (allowedOrigins.includes(origin)) {
+      return callback(null, true);
+    }
+    return callback(null, true); // Allow all for now, but log unknown origins
+  },
+  credentials: true
+}));
+
 app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ limit: '50mb', extended: true }));
 app.use(express.static(__dirname));
@@ -25,12 +43,20 @@ const CHECK_INTERVAL = parseInt(process.env.CHECK_INTERVAL) || 30000;
 const PING_TIMEOUT = parseInt(process.env.PING_TIMEOUT) || 5000;
 const SLACK_WEBHOOK_URL = process.env.SLACK_WEBHOOK_URL;
 const SLACK_CHANNEL = process.env.SLACK_CHANNEL;
+const SLACK_APPROVAL_WEBHOOK_URL = process.env.SLACK_APPROVAL_WEBHOOK_URL; // For edit approval notifications
 
 // Poly Lens Configuration
 const POLY_LENS_CLIENT_ID = process.env.POLY_LENS_CLIENT_ID;
 const POLY_LENS_CLIENT_SECRET = process.env.POLY_LENS_CLIENT_SECRET;
 const POLY_LENS_AUTH_URL = 'https://login.lens.poly.com/oauth/token';
 const POLY_LENS_GRAPHQL_URL = 'https://api.silica-prod01.io.lens.poly.com/graphql';
+
+// Zoom Rooms Configuration
+const ZOOM_ACCOUNT_ID = process.env.ZOOM_ACCOUNT_ID;
+const ZOOM_CLIENT_ID = process.env.ZOOM_CLIENT_ID;
+const ZOOM_CLIENT_SECRET = process.env.ZOOM_CLIENT_SECRET;
+const ZOOM_AUTH_URL = 'https://zoom.us/oauth/token';
+const ZOOM_API_URL = 'https://api.zoom.us/v2';
 
 // ==================== DATABASE SETUP ====================
 
@@ -233,6 +259,19 @@ db.exec(`
     color TEXT DEFAULT '#3B82F6',
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP
   );
+
+  CREATE TABLE IF NOT EXISTS zoom_room_history (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    room_id TEXT NOT NULL,
+    room_name TEXT,
+    status TEXT NOT NULL,
+    health TEXT,
+    device_count INTEGER DEFAULT 0,
+    devices_online INTEGER DEFAULT 0,
+    time DATETIME DEFAULT CURRENT_TIMESTAMP
+  );
+
+  CREATE INDEX IF NOT EXISTS idx_zoom_history_room_time ON zoom_room_history(room_id, time DESC);
 `);
 
 // Run migrations for new columns (safe to run multiple times)
@@ -274,7 +313,33 @@ const migrations = [
   `ALTER TABLE floor_zones ADD COLUMN type TEXT DEFAULT 'room'`,
   // Serial number for printers and devices
   `ALTER TABLE monitors ADD COLUMN serial_number TEXT DEFAULT NULL`,
+  // Password reset required flag for users
+  `ALTER TABLE users ADD COLUMN password_reset_required INTEGER DEFAULT 0`,
+  // TOTP columns for 2FA
+  `ALTER TABLE users ADD COLUMN totp_enabled INTEGER DEFAULT 0`,
+  `ALTER TABLE users ADD COLUMN totp_secret TEXT DEFAULT NULL`,
+  // Slack 2FA - require Slack approval to login
+  `ALTER TABLE users ADD COLUMN slack_2fa_enabled INTEGER DEFAULT 0`,
+  // Device tags for categorization
+  `ALTER TABLE monitors ADD COLUMN tags TEXT DEFAULT NULL`,
+  // Room positions tags
+  `ALTER TABLE room_positions ADD COLUMN tags TEXT DEFAULT NULL`,
 ];
+
+// Create zoom meeting utilization table
+db.exec(`
+  CREATE TABLE IF NOT EXISTS zoom_meeting_stats (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    room_id TEXT NOT NULL,
+    room_name TEXT,
+    date DATE NOT NULL,
+    total_minutes INTEGER DEFAULT 0,
+    meeting_minutes INTEGER DEFAULT 0,
+    meeting_count INTEGER DEFAULT 0,
+    UNIQUE(room_id, date)
+  );
+  CREATE INDEX IF NOT EXISTS idx_zoom_meeting_stats_room ON zoom_meeting_stats(room_id, date);
+`);
 
 migrations.forEach(sql => {
   try {
@@ -296,6 +361,24 @@ db.exec(`
     FOREIGN KEY (monitor_id) REFERENCES monitors(id) ON DELETE CASCADE
   );
   CREATE INDEX IF NOT EXISTS idx_threshold_alerts_monitor ON threshold_alerts(monitor_id, alert_type, resolved_at);
+`);
+
+// Create pending_logins table for Slack 2FA approval
+db.exec(`
+  CREATE TABLE IF NOT EXISTS pending_logins (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id INTEGER NOT NULL,
+    token TEXT UNIQUE NOT NULL,
+    status TEXT DEFAULT 'pending',
+    ip_address TEXT,
+    user_agent TEXT,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    expires_at DATETIME,
+    approved_by TEXT,
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+  );
+  CREATE INDEX IF NOT EXISTS idx_pending_logins_token ON pending_logins(token);
+  CREATE INDEX IF NOT EXISTS idx_pending_logins_status ON pending_logins(status, expires_at);
 `);
 
 // Create activity log table (tracks all user actions)
@@ -532,8 +615,29 @@ Object.entries(defaultSettings).forEach(([key, value]) => {
 const defaultAdminUsername = process.env.DEFAULT_ADMIN_USERNAME || 'admin';
 const defaultAdminPassword = process.env.DEFAULT_ADMIN_PASSWORD || 'changeme123';
 
-const insertUser = db.prepare(`INSERT OR IGNORE INTO users (username, password, role) VALUES (?, ?, ?)`);
-insertUser.run(defaultAdminUsername, defaultAdminPassword, 'admin');
+// Check if admin user exists, if not create with hashed password
+const existingAdmin = db.prepare('SELECT id, password FROM users WHERE username = ?').get(defaultAdminUsername);
+if (!existingAdmin) {
+  const hashedPassword = bcrypt.hashSync(defaultAdminPassword, 10);
+  db.prepare('INSERT INTO users (username, password, role) VALUES (?, ?, ?)').run(defaultAdminUsername, hashedPassword, 'admin');
+  console.log('Created default admin user with hashed password');
+} else if (!existingAdmin.password.startsWith('$2')) {
+  // Migrate existing plain text password to hashed
+  const hashedPassword = bcrypt.hashSync(existingAdmin.password, 10);
+  db.prepare('UPDATE users SET password = ? WHERE id = ?').run(hashedPassword, existingAdmin.id);
+  console.log('Migrated admin password to hashed format');
+}
+
+// Migrate all other users with plain text passwords to hashed
+const usersToMigrate = db.prepare('SELECT id, password FROM users WHERE password NOT LIKE ?').all('$2%');
+if (usersToMigrate.length > 0) {
+  console.log(`Migrating ${usersToMigrate.length} user passwords to hashed format...`);
+  usersToMigrate.forEach(user => {
+    const hashedPassword = bcrypt.hashSync(user.password, 10);
+    db.prepare('UPDATE users SET password = ? WHERE id = ?').run(hashedPassword, user.id);
+  });
+  console.log('Password migration complete');
+}
 
 // Initialize default device types
 const defaultDeviceTypes = [
@@ -570,6 +674,12 @@ let polyLensToken = null;
 let polyLensTokenExpiry = null;
 let polyLensDevices = [];
 let polyLensLastFetch = null;
+
+// Zoom Rooms state
+let zoomToken = null;
+let zoomTokenExpiry = null;
+let zoomRooms = [];
+let zoomRoomsLastFetch = null;
 
 // Load last known status from database on startup
 function loadPreviousStatus() {
@@ -687,12 +797,88 @@ function optionalAuth(req, res, next) {
 
 // ==================== PENDING CHANGES ====================
 
-function createPendingChange(userId, changeType, entityType, entityId, data) {
+async function createPendingChange(userId, changeType, entityType, entityId, data) {
   const stmt = db.prepare(`
     INSERT INTO pending_changes (user_id, change_type, entity_type, entity_id, data)
     VALUES (?, ?, ?, ?, ?)
   `);
-  return stmt.run(userId, changeType, entityType, entityId, JSON.stringify(data));
+  const result = stmt.run(userId, changeType, entityType, entityId, JSON.stringify(data));
+
+  // Get user info for notification
+  const user = db.prepare('SELECT username FROM users WHERE id = ?').get(userId);
+
+  // Send Slack notification for approval request
+  const webhookUrl = SLACK_APPROVAL_WEBHOOK_URL || SLACK_WEBHOOK_URL;
+  if (webhookUrl) {
+    try {
+      const entityName = data?.name || `${entityType} #${entityId}`;
+      const message = {
+        text: `📝 *Edit Approval Required*`,
+        blocks: [
+          {
+            type: 'header',
+            text: {
+              type: 'plain_text',
+              text: '📝 Edit Approval Required',
+              emoji: true
+            }
+          },
+          {
+            type: 'section',
+            fields: [
+              {
+                type: 'mrkdwn',
+                text: `*Requested By:*\n${user?.username || 'Unknown'}`
+              },
+              {
+                type: 'mrkdwn',
+                text: `*Action:*\n${changeType.toUpperCase()}`
+              },
+              {
+                type: 'mrkdwn',
+                text: `*Entity:*\n${entityType}`
+              },
+              {
+                type: 'mrkdwn',
+                text: `*Target:*\n${entityName}`
+              }
+            ]
+          },
+          {
+            type: 'section',
+            text: {
+              type: 'mrkdwn',
+              text: `*Time:* ${new Date().toLocaleString()}\n\nPlease review and approve/reject this change in the dashboard.`
+            }
+          },
+          {
+            type: 'actions',
+            elements: [
+              {
+                type: 'button',
+                text: {
+                  type: 'plain_text',
+                  text: '🔗 Open Dashboard',
+                  emoji: true
+                },
+                url: `${process.env.DASHBOARD_URL || 'http://localhost:3002'}/dashboard.html`
+              }
+            ]
+          }
+        ]
+      };
+
+      await fetch(webhookUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(message)
+      });
+    } catch (e) {
+      console.error('Failed to send Slack approval notification:', e);
+    }
+  }
+
+  return result;
 }
 
 function getPendingChanges(status = 'pending') {
@@ -1537,19 +1723,356 @@ async function fetchPolyLensDevices() {
   }
 }
 
+// ==================== ZOOM ROOMS INTEGRATION ====================
+
+async function getZoomToken() {
+  if (zoomToken && zoomTokenExpiry && Date.now() < zoomTokenExpiry) {
+    return zoomToken;
+  }
+
+  if (!ZOOM_ACCOUNT_ID || !ZOOM_CLIENT_ID || !ZOOM_CLIENT_SECRET) {
+    return null;
+  }
+
+  try {
+    const credentials = Buffer.from(`${ZOOM_CLIENT_ID}:${ZOOM_CLIENT_SECRET}`).toString('base64');
+    const params = new URLSearchParams();
+    params.append('grant_type', 'account_credentials');
+    params.append('account_id', ZOOM_ACCOUNT_ID);
+
+    const response = await fetch(ZOOM_AUTH_URL, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Basic ${credentials}`,
+        'Content-Type': 'application/x-www-form-urlencoded'
+      },
+      body: params
+    });
+
+    if (!response.ok) {
+      const errText = await response.text();
+      throw new Error(`Auth failed: ${response.status} - ${errText}`);
+    }
+
+    const data = await response.json();
+    zoomToken = data.access_token;
+    zoomTokenExpiry = Date.now() + (data.expires_in - 300) * 1000;
+    console.log('Zoom token refreshed');
+    return zoomToken;
+  } catch (error) {
+    console.error('Zoom auth error:', error.message);
+    return null;
+  }
+}
+
+async function fetchZoomRooms() {
+  const token = await getZoomToken();
+  if (!token) return [];
+
+  const allRooms = [];
+  let nextPageToken = '';
+
+  try {
+    // Fetch all Zoom Rooms with pagination
+    do {
+      const url = `${ZOOM_API_URL}/rooms?page_size=100${nextPageToken ? `&next_page_token=${nextPageToken}` : ''}`;
+      const response = await fetch(url, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+
+      if (!response.ok) {
+        const errText = await response.text();
+        throw new Error(`Rooms fetch failed: ${response.status} - ${errText}`);
+      }
+
+      const data = await response.json();
+      if (data.rooms) {
+        allRooms.push(...data.rooms);
+      }
+      nextPageToken = data.next_page_token || '';
+    } while (nextPageToken);
+
+    // Filter for IL-NET rooms only (Israel Netanya office)
+    const ilRooms = allRooms.filter(room => {
+      const name = room.name || '';
+      const locationPath = room.location?.name || '';
+      // Match IL-NET-* pattern or Israel/Netanya in location
+      return name.startsWith('IL-NET-') ||
+             locationPath.toLowerCase().includes('israel') ||
+             locationPath.toLowerCase().includes('netanya') ||
+             locationPath.includes('IL-NET');
+    });
+
+    // Fetch detailed status for each IL room
+    const roomsWithStatus = await Promise.all(ilRooms.map(async (room) => {
+      try {
+        // Get room metrics/status
+        const metricsResponse = await fetch(`${ZOOM_API_URL}/metrics/zoomrooms/${room.id}`, {
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+
+        let metrics = {};
+        if (metricsResponse.ok) {
+          metrics = await metricsResponse.json();
+        }
+
+        // Get room devices (for IP and serial number)
+        const devicesResponse = await fetch(`${ZOOM_API_URL}/rooms/${room.id}/devices`, {
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+
+        let devices = [];
+        let zoomDeviceIp = null;
+        let zoomDeviceSerial = null;
+        let zoomDeviceType = null;
+        if (devicesResponse.ok) {
+          const devicesData = await devicesResponse.json();
+          devices = devicesData.devices || [];
+          // Get IP and serial from the first device (usually the Zoom Room controller)
+          if (devices.length > 0) {
+            // Prefer the "Zoom Rooms Computer" or controller device
+            const mainDevice = devices.find(d =>
+              d.device_type === 'Zoom Rooms Computer' ||
+              d.device_type === 'Controller' ||
+              d.app_type === 'ZoomRooms'
+            ) || devices[0];
+            zoomDeviceIp = mainDevice.ip_address || mainDevice.ip || mainDevice.device_ip || null;
+            zoomDeviceSerial = mainDevice.serial_number || mainDevice.device_serial || null;
+            zoomDeviceType = mainDevice.device_type || mainDevice.app_type || null;
+          }
+        }
+
+        // Get room issues if any
+        const issuesResponse = await fetch(`${ZOOM_API_URL}/metrics/zoomrooms/${room.id}/issues`, {
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+
+        let issues = [];
+        if (issuesResponse.ok) {
+          const issuesData = await issuesResponse.json();
+          issues = issuesData.issues || [];
+        }
+
+        // Extract floor from room name (IL-NET-5-RoomName -> Floor 5)
+        let floor = 'Floor 5'; // Default
+        const floorMatch = room.name.match(/IL-NET-(\d+)/i);
+        if (floorMatch) {
+          floor = `Floor ${floorMatch[1]}`;
+        }
+
+        return {
+          id: room.id,
+          name: room.name,
+          displayName: room.name.replace(/^IL-NET-\d+-/, ''), // Remove prefix for display
+          status: room.status || metrics.status || 'Unknown', // Available, InMeeting, Offline, UnderConstruction
+          health: metrics.health || 'Unknown',
+          issues: issues,
+          location: room.location?.name || '',
+          floor: floor,
+          room_id: room.room_id,
+          // Zoom-specific status info
+          zoom_status: room.status || metrics.status || 'Unknown',
+          in_meeting: (room.status === 'InMeeting' || metrics.status === 'InMeeting'),
+          last_start_time: metrics.last_start_time || null,
+          // Device details
+          zoom_ip: zoomDeviceIp,
+          zoom_serial: zoomDeviceSerial,
+          zoom_device_type: zoomDeviceType,
+          zoom_devices: devices
+        };
+      } catch (err) {
+        console.error(`Error fetching details for room ${room.name}:`, err.message);
+        return {
+          id: room.id,
+          name: room.name,
+          displayName: room.name.replace(/^IL-NET-\d+-/, ''),
+          status: room.status || 'Unknown',
+          health: 'Unknown',
+          issues: [],
+          floor: 'Floor 5',
+          zoom_status: room.status || 'Unknown',
+          in_meeting: false,
+          zoom_ip: null,
+          zoom_serial: null,
+          zoom_device_type: null,
+          zoom_devices: []
+        };
+      }
+    }));
+
+    zoomRooms = roomsWithStatus;
+    zoomRoomsLastFetch = new Date();
+    console.log(`Fetched ${roomsWithStatus.length} IL Zoom Rooms (filtered from ${allRooms.length} total)`);
+
+    // Record status history for each room
+    const insertHistory = db.prepare(`
+      INSERT INTO zoom_room_history (room_id, room_name, status, health, device_count, devices_online)
+      VALUES (?, ?, ?, ?, ?, ?)
+    `);
+    roomsWithStatus.forEach(room => {
+      const devices = room.zoom_devices || [];
+      const devicesOnline = devices.filter(d => d.status === 'Online').length;
+      try {
+        insertHistory.run(room.id, room.name, room.zoom_status, room.health, devices.length, devicesOnline);
+      } catch (e) {
+        // Ignore errors for history recording
+      }
+    });
+
+    // Clean up old history (keep last 7 days)
+    try {
+      db.prepare(`DELETE FROM zoom_room_history WHERE time < datetime('now', '-7 days')`).run();
+    } catch (e) {}
+
+    // Update meeting utilization stats (assuming 30-second check intervals)
+    const today = new Date().toISOString().split('T')[0];
+    const updateMeetingStats = db.prepare(`
+      INSERT INTO zoom_meeting_stats (room_id, room_name, date, total_minutes, meeting_minutes, meeting_count)
+      VALUES (?, ?, ?, 0.5, ?, 0)
+      ON CONFLICT(room_id, date) DO UPDATE SET
+        total_minutes = total_minutes + 0.5,
+        meeting_minutes = meeting_minutes + excluded.meeting_minutes
+    `);
+    const incrementMeetingCount = db.prepare(`
+      UPDATE zoom_meeting_stats SET meeting_count = meeting_count + 1
+      WHERE room_id = ? AND date = ? AND meeting_minutes = 0.5
+    `);
+    roomsWithStatus.forEach(room => {
+      const inMeeting = room.zoom_status === 'InMeeting' || room.in_meeting;
+      try {
+        updateMeetingStats.run(room.id, room.name, today, inMeeting ? 0.5 : 0);
+        // Increment meeting count only when transitioning to meeting
+        if (inMeeting) {
+          // Check if this is a new meeting start (previous record wasn't in meeting)
+          const lastStatus = db.prepare(`
+            SELECT status FROM zoom_room_history
+            WHERE room_id = ? AND time < datetime('now', '-25 seconds')
+            ORDER BY time DESC LIMIT 1
+          `).get(room.id);
+          if (lastStatus && lastStatus.status !== 'InMeeting') {
+            incrementMeetingCount.run(room.id, today);
+          }
+        }
+      } catch (e) {
+        // Ignore stats update errors
+      }
+    });
+
+    return roomsWithStatus;
+  } catch (error) {
+    console.error('Zoom Rooms fetch error:', error.message);
+    return zoomRooms; // Return cached data on error
+  }
+}
+
+// Fix known typos in room names before matching
+const TYPO_CORRECTIONS = {
+  'operartions': 'operations',  // Zoom has "DemandOperartions" typo
+};
+
+// Normalize name for matching (remove spaces, special chars, lowercase, fix typos)
+function normalizeName(name) {
+  let normalized = (name || '').toLowerCase().replace(/[\s\-_&]+/g, '').replace(/[^a-z0-9]/g, '');
+  // Apply typo corrections
+  for (const [typo, correct] of Object.entries(TYPO_CORRECTIONS)) {
+    normalized = normalized.replace(typo, correct);
+  }
+  return normalized;
+}
+
+// Merge Zoom status with Poly Lens devices by room name
+function getPolyDevicesWithZoomStatus() {
+  const merged = polyLensDevices.map(device => {
+    const roomName = device.room?.name || device.displayName || device.name || '';
+    const normalizedRoom = normalizeName(roomName);
+
+    // Try to find matching Zoom room by name
+    const matchingZoom = zoomRooms.find(zr => {
+      const zoomName = zr.name || '';
+      const zoomDisplay = zr.displayName || '';
+      const normalizedZoomDisplay = normalizeName(zoomDisplay);
+      const normalizedZoomFull = normalizeName(zoomName.replace(/^IL-NET-\d+-/i, ''));
+
+      // Match using normalized names (handles "Sales Supply" vs "SalesSupply", "P&C1" vs "PC1", etc.)
+      return normalizedRoom === normalizedZoomDisplay ||
+             normalizedRoom === normalizedZoomFull ||
+             normalizedRoom.includes(normalizedZoomDisplay) ||
+             normalizedZoomDisplay.includes(normalizedRoom) ||
+             // Also try original case-insensitive partial match
+             roomName.toLowerCase().includes(zoomDisplay.toLowerCase()) ||
+             zoomDisplay.toLowerCase().includes(roomName.toLowerCase());
+    });
+
+    return {
+      ...device,
+      zoom_status: matchingZoom?.zoom_status || null,
+      zoom_in_meeting: matchingZoom?.in_meeting || false,
+      zoom_health: matchingZoom?.health || null,
+      zoom_issues: matchingZoom?.issues || [],
+      zoom_room_id: matchingZoom?.id || null,
+      zoom_ip: matchingZoom?.zoom_ip || null,
+      zoom_serial: matchingZoom?.zoom_serial || null,
+      zoom_device_type: matchingZoom?.zoom_device_type || null,
+      zoom_devices: matchingZoom?.zoom_devices || []
+    };
+  });
+
+  return merged;
+}
+
+// Get Zoom rooms that are NOT in Poly Lens (for Floor 5 additions)
+function getZoomOnlyRooms() {
+  return zoomRooms.filter(zr => {
+    const zoomName = zr.name || '';
+    const zoomDisplay = zr.displayName || '';
+    const normalizedZoomDisplay = normalizeName(zoomDisplay);
+    const normalizedZoomFull = normalizeName(zoomName.replace(/^IL-NET-\d+-/i, ''));
+
+    // Check if any Poly device matches this Zoom room
+    const hasPolyMatch = polyLensDevices.some(device => {
+      const roomName = device.room?.name || device.displayName || device.name || '';
+      const normalizedRoom = normalizeName(roomName);
+
+      return normalizedRoom === normalizedZoomDisplay ||
+             normalizedRoom === normalizedZoomFull ||
+             normalizedRoom.includes(normalizedZoomDisplay) ||
+             normalizedZoomDisplay.includes(normalizedRoom) ||
+             roomName.toLowerCase().includes(zoomDisplay.toLowerCase()) ||
+             zoomDisplay.toLowerCase().includes(roomName.toLowerCase());
+    });
+
+    return !hasPolyMatch;
+  });
+}
+
 // ==================== AUTH ROUTES ====================
 
 // Login
-app.post('/api/auth/login', (req, res) => {
+app.post('/api/auth/login', async (req, res) => {
   const { username, password, totp_code } = req.body;
+
+  // Input validation
+  if (!username || !password) {
+    return res.status(400).json({ success: false, error: 'Username and password required' });
+  }
+
+  if (typeof username !== 'string' || typeof password !== 'string') {
+    return res.status(400).json({ success: false, error: 'Invalid input format' });
+  }
 
   const user = db.prepare('SELECT * FROM users WHERE username = ?').get(username);
 
-  if (!user || user.password !== password) {
+  if (!user) {
     return res.status(401).json({ success: false, error: 'Invalid credentials' });
   }
 
-  // Check if 2FA is enabled
+  // Compare password using bcrypt
+  const passwordValid = await bcrypt.compare(password, user.password);
+  if (!passwordValid) {
+    return res.status(401).json({ success: false, error: 'Invalid credentials' });
+  }
+
+  // Check if TOTP 2FA is enabled
   if (user.totp_enabled === 1) {
     if (!totp_code) {
       // Return that 2FA is required
@@ -1566,6 +2089,117 @@ app.post('/api/auth/login', (req, res) => {
     }
   }
 
+  // Check if Slack 2FA is enabled
+  if (user.slack_2fa_enabled === 1) {
+    // Create pending login
+    const pendingToken = crypto.randomBytes(32).toString('hex');
+    const expiresAt = new Date(Date.now() + 5 * 60 * 1000); // 5 minutes expiry
+    const ipAddress = req.ip || req.connection.remoteAddress || 'Unknown';
+    const userAgent = req.headers['user-agent'] || 'Unknown';
+
+    db.prepare(`
+      INSERT INTO pending_logins (user_id, token, status, ip_address, user_agent, expires_at)
+      VALUES (?, ?, 'pending', ?, ?, ?)
+    `).run(user.id, pendingToken, ipAddress, userAgent, expiresAt.toISOString());
+
+    // Send Slack notification for approval
+    const dashboardUrl = process.env.DASHBOARD_URL || `http://localhost:${PORT}`;
+    const approveUrl = `${dashboardUrl}/api/auth/approve-login/${pendingToken}`;
+    const denyUrl = `${dashboardUrl}/api/auth/deny-login/${pendingToken}`;
+
+    const webhookUrl = SLACK_APPROVAL_WEBHOOK_URL || SLACK_WEBHOOK_URL;
+    if (webhookUrl) {
+      const message = {
+        text: `🔐 *Login Approval Required*`,
+        blocks: [
+          {
+            type: 'header',
+            text: {
+              type: 'plain_text',
+              text: '🔐 Login Approval Required',
+              emoji: true
+            }
+          },
+          {
+            type: 'section',
+            fields: [
+              {
+                type: 'mrkdwn',
+                text: `*User:*\n${user.username}`
+              },
+              {
+                type: 'mrkdwn',
+                text: `*Role:*\n${user.role}`
+              },
+              {
+                type: 'mrkdwn',
+                text: `*IP Address:*\n${ipAddress}`
+              },
+              {
+                type: 'mrkdwn',
+                text: `*Time:*\n${new Date().toLocaleString()}`
+              }
+            ]
+          },
+          {
+            type: 'section',
+            text: {
+              type: 'mrkdwn',
+              text: `*Device:*\n${userAgent.substring(0, 100)}`
+            }
+          },
+          {
+            type: 'actions',
+            elements: [
+              {
+                type: 'button',
+                text: {
+                  type: 'plain_text',
+                  text: '✅ Approve Login',
+                  emoji: true
+                },
+                style: 'primary',
+                url: approveUrl
+              },
+              {
+                type: 'button',
+                text: {
+                  type: 'plain_text',
+                  text: '❌ Deny Login',
+                  emoji: true
+                },
+                style: 'danger',
+                url: denyUrl
+              }
+            ]
+          },
+          {
+            type: 'context',
+            elements: [
+              {
+                type: 'mrkdwn',
+                text: `⏱️ This request expires in 5 minutes`
+              }
+            ]
+          }
+        ]
+      };
+
+      fetch(webhookUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(message)
+      }).catch(err => console.error('Failed to send Slack 2FA notification:', err));
+    }
+
+    return res.json({
+      success: false,
+      requires_slack_approval: true,
+      pending_token: pendingToken,
+      message: 'Login requires approval. Please wait for an admin to approve your login via Slack.'
+    });
+  }
+
   const token = createSession(user.id);
 
   res.json({
@@ -1574,7 +2208,8 @@ app.post('/api/auth/login', (req, res) => {
     user: {
       id: user.id,
       username: user.username,
-      role: user.role
+      role: user.role,
+      password_reset_required: user.password_reset_required === 1
     }
   });
 });
@@ -1588,9 +2223,316 @@ app.post('/api/auth/logout', authMiddleware, (req, res) => {
   res.json({ success: true });
 });
 
+// Approve login via Slack 2FA
+app.get('/api/auth/approve-login/:token', (req, res) => {
+  const { token } = req.params;
+  const approverIp = req.ip || req.connection.remoteAddress || 'Unknown';
+
+  const pending = db.prepare('SELECT * FROM pending_logins WHERE token = ?').get(token);
+
+  if (!pending) {
+    return res.send(`
+      <html>
+        <head><title>Login Approval</title></head>
+        <body style="font-family: sans-serif; display: flex; justify-content: center; align-items: center; height: 100vh; margin: 0; background: #1a1a2e;">
+          <div style="text-align: center; color: #fff; padding: 40px; background: #16213e; border-radius: 12px;">
+            <h1 style="color: #ef4444;">❌ Invalid Request</h1>
+            <p>This login approval link is invalid or has already been used.</p>
+          </div>
+        </body>
+      </html>
+    `);
+  }
+
+  if (pending.status !== 'pending') {
+    return res.send(`
+      <html>
+        <head><title>Login Approval</title></head>
+        <body style="font-family: sans-serif; display: flex; justify-content: center; align-items: center; height: 100vh; margin: 0; background: #1a1a2e;">
+          <div style="text-align: center; color: #fff; padding: 40px; background: #16213e; border-radius: 12px;">
+            <h1 style="color: #f59e0b;">⚠️ Already Processed</h1>
+            <p>This login request has already been ${pending.status}.</p>
+          </div>
+        </body>
+      </html>
+    `);
+  }
+
+  // Check if expired
+  if (new Date(pending.expires_at) < new Date()) {
+    db.prepare('UPDATE pending_logins SET status = ? WHERE token = ?').run('expired', token);
+    return res.send(`
+      <html>
+        <head><title>Login Approval</title></head>
+        <body style="font-family: sans-serif; display: flex; justify-content: center; align-items: center; height: 100vh; margin: 0; background: #1a1a2e;">
+          <div style="text-align: center; color: #fff; padding: 40px; background: #16213e; border-radius: 12px;">
+            <h1 style="color: #f59e0b;">⏱️ Expired</h1>
+            <p>This login request has expired. The user needs to try logging in again.</p>
+          </div>
+        </body>
+      </html>
+    `);
+  }
+
+  // Approve the login
+  db.prepare('UPDATE pending_logins SET status = ?, approved_by = ? WHERE token = ?').run('approved', approverIp, token);
+
+  const user = db.prepare('SELECT username FROM users WHERE id = ?').get(pending.user_id);
+
+  res.send(`
+    <html>
+      <head><title>Login Approved</title></head>
+      <body style="font-family: sans-serif; display: flex; justify-content: center; align-items: center; height: 100vh; margin: 0; background: #1a1a2e;">
+        <div style="text-align: center; color: #fff; padding: 40px; background: #16213e; border-radius: 12px;">
+          <h1 style="color: #22c55e;">✅ Login Approved</h1>
+          <p><strong>${user?.username || 'User'}</strong> can now access the dashboard.</p>
+          <p style="color: #94a3b8; font-size: 14px;">You can close this window.</p>
+        </div>
+      </body>
+    </html>
+  `);
+});
+
+// Deny login via Slack 2FA
+app.get('/api/auth/deny-login/:token', (req, res) => {
+  const { token } = req.params;
+
+  const pending = db.prepare('SELECT * FROM pending_logins WHERE token = ?').get(token);
+
+  if (!pending) {
+    return res.send(`
+      <html>
+        <head><title>Login Denial</title></head>
+        <body style="font-family: sans-serif; display: flex; justify-content: center; align-items: center; height: 100vh; margin: 0; background: #1a1a2e;">
+          <div style="text-align: center; color: #fff; padding: 40px; background: #16213e; border-radius: 12px;">
+            <h1 style="color: #ef4444;">❌ Invalid Request</h1>
+            <p>This login denial link is invalid or has already been used.</p>
+          </div>
+        </body>
+      </html>
+    `);
+  }
+
+  if (pending.status !== 'pending') {
+    return res.send(`
+      <html>
+        <head><title>Login Denial</title></head>
+        <body style="font-family: sans-serif; display: flex; justify-content: center; align-items: center; height: 100vh; margin: 0; background: #1a1a2e;">
+          <div style="text-align: center; color: #fff; padding: 40px; background: #16213e; border-radius: 12px;">
+            <h1 style="color: #f59e0b;">⚠️ Already Processed</h1>
+            <p>This login request has already been ${pending.status}.</p>
+          </div>
+        </body>
+      </html>
+    `);
+  }
+
+  // Deny the login
+  db.prepare('UPDATE pending_logins SET status = ? WHERE token = ?').run('denied', token);
+
+  const user = db.prepare('SELECT username FROM users WHERE id = ?').get(pending.user_id);
+
+  res.send(`
+    <html>
+      <head><title>Login Denied</title></head>
+      <body style="font-family: sans-serif; display: flex; justify-content: center; align-items: center; height: 100vh; margin: 0; background: #1a1a2e;">
+        <div style="text-align: center; color: #fff; padding: 40px; background: #16213e; border-radius: 12px;">
+          <h1 style="color: #ef4444;">🚫 Login Denied</h1>
+          <p>Login attempt by <strong>${user?.username || 'User'}</strong> has been denied.</p>
+          <p style="color: #94a3b8; font-size: 14px;">You can close this window.</p>
+        </div>
+      </body>
+    </html>
+  `);
+});
+
+// Check login approval status (for polling)
+app.get('/api/auth/check-login-status/:token', (req, res) => {
+  const { token } = req.params;
+
+  const pending = db.prepare('SELECT * FROM pending_logins WHERE token = ?').get(token);
+
+  if (!pending) {
+    return res.json({ success: false, error: 'Invalid token' });
+  }
+
+  // Check if expired
+  if (pending.status === 'pending' && new Date(pending.expires_at) < new Date()) {
+    db.prepare('UPDATE pending_logins SET status = ? WHERE token = ?').run('expired', token);
+    return res.json({ success: false, status: 'expired', error: 'Login request has expired' });
+  }
+
+  if (pending.status === 'approved') {
+    // Create actual session token
+    const user = db.prepare('SELECT * FROM users WHERE id = ?').get(pending.user_id);
+    const sessionToken = createSession(user.id);
+
+    // Mark pending login as used
+    db.prepare('DELETE FROM pending_logins WHERE token = ?').run(token);
+
+    return res.json({
+      success: true,
+      status: 'approved',
+      token: sessionToken,
+      user: {
+        id: user.id,
+        username: user.username,
+        role: user.role,
+        password_reset_required: user.password_reset_required === 1
+      }
+    });
+  }
+
+  if (pending.status === 'denied') {
+    db.prepare('DELETE FROM pending_logins WHERE token = ?').run(token);
+    return res.json({ success: false, status: 'denied', error: 'Login was denied by admin' });
+  }
+
+  // Still pending
+  res.json({ success: false, status: 'pending' });
+});
+
 // Get current user
 app.get('/api/auth/me', authMiddleware, (req, res) => {
-  res.json({ success: true, user: req.user });
+  const user = db.prepare('SELECT id, username, role, password_reset_required FROM users WHERE id = ?').get(req.user.id);
+  res.json({
+    success: true,
+    user: {
+      id: user.id,
+      username: user.username,
+      role: user.role,
+      password_reset_required: user.password_reset_required === 1
+    }
+  });
+});
+
+// Change password
+app.post('/api/auth/change-password', authMiddleware, async (req, res) => {
+  const { current_password, new_password } = req.body;
+
+  // Input validation
+  if (!current_password || !new_password) {
+    return res.status(400).json({ success: false, error: 'Current password and new password are required' });
+  }
+
+  if (typeof new_password !== 'string' || new_password.length < 6) {
+    return res.status(400).json({ success: false, error: 'New password must be at least 6 characters' });
+  }
+
+  // Get user from database
+  const user = db.prepare('SELECT * FROM users WHERE id = ?').get(req.user.id);
+  if (!user) {
+    return res.status(404).json({ success: false, error: 'User not found' });
+  }
+
+  // Verify current password
+  const passwordValid = await bcrypt.compare(current_password, user.password);
+  if (!passwordValid) {
+    return res.status(401).json({ success: false, error: 'Current password is incorrect' });
+  }
+
+  try {
+    // Hash new password and update
+    const hashedPassword = await bcrypt.hash(new_password, 10);
+    db.prepare('UPDATE users SET password = ?, password_reset_required = 0 WHERE id = ?').run(hashedPassword, req.user.id);
+    res.json({ success: true, message: 'Password changed successfully' });
+  } catch (e) {
+    console.error('Failed to change password:', e);
+    res.status(500).json({ success: false, error: 'Failed to change password' });
+  }
+});
+
+// Forgot password - sends Slack notification and resets to default password
+app.post('/api/auth/forgot-password', async (req, res) => {
+  const { username } = req.body;
+
+  if (!username) {
+    return res.status(400).json({ success: false, error: 'Username is required' });
+  }
+
+  // Find user
+  const user = db.prepare('SELECT id, username FROM users WHERE username = ?').get(username);
+  if (!user) {
+    // Don't reveal if user exists or not for security
+    return res.json({ success: true, message: 'If the username exists, a password reset has been initiated' });
+  }
+
+  try {
+    // Reset password to default
+    const defaultPassword = 'ob123456';
+    const hashedPassword = await bcrypt.hash(defaultPassword, 10);
+    db.prepare('UPDATE users SET password = ?, password_reset_required = 1 WHERE id = ?').run(hashedPassword, user.id);
+
+    // Send Slack notification to BOTH channels
+    const message = {
+      text: `🔐 *Password Reset Request*`,
+      blocks: [
+        {
+          type: 'header',
+          text: {
+            type: 'plain_text',
+            text: '🔐 Password Reset Request',
+            emoji: true
+          }
+        },
+        {
+          type: 'section',
+          fields: [
+            {
+              type: 'mrkdwn',
+              text: `*User:*\n${user.username}`
+            },
+            {
+              type: 'mrkdwn',
+              text: `*Time:*\n${new Date().toLocaleString()}`
+            }
+          ]
+        },
+        {
+          type: 'section',
+          text: {
+            type: 'mrkdwn',
+            text: `Password has been reset to the default temporary password. User will be required to change it on next login.`
+          }
+        }
+      ]
+    };
+
+    // Send to both webhooks
+    const webhooks = [SLACK_WEBHOOK_URL, SLACK_APPROVAL_WEBHOOK_URL].filter(Boolean);
+    await Promise.all(webhooks.map(url =>
+      fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(message)
+      }).catch(err => console.error('Failed to send Slack notification:', err))
+    ));
+
+    res.json({ success: true, message: 'If the username exists, a password reset has been initiated' });
+  } catch (e) {
+    console.error('Failed to reset password:', e);
+    res.status(500).json({ success: false, error: 'Failed to process request' });
+  }
+});
+
+// Admin password reset - mark user as needing to change password
+app.post('/api/auth/admin-password-reset/:userId', authMiddleware, (req, res) => {
+  if (req.user.role !== 'admin') {
+    return res.status(403).json({ success: false, error: 'Admin access required' });
+  }
+
+  const userId = parseInt(req.params.userId);
+  if (isNaN(userId)) {
+    return res.status(400).json({ success: false, error: 'Invalid user ID' });
+  }
+
+  try {
+    db.prepare('UPDATE users SET password_reset_required = 1 WHERE id = ?').run(userId);
+    res.json({ success: true });
+  } catch (e) {
+    console.error('Failed to mark password reset:', e);
+    res.status(500).json({ success: false, error: 'Failed to mark password reset' });
+  }
 });
 
 // ==================== USER MANAGEMENT ROUTES ====================
@@ -1601,24 +2543,40 @@ app.get('/api/users', authMiddleware, (req, res) => {
     return res.status(403).json({ success: false, error: 'Admin access required' });
   }
 
-  const users = db.prepare('SELECT id, username, role, created_at FROM users').all();
+  const users = db.prepare('SELECT id, username, role, created_at, slack_2fa_enabled FROM users').all();
   res.json({ success: true, users });
 });
 
 // Create new user (admin only)
-app.post('/api/users', authMiddleware, (req, res) => {
+app.post('/api/users', authMiddleware, async (req, res) => {
   if (req.user.role !== 'admin') {
     return res.status(403).json({ success: false, error: 'Admin access required' });
   }
 
   const { username, password, role } = req.body;
 
+  // Input validation
   if (!username || !password) {
     return res.status(400).json({ success: false, error: 'Username and password required' });
   }
 
+  if (typeof username !== 'string' || typeof password !== 'string') {
+    return res.status(400).json({ success: false, error: 'Invalid input format' });
+  }
+
+  // Username validation: alphanumeric with dots, hyphens, underscores, 3-50 chars
+  if (!/^[a-zA-Z0-9._-]{3,50}$/.test(username)) {
+    return res.status(400).json({ success: false, error: 'Username must be 3-50 characters (letters, numbers, dots, hyphens, underscores)' });
+  }
+
   if (password.length < 6) {
     return res.status(400).json({ success: false, error: 'Password must be at least 6 characters' });
+  }
+
+  // Validate role
+  const validRoles = ['admin', 'user'];
+  if (role && !validRoles.includes(role)) {
+    return res.status(400).json({ success: false, error: 'Invalid role' });
   }
 
   // Check if username exists
@@ -1628,25 +2586,43 @@ app.post('/api/users', authMiddleware, (req, res) => {
   }
 
   try {
+    // Hash password before storing
+    const hashedPassword = await bcrypt.hash(password, 10);
     const result = db.prepare('INSERT INTO users (username, password, role) VALUES (?, ?, ?)').run(
       username,
-      password,
+      hashedPassword,
       role || 'user'
     );
     res.json({ success: true, id: result.lastInsertRowid });
   } catch (e) {
+    console.error('Failed to create user:', e);
     res.status(500).json({ success: false, error: 'Failed to create user' });
   }
 });
 
 // Update user (admin only)
-app.put('/api/users/:id', authMiddleware, (req, res) => {
+app.put('/api/users/:id', authMiddleware, async (req, res) => {
   if (req.user.role !== 'admin') {
     return res.status(403).json({ success: false, error: 'Admin access required' });
   }
 
   const userId = parseInt(req.params.id);
+  if (isNaN(userId)) {
+    return res.status(400).json({ success: false, error: 'Invalid user ID' });
+  }
+
   const { role, password } = req.body;
+
+  // Validate role if provided
+  const validRoles = ['admin', 'user'];
+  if (role && !validRoles.includes(role)) {
+    return res.status(400).json({ success: false, error: 'Invalid role' });
+  }
+
+  // Validate password if provided
+  if (password && (typeof password !== 'string' || password.length < 6)) {
+    return res.status(400).json({ success: false, error: 'Password must be at least 6 characters' });
+  }
 
   // Prevent admin from demoting themselves
   if (userId === req.user.id && role === 'user') {
@@ -1655,13 +2631,47 @@ app.put('/api/users/:id', authMiddleware, (req, res) => {
 
   try {
     if (password) {
-      db.prepare('UPDATE users SET role = ?, password = ? WHERE id = ?').run(role, password, userId);
+      // Hash password before storing
+      const hashedPassword = await bcrypt.hash(password, 10);
+      db.prepare('UPDATE users SET role = ?, password = ? WHERE id = ?').run(role, hashedPassword, userId);
     } else {
       db.prepare('UPDATE users SET role = ? WHERE id = ?').run(role, userId);
     }
     res.json({ success: true });
   } catch (e) {
+    console.error('Failed to update user:', e);
     res.status(500).json({ success: false, error: 'Failed to update user' });
+  }
+});
+
+// Toggle Slack 2FA for a user (admin only)
+app.patch('/api/users/:id/slack-2fa', authMiddleware, (req, res) => {
+  if (req.user.role !== 'admin') {
+    return res.status(403).json({ success: false, error: 'Admin access required' });
+  }
+
+  const userId = parseInt(req.params.id);
+  if (isNaN(userId)) {
+    return res.status(400).json({ success: false, error: 'Invalid user ID' });
+  }
+
+  const { enabled } = req.body;
+  if (typeof enabled !== 'boolean') {
+    return res.status(400).json({ success: false, error: 'enabled must be a boolean' });
+  }
+
+  try {
+    const user = db.prepare('SELECT id, username FROM users WHERE id = ?').get(userId);
+    if (!user) {
+      return res.status(404).json({ success: false, error: 'User not found' });
+    }
+
+    db.prepare('UPDATE users SET slack_2fa_enabled = ? WHERE id = ?').run(enabled ? 1 : 0, userId);
+    console.log(`Slack 2FA ${enabled ? 'enabled' : 'disabled'} for user ${user.username}`);
+    res.json({ success: true, slack_2fa_enabled: enabled });
+  } catch (e) {
+    console.error('Failed to toggle Slack 2FA:', e);
+    res.status(500).json({ success: false, error: 'Failed to toggle Slack 2FA' });
   }
 });
 
@@ -2189,7 +3199,10 @@ app.get('/api/poly-lens/by-floor', async (req, res) => {
     '5th Floor': []
   };
 
-  polyLensDevices.forEach(device => {
+  // Get devices with Zoom status merged
+  const devicesWithZoom = getPolyDevicesWithZoomStatus();
+
+  devicesWithZoom.forEach(device => {
     const floor = device.site?.name;
     const maintenanceInfo = maintenanceMap[device.id];
     if (floor && floors[floor]) {
@@ -2204,7 +3217,18 @@ app.get('/api/poly-lens/by-floor', async (req, res) => {
         room: device.room?.name,
         maintenance: maintenanceInfo ? 1 : 0,
         maintenance_note: maintenanceInfo?.maintenance_note,
-        maintenance_until: maintenanceInfo?.maintenance_until
+        maintenance_until: maintenanceInfo?.maintenance_until,
+        // Zoom status fields
+        zoom_status: device.zoom_status,
+        zoom_in_meeting: device.zoom_in_meeting,
+        zoom_health: device.zoom_health,
+        zoom_issues: device.zoom_issues,
+        zoom_room_id: device.zoom_room_id,
+        // Zoom device info
+        zoom_ip: device.zoom_ip,
+        zoom_serial: device.zoom_serial,
+        zoom_device_type: device.zoom_device_type,
+        zoom_devices: device.zoom_devices
       });
     }
   });
@@ -2214,6 +3238,263 @@ app.get('/api/poly-lens/by-floor', async (req, res) => {
     deviceCount: polyLensDevices.length,
     lastFetch: polyLensLastFetch,
     floors
+  });
+});
+
+// ==================== ZOOM ROOMS ENDPOINTS ====================
+
+// Get all IL Zoom Rooms
+app.get('/api/zoom-rooms', async (req, res) => {
+  if (req.query.refresh || !zoomRoomsLastFetch || Date.now() - zoomRoomsLastFetch > 60000) {
+    await fetchZoomRooms();
+  }
+
+  res.json({
+    success: true,
+    roomCount: zoomRooms.length,
+    lastFetch: zoomRoomsLastFetch,
+    rooms: zoomRooms
+  });
+});
+
+// Get Zoom Rooms by floor
+app.get('/api/zoom-rooms/by-floor', async (req, res) => {
+  if (req.query.refresh || !zoomRoomsLastFetch || Date.now() - zoomRoomsLastFetch > 60000) {
+    await fetchZoomRooms();
+  }
+
+  const floors = {};
+
+  zoomRooms.forEach(room => {
+    const floor = room.floor || 'Floor 5';
+    if (!floors[floor]) {
+      floors[floor] = [];
+    }
+    floors[floor].push(room);
+  });
+
+  res.json({
+    success: true,
+    roomCount: zoomRooms.length,
+    lastFetch: zoomRoomsLastFetch,
+    floors
+  });
+});
+
+// Get Zoom rooms that don't have Poly Lens devices (for adding to map)
+app.get('/api/zoom-rooms/unmatched', async (req, res) => {
+  if (req.query.refresh || !zoomRoomsLastFetch || Date.now() - zoomRoomsLastFetch > 60000) {
+    await fetchZoomRooms();
+  }
+  if (req.query.refresh || !polyLensLastFetch || Date.now() - polyLensLastFetch > 60000) {
+    await fetchPolyLensDevices();
+  }
+
+  const unmatchedRooms = getZoomOnlyRooms();
+
+  res.json({
+    success: true,
+    count: unmatchedRooms.length,
+    rooms: unmatchedRooms
+  });
+});
+
+// Get Zoom room status history
+app.get('/api/zoom-rooms/:roomId/history', (req, res) => {
+  const roomId = req.params.roomId;
+  const hours = parseInt(req.query.hours) || 24;
+
+  // Get history records for this room
+  const history = db.prepare(`
+    SELECT status, health, device_count, devices_online, time
+    FROM zoom_room_history
+    WHERE room_id = ? AND time > datetime('now', '-${hours} hours')
+    ORDER BY time ASC
+  `).all(roomId);
+
+  // Calculate uptime percentage
+  const totalRecords = history.length;
+  const onlineRecords = history.filter(h =>
+    h.status === 'Available' || h.status === 'InMeeting'
+  ).length;
+  const uptimePercent = totalRecords > 0 ? (onlineRecords / totalRecords) * 100 : null;
+
+  // Find last online time
+  const lastOnlineRecord = [...history].reverse().find(h =>
+    h.status === 'Available' || h.status === 'InMeeting'
+  );
+
+  res.json({
+    success: true,
+    room_id: roomId,
+    hours: hours,
+    uptime_percent: uptimePercent,
+    total_records: totalRecords,
+    online_records: onlineRecords,
+    last_online: lastOnlineRecord?.time || null,
+    history: history.map(h => ({
+      status: h.status,
+      health: h.health,
+      device_count: h.device_count,
+      devices_online: h.devices_online,
+      time: h.time
+    }))
+  });
+});
+
+// Get Zoom room meeting utilization stats
+app.get('/api/zoom-rooms/:roomId/utilization', (req, res) => {
+  const roomId = req.params.roomId;
+  const days = parseInt(req.query.days) || 7;
+
+  // Get utilization stats for the last N days
+  const stats = db.prepare(`
+    SELECT date, total_minutes, meeting_minutes, meeting_count
+    FROM zoom_meeting_stats
+    WHERE room_id = ? AND date >= date('now', '-${days} days')
+    ORDER BY date ASC
+  `).all(roomId);
+
+  // Calculate overall utilization
+  const totalMinutes = stats.reduce((sum, s) => sum + (s.total_minutes || 0), 0);
+  const meetingMinutes = stats.reduce((sum, s) => sum + (s.meeting_minutes || 0), 0);
+  const totalMeetings = stats.reduce((sum, s) => sum + (s.meeting_count || 0), 0);
+  const utilizationPercent = totalMinutes > 0 ? (meetingMinutes / totalMinutes) * 100 : 0;
+
+  // Calculate average daily utilization (assuming 10 hours work day = 600 minutes)
+  const workDayMinutes = 600;
+  const avgDailyUtilization = stats.length > 0
+    ? stats.reduce((sum, s) => sum + ((s.meeting_minutes || 0) / workDayMinutes) * 100, 0) / stats.length
+    : 0;
+
+  res.json({
+    success: true,
+    room_id: roomId,
+    days: days,
+    utilization_percent: Math.round(utilizationPercent * 10) / 10,
+    avg_daily_utilization: Math.round(avgDailyUtilization * 10) / 10,
+    total_meeting_minutes: Math.round(meetingMinutes),
+    total_meetings: totalMeetings,
+    daily_stats: stats.map(s => ({
+      date: s.date,
+      utilization: s.total_minutes > 0 ? Math.round((s.meeting_minutes / s.total_minutes) * 100) : 0,
+      meeting_minutes: Math.round(s.meeting_minutes || 0),
+      meeting_count: s.meeting_count || 0
+    }))
+  });
+});
+
+// Get all rooms meeting utilization summary
+app.get('/api/zoom-rooms/utilization/summary', (req, res) => {
+  const days = parseInt(req.query.days) || 7;
+
+  const stats = db.prepare(`
+    SELECT room_id, room_name,
+           SUM(total_minutes) as total_minutes,
+           SUM(meeting_minutes) as meeting_minutes,
+           SUM(meeting_count) as meeting_count
+    FROM zoom_meeting_stats
+    WHERE date >= date('now', '-${days} days')
+    GROUP BY room_id
+    ORDER BY meeting_minutes DESC
+  `).all();
+
+  const roomStats = stats.map(s => ({
+    room_id: s.room_id,
+    room_name: s.room_name,
+    utilization_percent: s.total_minutes > 0 ? Math.round((s.meeting_minutes / s.total_minutes) * 100) : 0,
+    meeting_hours: Math.round((s.meeting_minutes || 0) / 60 * 10) / 10,
+    meeting_count: s.meeting_count || 0
+  }));
+
+  res.json({
+    success: true,
+    days: days,
+    rooms: roomStats
+  });
+});
+
+// Get floor health summary
+app.get('/api/floors/health', (req, res) => {
+  const floors = {};
+
+  // Get monitors by floor with latest heartbeat status (optimized query)
+  const monitors = db.prepare(`
+    SELECT m.floor, m.disabled, m.maintenance, m.device_type,
+           CASE WHEN h.status = 1 THEN 'up' ELSE 'down' END as status
+    FROM monitors m
+    LEFT JOIN heartbeats h ON m.id = h.monitor_id
+      AND h.id = (SELECT MAX(h2.id) FROM heartbeats h2 WHERE h2.monitor_id = m.id)
+    WHERE m.active = 1
+  `).all();
+
+  monitors.forEach(m => {
+    if (!floors[m.floor]) {
+      floors[m.floor] = { total: 0, online: 0, offline: 0, disabled: 0, maintenance: 0, types: {} };
+    }
+    floors[m.floor].total++;
+    if (m.disabled) floors[m.floor].disabled++;
+    else if (m.maintenance) floors[m.floor].maintenance++;
+    else if (m.status === 'up') floors[m.floor].online++;
+    else floors[m.floor].offline++;
+
+    if (!floors[m.floor].types[m.device_type]) {
+      floors[m.floor].types[m.device_type] = { total: 0, online: 0 };
+    }
+    floors[m.floor].types[m.device_type].total++;
+    if (m.status === 'up' && !m.disabled && !m.maintenance) {
+      floors[m.floor].types[m.device_type].online++;
+    }
+  });
+
+  // Calculate health score per floor
+  const floorHealth = Object.entries(floors).map(([floor, data]) => {
+    const activeDevices = data.total - data.disabled;
+    const healthScore = activeDevices > 0
+      ? Math.round(((data.online + data.maintenance) / activeDevices) * 100)
+      : 100;
+    return {
+      floor,
+      health_score: healthScore,
+      total: data.total,
+      online: data.online,
+      offline: data.offline,
+      disabled: data.disabled,
+      maintenance: data.maintenance,
+      types: data.types
+    };
+  });
+
+  res.json({
+    success: true,
+    floors: floorHealth.sort((a, b) => a.floor.localeCompare(b.floor))
+  });
+});
+
+// Update device tags
+app.patch('/api/monitors/:id/tags', authMiddleware, (req, res) => {
+  const { tags } = req.body;
+  const tagsJson = Array.isArray(tags) ? JSON.stringify(tags) : tags;
+
+  db.prepare('UPDATE monitors SET tags = ? WHERE id = ?').run(tagsJson, req.params.id);
+  res.json({ success: true });
+});
+
+// Get all unique tags
+app.get('/api/tags', (req, res) => {
+  const monitors = db.prepare('SELECT tags FROM monitors WHERE tags IS NOT NULL').all();
+  const allTags = new Set();
+
+  monitors.forEach(m => {
+    try {
+      const tags = JSON.parse(m.tags || '[]');
+      tags.forEach(t => allTags.add(t));
+    } catch (e) {}
+  });
+
+  res.json({
+    success: true,
+    tags: Array.from(allTags).sort()
   });
 });
 
@@ -2352,14 +3633,61 @@ app.patch('/api/poly-devices/:deviceId/disable', authMiddleware, (req, res) => {
 app.post('/api/monitors', authMiddleware, (req, res) => {
   const { name, type, hostname, url, floor, device_type } = req.body;
 
-  const stmt = db.prepare(`
-    INSERT INTO monitors (name, type, hostname, url, floor, device_type)
-    VALUES (?, ?, ?, ?, ?, ?)
-  `);
+  // Input validation
+  if (!name || typeof name !== 'string') {
+    return res.status(400).json({ success: false, error: 'Name is required' });
+  }
 
-  const result = stmt.run(name, type || 'ping', hostname, url, floor, device_type);
+  // Sanitize name - remove potential XSS
+  const sanitizedName = name.trim().substring(0, 100).replace(/[<>]/g, '');
+  if (sanitizedName.length === 0) {
+    return res.status(400).json({ success: false, error: 'Name cannot be empty' });
+  }
 
-  res.json({ success: true, id: result.lastInsertRowid });
+  // Validate type
+  const validTypes = ['ping', 'http', 'https'];
+  const monitorType = type || 'ping';
+  if (!validTypes.includes(monitorType)) {
+    return res.status(400).json({ success: false, error: 'Invalid monitor type' });
+  }
+
+  // Validate hostname if provided (for ping monitors)
+  if (hostname) {
+    // Basic hostname/IP validation
+    const hostnameRegex = /^[a-zA-Z0-9][a-zA-Z0-9.-]{0,253}[a-zA-Z0-9]$|^[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}$/;
+    if (!hostnameRegex.test(hostname)) {
+      return res.status(400).json({ success: false, error: 'Invalid hostname format' });
+    }
+  }
+
+  // Validate URL if provided (for http/https monitors)
+  if (url) {
+    try {
+      new URL(url);
+    } catch (e) {
+      return res.status(400).json({ success: false, error: 'Invalid URL format' });
+    }
+  }
+
+  // Validate floor if provided
+  const sanitizedFloor = floor ? String(floor).trim().substring(0, 50) : null;
+
+  // Validate device_type if provided
+  const sanitizedDeviceType = device_type ? String(device_type).trim().substring(0, 50) : null;
+
+  try {
+    const stmt = db.prepare(`
+      INSERT INTO monitors (name, type, hostname, url, floor, device_type)
+      VALUES (?, ?, ?, ?, ?, ?)
+    `);
+
+    const result = stmt.run(sanitizedName, monitorType, hostname, url, sanitizedFloor, sanitizedDeviceType);
+
+    res.json({ success: true, id: result.lastInsertRowid });
+  } catch (e) {
+    console.error('Failed to create monitor:', e);
+    res.status(500).json({ success: false, error: 'Failed to create monitor' });
+  }
 });
 
 // Delete a monitor (admin only, or requires approval)
@@ -2917,10 +4245,16 @@ setTimeout(async () => {
   if (POLY_LENS_CLIENT_ID) {
     await fetchPolyLensDevices();
   }
+  if (ZOOM_ACCOUNT_ID) {
+    await fetchZoomRooms();
+  }
 }, 2000);
 
 // Refresh Poly Lens every 30 seconds
 setInterval(fetchPolyLensDevices, 30 * 1000);
+
+// Refresh Zoom Rooms every 60 seconds (less frequent to avoid rate limits)
+setInterval(fetchZoomRooms, 60 * 1000);
 
 // ==================== ACTIVITY LOG ====================
 
@@ -4750,5 +6084,6 @@ server.listen(PORT, () => {
   console.log(`⏱️  Check interval: ${CHECK_INTERVAL / 1000}s`);
   console.log(`🔔 Slack: ${SLACK_WEBHOOK_URL ? 'Configured' : 'Not configured'}`);
   console.log(`📹 Poly Lens: ${POLY_LENS_CLIENT_ID ? 'Configured' : 'Not configured'}`);
+  console.log(`🎥 Zoom Rooms: ${ZOOM_ACCOUNT_ID ? 'Configured' : 'Not configured'}`);
   console.log(`🔌 WebSocket: Enabled\n`);
 });

@@ -1,0 +1,131 @@
+Name,IP Address,Device Type,Floor,Status,Serial Number,Source
+1st Floor AP4(Bunker),192.168.31.175,accessPoints,1st Floor,up,,Uptime Kuma
+Israel -1st Floor Bunker,192.168.33.33,printers,1st Floor,up,CNB9X8Y7Z6-NEW,Uptime Kuma
+Gym,192.168.30.76,accessPoints,1st Floor,up,,Uptime Kuma
+5th-floor bunker,192.168.30.87,accessPoints,5th Floor,up,,Uptime Kuma
+5th-floor Kantina,192.168.30.82,accessPoints,5th Floor,up,,Uptime Kuma
+1st Floor AP1(Gaming Room),192.168.30.78,accessPoints,1st Floor,up,,Uptime Kuma
+1st Floor AP2(Above Wembley Room),192.168.30.73,accessPoints,1st Floor,up,,Uptime Kuma
+1st Floor AP3(Above Security),192.168.30.75,accessPoints,1st Floor,up,,Uptime Kuma
+1st Floor AP5(Data 1),192.168.30.74,accessPoints,1st Floor,up,,Uptime Kuma
+1st Floor Balcony,192.168.30.71,accessPoints,1st Floor,up,,Uptime Kuma
+2nd Floor AP(Above P&C),192.168.30.77,accessPoints,2nd Floor,up,,Uptime Kuma
+2nd Floor AP(Bunker),192.168.31.44,accessPoints,2nd Floor,up,,Uptime Kuma
+2nd Floor AP1(CX Supply),192.168.31.95,accessPoints,2nd Floor,up,,Uptime Kuma
+2nd Floor AP3 - MIS,192.168.31.96,accessPoints,2nd Floor,up,,Uptime Kuma
+2nd Floor AP4(Asaf Porat),192.168.31.185,accessPoints,2nd Floor,up,,Uptime Kuma
+3rd Floor AP1(Gamers),192.168.31.78,accessPoints,3rd Floor,up,,Uptime Kuma
+3rd Floor AP2(Nemo),192.168.30.179,accessPoints,3rd Floor,up,,Uptime Kuma
+3rd Floor AP4(Finance),192.168.31.3,accessPoints,3rd Floor,up,,Uptime Kuma
+3rd Floor AP5(Above Hadas),192.168.31.111,accessPoints,3rd Floor,up,,Uptime Kuma
+3rd Floor South,192.168.30.141,accessPoints,3rd Floor,up,,Uptime Kuma
+5th Floor North Side,192.168.30.244,accessPoints,5th Floor,up,,Uptime Kuma
+5th Floor South Site,192.168.31.105,accessPoints,5th Floor,up,,Uptime Kuma
+5th Floor West Side,192.168.30.173,accessPoints,5th Floor,up,,Uptime Kuma
+Israel - 2nd Floor Bunker,192.168.33.30,printers,2nd Floor,up,,Uptime Kuma
+Israel - 1st Floor Kitchen,192.168.33.38,printers,1st Floor,up,W2W7112856,Uptime Kuma
+Israel - 3rd Floor Storage,192.168.33.66,printers,3rd Floor,up,,Uptime Kuma
+Israel - 2nd Floor Storage,192.168.33.35,printers,2nd Floor,up,,Uptime Kuma
+Israel - 5th Floor Storage,192.168.33.40,printers,5th Floor,up,,Uptime Kuma
+P&C1,192.168.26.42,polyLens,2nd Floor,up,,Uptime Kuma
+P&C2,192.168.24.196,polyLens,2nd Floor,up,,Uptime Kuma
+CIO,192.168.24.111,polyLens,1st Floor,up,,Uptime Kuma
+Achla,192.168.26.90,polyLens,5th Floor,up,,Uptime Kuma
+Tachles,192.168.24.174,polyLens,5th Floor,up,,Uptime Kuma
+Sales Supply,192.168.24.79,polyLens,1st Floor,up,,Uptime Kuma
+MIS,192.168.24.97,polyLens,2nd Floor,up,,Uptime Kuma
+IL BIZ,192.168.24.78,polyLens,1st Floor,up,,Uptime Kuma
+Global Supply,192.168.24.199,polyLens,2nd Floor,up,,Uptime Kuma
+Sababa,192.168.24.130,polyLens,5th Floor,up,,Uptime Kuma
+The Beatles,192.168.24.197,polyLens,2nd Floor,up,,Uptime Kuma
+CX Supply,192.168.24.198,polyLens,2nd Floor,up,,Uptime Kuma
+CX Performance,192.168.24.101,polyLens,2nd Floor,up,,Uptime Kuma
+Cloud Platform1,192.168.25.5,polyLens,3rd Floor,up,,Uptime Kuma
+Jordan,192.168.24.183,polyLens,1st Floor,up,,Uptime Kuma
+Al-Hakefak,192.168.24.151,polyLens,5th Floor,up,,Uptime Kuma
+Finance,192.168.24.75,polyLens,3rd Floor,up,,Uptime Kuma
+Venus,192.168.24.158,polyLens,1st Floor,up,,Uptime Kuma
+Asaf Porat,192.168.24.115,polyLens,2nd Floor,up,,Uptime Kuma
+Global hubs1,192.168.24.159,polyLens,1st Floor,up,,Uptime Kuma
+Data2,192.168.24.152,polyLens,1st Floor,up,,Uptime Kuma
+Cloud Platform2,192.168.25.31,polyLens,3rd Floor,up,,Uptime Kuma
+Yalla,192.168.25.111,polyLens,5th Floor,up,,Uptime Kuma
+Whitney,192.168.24.200,polyLens,2nd Floor,up,,Uptime Kuma
+Wembley,192.168.24.66,polyLens,1st Floor,up,,Uptime Kuma
+Maradona,192.168.26.128,polyLens,1st Floor,up,,Uptime Kuma
+Data1,192.168.24.71,polyLens,1st Floor,up,,Uptime Kuma
+Avatar,192.168.25.16,polyLens,3rd Floor,up,,Uptime Kuma
+Nemo,192.168.24.88,polyLens,3rd Floor,up,,Uptime Kuma
+Nirvana,192.168.24.146,polyLens,2nd Floor,up,,Uptime Kuma
+Serena,192.168.24.153,polyLens,1st Floor,up,,Uptime Kuma
+Global hubs2,192.168.24.154,polyLens,1st Floor,up,,Uptime Kuma
+Daphna Michaeli,,Poly Studio R30,2nd Floor,down,,Poly Lens
+Tachles,192.168.24.174,Poly Studio X52,5th Floor,up,,Poly Lens
+Achla,192.168.26.90,Poly Studio X30,5th Floor,up,,Poly Lens
+Sales Supply,192.168.24.79,Poly Studio X30,1st Floor,up,,Poly Lens
+MIS,192.168.24.97,Poly Studio X30,2nd Floor,up,,Poly Lens
+IL BIZ,192.168.24.78,Poly Studio X30,1st Floor,up,,Poly Lens
+Local Supply,192.168.24.199,Poly Studio X30,2nd Floor,up,,Poly Lens
+Guy Yagur Conference Room,192.168.24.145,Poly Studio X30,1st Floor,up,,Poly Lens
+Sababa,192.168.24.130,Poly Studio X30,5th Floor,up,,Poly Lens
+The Beatles,192.168.24.197,Poly Studio X30,2nd Floor,up,,Poly Lens
+Global Supply,192.168.24.198,Poly Studio X30,2nd Floor,up,,Poly Lens
+Demand Operations,192.168.24.101,Poly Studio X30,2nd Floor,up,,Poly Lens
+Cloud Platform1,192.168.25.5,Poly Studio X30,3rd Floor,up,,Poly Lens
+Jordan,192.168.24.183,Poly Studio X30,1st Floor,up,,Poly Lens
+Al-Hakefak,192.168.24.151,Poly Studio X30,5th Floor,up,,Poly Lens
+Finance,192.168.24.75,Poly Studio X30,3rd Floor,up,,Poly Lens
+P&C1,192.168.26.42,Poly Studio X30,2nd Floor,up,,Poly Lens
+P&C2,192.168.24.196,Poly Studio X30,2nd Floor,up,,Poly Lens
+Global hubs1,192.168.24.159,Poly Studio X30,1st Floor,up,,Poly Lens
+Venus,192.168.24.158,Poly Studio X30,1st Floor,up,,Poly Lens
+CIO,192.168.24.111,Poly Studio X30,1st Floor,up,,Poly Lens
+Asaf Porat,192.168.24.115,Poly Studio X30,2nd Floor,up,,Poly Lens
+Data2,192.168.24.152,Poly Studio X30,1st Floor,up,,Poly Lens
+Cloud Platform2,192.168.25.31,Poly Studio X30,3rd Floor,up,,Poly Lens
+Yalla,192.168.25.111,Poly Studio X70,5th Floor,up,,Poly Lens
+Whitney,192.168.24.200,Poly Studio X70,2nd Floor,up,,Poly Lens
+Wembley,192.168.24.66,Poly Studio X70,1st Floor,up,,Poly Lens
+Poly TC10,192.168.26.153,Poly TC10,1st Floor,up,,Poly Lens
+Poly TC10,192.168.24.86,Poly TC10,3rd Floor,up,,Poly Lens
+Poly TC10,192.168.26.86,Poly TC10,1st Floor,up,,Poly Lens
+Poly TC10,192.168.24.133,Poly TC10,1st Floor,up,,Poly Lens
+Poly TC10,192.168.24.137,Poly TC10,1st Floor,up,,Poly Lens
+Poly TC10,192.168.25.22,Poly TC10,3rd Floor,up,,Poly Lens
+Poly TC8,192.168.24.168,Poly TC8,5th Floor,up,,Poly Lens
+Poly TC8,192.168.24.80,Poly TC8,1st Floor,up,,Poly Lens
+Poly TC8,192.168.24.83,Poly TC8,1st Floor,up,,Poly Lens
+Poly TC8,192.168.24.112,Poly TC8,2nd Floor,up,,Poly Lens
+Poly TC8,192.168.24.90,Poly TC8,2nd Floor,up,,Poly Lens
+Poly TC8,192.168.25.46,Poly TC8,3rd Floor,up,,Poly Lens
+Poly TC8,192.168.24.155,Poly TC8,5th Floor,up,,Poly Lens
+Poly TC8,192.168.24.126,Poly TC8,5th Floor,up,,Poly Lens
+Poly TC8,192.168.24.140,Poly TC8,1st Floor,down,,Poly Lens
+Poly TC8,192.168.24.166,Poly TC8,1st Floor,up,,Poly Lens
+Poly TC8,192.168.24.59,Poly TC8,2nd Floor,up,,Poly Lens
+Poly TC8,192.168.24.171,Poly TC8,2nd Floor,up,,Poly Lens
+Poly TC8,192.168.24.82,Poly TC8,1st Floor,up,,Poly Lens
+Poly TC8,192.168.25.32,Poly TC8,3rd Floor,up,,Poly Lens
+Poly TC8,192.168.24.105,Poly TC8,1st Floor,up,,Poly Lens
+Poly TC8,192.168.27.21,Poly TC8,3rd Floor,up,,Poly Lens
+Poly TC8,192.168.24.188,Poly TC8,2nd Floor,up,,Poly Lens
+Poly TC8,192.168.24.113,Poly TC8,2nd Floor,up,,Poly Lens
+Poly TC8,192.168.26.37,Poly TC8,2nd Floor,up,,Poly Lens
+Poly TC8,192.168.24.99,Poly TC8,5th Floor,up,,Poly Lens
+Poly TC8,192.168.24.67,Poly TC8,1st Floor,up,,Poly Lens
+Poly TC8,192.168.24.163,Poly TC8,1st Floor,up,,Poly Lens
+Maradona,192.168.26.128,Poly Studio X52,1st Floor,up,,Poly Lens
+Data1,192.168.24.71,Poly Studio X52,1st Floor,up,,Poly Lens
+Avatar,192.168.25.16,Poly Studio X52,3rd Floor,up,,Poly Lens
+Nemo,192.168.24.88,Poly Studio X52,3rd Floor,up,,Poly Lens
+Nirvana,192.168.24.146,Poly Studio X52,2nd Floor,up,,Poly Lens
+Serena,192.168.24.153,Poly Studio X52,1st Floor,up,,Poly Lens
+Global hubs2,192.168.24.154,Poly Studio X52,1st Floor,up,,Poly Lens
+Poly TC10,192.168.24.117,Poly TC10,2nd Floor,up,,Poly Lens
+Poly TC10,192.168.24.142,Poly TC10,1st Floor,up,,Poly Lens
+Poly TC10,192.168.25.112,Poly TC10,5th Floor,up,,Poly Lens
+Poly TC10,192.168.26.148,Poly TC10,2nd Floor,up,,Poly Lens
+Poly TC10,192.168.27.87,Poly TC10,3rd Floor,up,,Poly Lens
+Poly TC10,192.168.24.160,Poly TC10,,down,,Poly Lens
+Poly TC10,192.168.24.120,Poly TC10,2nd Floor,up,,Poly Lens
+Poly TC10,192.168.24.96,Poly TC10,2nd Floor,up,,Poly Lens

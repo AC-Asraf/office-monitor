@@ -190,6 +190,490 @@
       100% { opacity: 0.5; }
     }
 
+    /* Penguin Loading Animation */
+    @keyframes penguinWalk {
+      0%, 100% { transform: translateY(0) rotate(-5deg); }
+      25% { transform: translateY(-8px) rotate(5deg); }
+      50% { transform: translateY(0) rotate(-5deg); }
+      75% { transform: translateY(-8px) rotate(5deg); }
+    }
+
+    @keyframes hammerSwing {
+      0%, 100% { transform: rotate(-20deg); }
+      50% { transform: rotate(20deg); }
+    }
+
+    @keyframes nailBounce {
+      0%, 100% { transform: translateY(0); }
+      50% { transform: translateY(-3px); }
+    }
+
+    /* Floor Transition Animation */
+    @keyframes floorFadeIn {
+      from { opacity: 0; transform: scale(0.98); }
+      to { opacity: 1; transform: scale(1); }
+    }
+
+    @keyframes floorSlideIn {
+      from { opacity: 0; transform: translateY(10px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    /* Connection Status Pulse */
+    @keyframes connectionPulse {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.4; }
+    }
+
+    @keyframes reconnectSpin {
+      from { transform: rotate(0deg); }
+      to { transform: rotate(360deg); }
+    }
+
+    /* Penguin Loading Container */
+    .penguin-loader {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 60px 20px;
+      gap: 20px;
+    }
+
+    .penguin-scene {
+      position: relative;
+      width: 120px;
+      height: 100px;
+    }
+
+    .penguin {
+      font-size: 48px;
+      position: absolute;
+      left: 50%;
+      bottom: 0;
+      transform: translateX(-50%);
+      animation: penguinWalk 0.6s ease-in-out infinite;
+    }
+
+    .hammer {
+      font-size: 24px;
+      position: absolute;
+      right: 15px;
+      top: 10px;
+      transform-origin: bottom right;
+      animation: hammerSwing 0.3s ease-in-out infinite;
+    }
+
+    .nails {
+      position: absolute;
+      bottom: 5px;
+      left: 10px;
+      display: flex;
+      gap: 4px;
+    }
+
+    .nail {
+      font-size: 14px;
+      animation: nailBounce 0.4s ease-in-out infinite;
+    }
+
+    .nail:nth-child(2) { animation-delay: 0.1s; }
+    .nail:nth-child(3) { animation-delay: 0.2s; }
+
+    .penguin-text {
+      color: var(--text-secondary);
+      font-size: 14px;
+      text-align: center;
+    }
+
+    .penguin-subtext {
+      color: var(--text-muted);
+      font-size: 12px;
+    }
+
+    /* Floor Content Transitions */
+    .floor-content {
+      transition: opacity 0.3s ease, transform 0.3s ease;
+    }
+
+    .floor-content.transitioning {
+      opacity: 0;
+      transform: scale(0.98);
+    }
+
+    .floor-content.entering {
+      animation: floorFadeIn 0.4s ease forwards;
+    }
+
+    /* Connection Status Indicator */
+    .connection-status {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      padding: 4px 10px;
+      border-radius: var(--radius-full);
+      font-size: 11px;
+      font-weight: 500;
+      transition: all 0.3s ease;
+    }
+
+    .connection-status.connected {
+      background: var(--status-online-bg);
+      color: var(--status-online);
+    }
+
+    .connection-status.disconnected {
+      background: var(--status-offline-bg);
+      color: var(--status-offline);
+      animation: connectionPulse 1.5s ease-in-out infinite;
+    }
+
+    .connection-status.reconnecting {
+      background: var(--status-warning-bg);
+      color: var(--status-warning);
+    }
+
+    .connection-status .status-icon {
+      font-size: 10px;
+    }
+
+    .connection-status.reconnecting .status-icon {
+      animation: reconnectSpin 1s linear infinite;
+    }
+
+    /* Quick Filters */
+    .quick-filters {
+      display: flex;
+      gap: 8px;
+      padding: 8px 12px;
+      background: var(--bg-surface);
+      border-bottom: 1px solid var(--border-subtle);
+      flex-wrap: wrap;
+    }
+
+    .filter-btn {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      padding: 4px 10px;
+      border-radius: var(--radius-full);
+      font-size: 11px;
+      font-weight: 500;
+      border: 1px solid var(--border-default);
+      background: var(--bg-elevated);
+      color: var(--text-secondary);
+      cursor: pointer;
+      transition: all 0.2s ease;
+    }
+
+    .filter-btn:hover {
+      border-color: var(--accent-blue);
+      color: var(--text-primary);
+    }
+
+    .filter-btn.active {
+      background: var(--accent-blue);
+      border-color: var(--accent-blue);
+      color: white;
+    }
+
+    .filter-btn .filter-count {
+      background: rgba(255,255,255,0.2);
+      padding: 1px 5px;
+      border-radius: 8px;
+      font-size: 10px;
+    }
+
+    .filter-btn.active .filter-count {
+      background: rgba(255,255,255,0.3);
+    }
+
+    /* Last Updated Timestamp */
+    .last-updated {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 10px;
+      color: var(--text-muted);
+      padding: 4px 8px;
+      background: var(--bg-elevated);
+      border-radius: var(--radius-sm);
+    }
+
+    .last-updated .refresh-icon {
+      cursor: pointer;
+      transition: transform 0.3s ease;
+    }
+
+    .last-updated .refresh-icon:hover {
+      transform: rotate(180deg);
+    }
+
+    .last-updated .refresh-icon.spinning {
+      animation: reconnectSpin 1s linear infinite;
+    }
+
+    /* Floor Health Indicator */
+    .floor-health {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      font-size: 10px;
+      margin-top: 2px;
+    }
+
+    .floor-health-bar {
+      width: 40px;
+      height: 4px;
+      background: var(--bg-overlay);
+      border-radius: 2px;
+      overflow: hidden;
+    }
+
+    .floor-health-fill {
+      height: 100%;
+      border-radius: 2px;
+      transition: width 0.3s ease;
+    }
+
+    .floor-health-score {
+      font-weight: 600;
+      min-width: 28px;
+    }
+
+    /* Device Tags */
+    .device-tags {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 4px;
+      margin-top: 4px;
+    }
+
+    .device-tag {
+      display: inline-flex;
+      align-items: center;
+      gap: 3px;
+      padding: 2px 6px;
+      background: var(--bg-overlay);
+      border-radius: 10px;
+      font-size: 9px;
+      color: var(--text-secondary);
+      border: 1px solid var(--border-subtle);
+    }
+
+    .device-tag.editable {
+      cursor: pointer;
+    }
+
+    .device-tag.editable:hover {
+      background: var(--accent-blue);
+      color: white;
+      border-color: var(--accent-blue);
+    }
+
+    .device-tag .tag-remove {
+      cursor: pointer;
+      opacity: 0.6;
+      margin-left: 2px;
+    }
+
+    .device-tag .tag-remove:hover {
+      opacity: 1;
+    }
+
+    .tag-input {
+      padding: 2px 6px;
+      font-size: 9px;
+      border: 1px solid var(--accent-blue);
+      border-radius: 10px;
+      background: var(--bg-surface);
+      color: var(--text-primary);
+      outline: none;
+      width: 60px;
+    }
+
+    /* Utilization Chart */
+    .utilization-bar {
+      display: flex;
+      height: 20px;
+      gap: 1px;
+      border-radius: 4px;
+      overflow: hidden;
+      background: var(--bg-overlay);
+    }
+
+    .utilization-segment {
+      flex: 1;
+      transition: background 0.2s ease;
+    }
+
+    .utilization-legend {
+      display: flex;
+      justify-content: space-between;
+      font-size: 9px;
+      color: var(--text-muted);
+      margin-top: 4px;
+    }
+
+    /* Mobile Responsiveness */
+    @media (max-width: 768px) {
+      .header {
+        flex-direction: column;
+        gap: 8px;
+        padding: 8px;
+      }
+
+      .header-left, .header-right {
+        width: 100%;
+        justify-content: space-between;
+      }
+
+      .status-bar {
+        flex-wrap: wrap;
+        gap: 8px;
+      }
+
+      .global-search {
+        width: 100%;
+        max-width: none;
+      }
+
+      .header-actions {
+        flex-wrap: wrap;
+        justify-content: center;
+      }
+
+      .left-panel {
+        position: fixed;
+        left: -280px;
+        top: 60px;
+        bottom: 0;
+        width: 280px;
+        z-index: 100;
+        transition: left 0.3s ease;
+        background: var(--bg-surface);
+        border-right: 1px solid var(--border-default);
+      }
+
+      .left-panel.mobile-open {
+        left: 0;
+      }
+
+      .right-sidebar {
+        position: fixed;
+        right: -320px;
+        top: 60px;
+        bottom: 0;
+        width: 320px;
+        z-index: 100;
+        transition: right 0.3s ease;
+      }
+
+      .right-sidebar.mobile-open {
+        right: 0;
+      }
+
+      .map-container {
+        padding: 8px;
+      }
+
+      .floor-label {
+        font-size: 14px;
+        padding: 4px 8px;
+      }
+
+      .device-popup {
+        max-width: 200px;
+        font-size: 10px;
+      }
+
+      .analytics-sidebar {
+        width: 100%;
+        max-width: 100%;
+      }
+
+      .quick-filters {
+        flex-wrap: nowrap;
+        overflow-x: auto;
+        padding: 8px;
+        -webkit-overflow-scrolling: touch;
+      }
+
+      .filter-btn {
+        flex-shrink: 0;
+      }
+
+      .mobile-menu-btn {
+        display: flex;
+      }
+
+      .time-display {
+        display: none;
+      }
+
+      .last-updated {
+        display: none;
+      }
+    }
+
+    @media (min-width: 769px) {
+      .mobile-menu-btn {
+        display: none;
+      }
+
+      .mobile-overlay {
+        display: none !important;
+      }
+    }
+
+    .mobile-menu-btn {
+      display: none;
+      align-items: center;
+      justify-content: center;
+      width: 36px;
+      height: 36px;
+      border-radius: var(--radius-sm);
+      background: var(--bg-elevated);
+      border: 1px solid var(--border-default);
+      color: var(--text-primary);
+      cursor: pointer;
+      font-size: 18px;
+    }
+
+    .mobile-overlay {
+      display: none;
+      position: fixed;
+      inset: 0;
+      background: rgba(0, 0, 0, 0.5);
+      z-index: 99;
+    }
+
+    .mobile-overlay.active {
+      display: block;
+    }
+
+    /* Touch-friendly controls */
+    @media (pointer: coarse) {
+      .device-marker {
+        min-width: 32px;
+        min-height: 32px;
+      }
+
+      .device-dot {
+        width: 28px;
+        height: 28px;
+      }
+
+      .btn, .header-btn, .filter-btn {
+        min-height: 40px;
+        padding: 8px 12px;
+      }
+
+      .floor-item {
+        padding: 12px;
+      }
+    }
+
     /* Animated Status Classes */
     .status-animated.online {
       animation: onlineGlow 3s ease-in-out infinite;
@@ -903,6 +1387,10 @@
     .popup-name {
       font-size: var(--text-body);
       font-weight: 600;
+      max-width: 150px;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
     }
 
     .popup-type {
@@ -2184,6 +2672,15 @@
       pointer-events: none;
     }
 
+    .room-borders-overlay .room-label-group {
+      pointer-events: auto;
+      cursor: pointer;
+    }
+
+    .room-borders-overlay .room-label-group:hover .room-label-bg {
+      fill: rgba(59, 130, 246, 0.8);
+    }
+
     .excluded-zones-overlay {
       position: absolute;
       left: 0;
@@ -2204,10 +2701,11 @@
       font-size: 10px;
       font-weight: 500;
       white-space: nowrap;
+      max-width: 100px;
+      overflow: hidden;
+      text-overflow: ellipsis;
       pointer-events: auto;
       cursor: pointer;
-      transition: background 0.2s, transform 0.1s;
-      border: 1px solid rgba(255, 255, 255, 0.2);
     }
 
     .room-label:hover {
@@ -2514,6 +3012,7 @@
 
     .device-status-dot.up, .device-status-dot.online { background: var(--status-online); }
     .device-status-dot.down, .device-status-dot.offline { background: var(--status-offline); animation: pulse 1.5s infinite; }
+    .device-status-dot.warning { background: var(--status-warning); animation: pulse 2s infinite; }
     .device-status-dot.maintenance { background: var(--status-warning); }
 
     .device-info {
@@ -2669,7 +3168,7 @@
     }
 
     .popup-icon { font-size: var(--text-title); }
-    .popup-name { font-size: var(--text-body); font-weight: 600; }
+    .popup-name { font-size: var(--text-body); font-weight: 600; max-width: 150px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
     .popup-details { padding: var(--space-md); }
 
     .popup-row {
@@ -3510,6 +4009,10 @@
       font-size: 10px;
       font-weight: 600;
       border-radius: 4px;
+      max-width: 120px;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
     }
 
     .zone-editor-toolbar {
@@ -3919,10 +4422,12 @@
     // Data stores
     let uptimeKumaData = {};
     let polyLensData = {};
+    let zoomOnlyRooms = {}; // Zoom rooms without Poly devices, by floor
     let printerStatusData = {}; // Store printer toner/paper status by monitor ID
     let apiStatus = {
       uptimeKuma: { connected: false, monitorCount: 0 },
-      polyLens: { configured: false, deviceCount: 0 }
+      polyLens: { configured: false, deviceCount: 0 },
+      zoomRooms: { configured: false, roomCount: 0 }
     };
     let lastFetchError = null;
     let activeFloor = "1st Floor";
@@ -3968,6 +4473,22 @@
     let ws = null;
     let wsConnected = false;
     let wsReconnectTimer = null;
+    let wsReconnectAttempts = 0;
+    let wsReconnecting = false;
+
+    // Quick filter state
+    let activeFilters = {
+      offlineOnly: false,
+      lowToner: false,
+      inMeeting: false
+    };
+
+    // Last updated state
+    let lastDataUpdate = null;
+    let isRefreshing = false;
+
+    // Floor transition state
+    let isFloorTransitioning = false;
 
     // Notifications state
     let unreadNotifications = 0;
@@ -3982,6 +4503,9 @@
     }
 
     // Login function
+    let pendingApprovalToken = null;
+    let approvalCheckInterval = null;
+
     async function login(username, password) {
       try {
         const response = await fetch(`${API_URL}/api/auth/login`, {
@@ -3999,6 +4523,18 @@
           localStorage.setItem('currentUser', JSON.stringify(currentUser));
           loginError = '';
           renderApp();
+
+          // Check if password reset is required - show modal after render
+          if (data.user.password_reset_required) {
+            setTimeout(() => {
+              showChangePasswordModal(true);
+            }, 500);
+          }
+        } else if (data.requires_slack_approval) {
+          // Slack 2FA - show waiting screen and poll for approval
+          pendingApprovalToken = data.pending_token;
+          showSlackApprovalWaiting(username);
+          startApprovalPolling();
         } else {
           loginError = data.error || 'Login failed';
           renderLogin();
@@ -4007,6 +4543,123 @@
         loginError = 'Connection error. Please try again.';
         renderLogin();
       }
+    }
+
+    // Show Slack 2FA approval waiting screen
+    function showSlackApprovalWaiting(username) {
+      document.getElementById('app').innerHTML = `
+        <div class="login-page">
+          <div class="login-container" style="text-align: center;">
+            <div class="login-logo">
+              <div class="login-logo-icon">🔔</div>
+              <div class="login-logo-title">Awaiting Approval</div>
+            </div>
+            <div class="approval-spinner" style="margin: 24px 0;">
+              <svg width="48" height="48" viewBox="0 0 48 48" style="animation: spin 1.5s linear infinite;">
+                <circle cx="24" cy="24" r="20" fill="none" stroke="var(--border-default)" stroke-width="4"></circle>
+                <circle cx="24" cy="24" r="20" fill="none" stroke="var(--accent-blue)" stroke-width="4"
+                        stroke-linecap="round" stroke-dasharray="80" stroke-dashoffset="60"></circle>
+              </svg>
+            </div>
+            <p style="color: var(--text-secondary); font-size: 14px; margin-bottom: 8px;">
+              A login approval request has been sent to Slack.
+            </p>
+            <p style="color: var(--text-muted); font-size: 13px; margin-bottom: 24px;">
+              Waiting for an administrator to approve your login as <strong style="color: var(--text-primary);">${username}</strong>
+            </p>
+            <div id="approval-status" style="padding: 12px; background: var(--bg-elevated); border-radius: 8px; margin-bottom: 16px;">
+              <span style="color: var(--status-warning);">⏳ Pending approval...</span>
+            </div>
+            <button onclick="cancelSlackApproval()" class="login-btn" style="background: var(--bg-elevated); border: 1px solid var(--border-default);">
+              Cancel
+            </button>
+          </div>
+        </div>
+        <style>
+          @keyframes spin {
+            from { transform: rotate(0deg); }
+            to { transform: rotate(360deg); }
+          }
+        </style>
+      `;
+    }
+
+    // Start polling for approval status
+    function startApprovalPolling() {
+      if (approvalCheckInterval) {
+        clearInterval(approvalCheckInterval);
+      }
+
+      approvalCheckInterval = setInterval(async () => {
+        if (!pendingApprovalToken) {
+          clearInterval(approvalCheckInterval);
+          return;
+        }
+
+        try {
+          const response = await fetch(`${API_URL}/api/auth/check-login-status/${pendingApprovalToken}`);
+          const data = await response.json();
+
+          if (data.status === 'approved' && data.token) {
+            // Login approved!
+            clearInterval(approvalCheckInterval);
+            pendingApprovalToken = null;
+
+            authToken = data.token;
+            currentUser = data.user;
+            localStorage.setItem('authToken', authToken);
+            localStorage.setItem('currentUser', JSON.stringify(currentUser));
+            loginError = '';
+
+            // Update status before redirecting
+            const statusEl = document.getElementById('approval-status');
+            if (statusEl) {
+              statusEl.innerHTML = '<span style="color: var(--status-online);">✓ Approved! Logging in...</span>';
+            }
+
+            setTimeout(() => {
+              renderApp();
+              // Check if password reset is required
+              if (data.user && data.user.password_reset_required) {
+                setTimeout(() => showChangePasswordModal(true), 500);
+              }
+            }, 1000);
+          } else if (data.status === 'denied') {
+            // Login denied
+            clearInterval(approvalCheckInterval);
+            pendingApprovalToken = null;
+
+            const statusEl = document.getElementById('approval-status');
+            if (statusEl) {
+              statusEl.innerHTML = '<span style="color: var(--status-offline);">✕ Login denied by administrator</span>';
+            }
+
+            setTimeout(() => {
+              loginError = 'Login was denied by an administrator';
+              renderLogin();
+            }, 2000);
+          } else if (data.status === 'expired') {
+            // Request expired
+            clearInterval(approvalCheckInterval);
+            pendingApprovalToken = null;
+            loginError = 'Login approval request expired. Please try again.';
+            renderLogin();
+          }
+        } catch (e) {
+          console.error('Error checking approval status:', e);
+        }
+      }, 2000); // Check every 2 seconds
+    }
+
+    // Cancel Slack approval and go back to login
+    function cancelSlackApproval() {
+      if (approvalCheckInterval) {
+        clearInterval(approvalCheckInterval);
+        approvalCheckInterval = null;
+      }
+      pendingApprovalToken = null;
+      loginError = '';
+      renderLogin();
     }
 
     // Logout function
@@ -4062,9 +4715,151 @@
               <input type="password" id="login-password" class="login-input" placeholder="Password" required>
               <button type="submit" class="login-btn">Sign In</button>
             </form>
+            <div style="margin-top: 16px; text-align: center;">
+              <a href="#" onclick="showForgotPassword(); return false;" style="color: var(--accent-blue); font-size: 13px; text-decoration: none;">Forgot Password?</a>
+            </div>
           </div>
         </div>
       `;
+    }
+
+    // Forgot password UI
+    function showForgotPassword() {
+      loginError = '';
+      document.getElementById('app').innerHTML = `
+        <div class="login-page">
+          <div class="login-container">
+            <div class="login-logo">
+              <div class="login-logo-icon">🔐</div>
+              <div class="login-logo-title">Reset Password</div>
+            </div>
+            <p style="color: var(--text-secondary); font-size: 13px; margin-bottom: 16px; text-align: center;">
+              Enter your username and a password reset will be initiated. An admin will be notified via Slack.
+            </p>
+            <form class="login-form" onsubmit="handleForgotPassword(event)">
+              <input type="text" id="forgot-username" class="login-input" placeholder="Username" required autofocus>
+              <button type="submit" class="login-btn">Request Reset</button>
+            </form>
+            <div style="margin-top: 16px; text-align: center;">
+              <a href="#" onclick="renderLogin(); return false;" style="color: var(--text-secondary); font-size: 13px; text-decoration: none;">← Back to Login</a>
+            </div>
+          </div>
+        </div>
+      `;
+    }
+
+    // Handle forgot password submission
+    async function handleForgotPassword(event) {
+      event.preventDefault();
+      const username = document.getElementById('forgot-username').value;
+
+      try {
+        const response = await fetch(`${API_URL}/api/auth/forgot-password`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ username })
+        });
+
+        const data = await response.json();
+
+        document.getElementById('app').innerHTML = `
+          <div class="login-page">
+            <div class="login-container">
+              <div class="login-logo">
+                <div class="login-logo-icon">✅</div>
+                <div class="login-logo-title">Request Sent</div>
+              </div>
+              <p style="color: var(--text-secondary); font-size: 13px; margin-bottom: 16px; text-align: center;">
+                If the username exists, a password reset has been initiated. An admin has been notified. Please try logging in with the temporary password.
+              </p>
+              <button class="login-btn" onclick="renderLogin()">Back to Login</button>
+            </div>
+          </div>
+        `;
+      } catch (e) {
+        showAlert('Connection error. Please try again.', 'error');
+        showForgotPassword();
+      }
+    }
+
+    // Show change password modal
+    function showChangePasswordModal(required = false) {
+      document.getElementById('modal-container').innerHTML = `
+        <div class="modal open" ${required ? '' : 'onclick="if(event.target === this) closeChangePasswordModal()"'}>
+          <div class="modal-content" style="max-width: 400px;">
+            <div class="modal-header">
+              <h3 class="modal-title">🔐 ${required ? 'Password Change Required' : 'Change Password'}</h3>
+              ${required ? '' : '<button class="admin-close" onclick="closeChangePasswordModal()">&times;</button>'}
+            </div>
+            ${required ? `
+              <div style="padding: 12px 16px; background: var(--status-warning-bg); color: var(--status-warning); font-size: 13px; border-bottom: 1px solid var(--border-subtle);">
+                Your password has been reset. Please create a new password to continue.
+              </div>
+            ` : ''}
+            <form onsubmit="handleChangePassword(event, ${required})" style="padding: 16px;">
+              <div style="margin-bottom: 12px;">
+                <label style="display: block; font-size: 12px; color: var(--text-secondary); margin-bottom: 4px;">Current Password</label>
+                <input type="password" id="current-password" class="login-input" style="width: 100%;" required>
+              </div>
+              <div style="margin-bottom: 12px;">
+                <label style="display: block; font-size: 12px; color: var(--text-secondary); margin-bottom: 4px;">New Password</label>
+                <input type="password" id="new-password" class="login-input" style="width: 100%;" required minlength="6">
+              </div>
+              <div style="margin-bottom: 16px;">
+                <label style="display: block; font-size: 12px; color: var(--text-secondary); margin-bottom: 4px;">Confirm New Password</label>
+                <input type="password" id="confirm-password" class="login-input" style="width: 100%;" required minlength="6">
+              </div>
+              <button type="submit" class="login-btn" style="width: 100%;">Change Password</button>
+            </form>
+          </div>
+        </div>
+      `;
+    }
+
+    function closeChangePasswordModal() {
+      document.getElementById('modal-container').innerHTML = '';
+    }
+
+    // Handle change password submission
+    async function handleChangePassword(event, required = false) {
+      event.preventDefault();
+      const currentPassword = document.getElementById('current-password').value;
+      const newPassword = document.getElementById('new-password').value;
+      const confirmPassword = document.getElementById('confirm-password').value;
+
+      if (newPassword !== confirmPassword) {
+        showAlert('New passwords do not match', 'error');
+        return;
+      }
+
+      if (newPassword.length < 6) {
+        showAlert('Password must be at least 6 characters', 'error');
+        return;
+      }
+
+      try {
+        const response = await authFetch(`${API_URL}/api/auth/change-password`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ current_password: currentPassword, new_password: newPassword })
+        });
+
+        const data = await response.json();
+
+        if (data.success) {
+          closeChangePasswordModal();
+          showAlert('Password changed successfully!', 'success');
+          // Update user state to reflect password is no longer reset required
+          if (currentUser) {
+            currentUser.password_reset_required = false;
+            localStorage.setItem('currentUser', JSON.stringify(currentUser));
+          }
+        } else {
+          showAlert(data.error || 'Failed to change password', 'error');
+        }
+      } catch (e) {
+        showAlert('Connection error. Please try again.', 'error');
+      }
     }
 
     // Check if user is admin
@@ -4096,6 +4891,29 @@
           }
         }
 
+        // Fetch Zoom-only rooms (rooms without Poly devices)
+        const zoomResponse = await fetch(`${API_URL}/api/zoom-rooms/unmatched`);
+        if (zoomResponse.ok) {
+          const zoomData = await zoomResponse.json();
+          if (zoomData.success) {
+            // Group unmatched rooms by floor
+            zoomOnlyRooms = {};
+            (zoomData.rooms || []).forEach(room => {
+              const floor = room.floor || 'Floor 5';
+              const floorNum = floor.replace('Floor ', '');
+              const floorKey = floorNum + (['1','2','3'].includes(floorNum)
+                ? (floorNum === '1' ? 'st' : floorNum === '2' ? 'nd' : 'rd')
+                : 'th') + ' Floor';
+              if (!zoomOnlyRooms[floorKey]) {
+                zoomOnlyRooms[floorKey] = [];
+              }
+              zoomOnlyRooms[floorKey].push(room);
+            });
+            apiStatus.zoomRooms.configured = true;
+            apiStatus.zoomRooms.roomCount = zoomData.count;
+          }
+        }
+
         // Fetch health for counts
         const healthResponse = await fetch(`${API_URL}/api/health`);
         if (healthResponse.ok) {
@@ -4111,6 +4929,7 @@
         await fetchPrinterStatus();
 
         lastFetchError = null;
+        lastDataUpdate = new Date();
       } catch (error) {
         console.error('Failed to fetch data:', error);
         lastFetchError = error.message;
@@ -4120,7 +4939,8 @@
     const deviceTypes = {
       accessPoints: { icon: "📡", label: "Access Points", color: "#3B82F6" },
       printers: { icon: "🖨️", label: "Printers", color: "#8B5CF6" },
-      polyLens: { icon: "📹", label: "Zoom Rooms", color: "#F59E0B" }
+      polyLens: { icon: "📹", label: "Zoom Rooms", color: "#F59E0B" },
+      zoomOnly: { icon: "🎥", label: "Zoom Room", color: "#06B6D4" }
     };
 
     const statusColors = {
@@ -5001,6 +5821,7 @@
         <div class="admin-tab ${adminTab === 'floors' ? 'active' : ''}" onclick="setAdminTab('floors')" data-tab="floors">Floor Plans</div>
       `;
       if (isAdmin()) {
+        tabsHtml += `<div class="admin-tab ${adminTab === 'users' ? 'active' : ''}" onclick="setAdminTab('users')" data-tab="users">2FA</div>`;
         tabsHtml += `<div class="admin-tab ${adminTab === 'approvals' ? 'active' : ''}" onclick="setAdminTab('approvals')" data-tab="approvals">
           Approvals${pendingChangesCount > 0 ? `<span class="pending-badge">${pendingChangesCount}</span>` : ''}
         </div>`;
@@ -5210,6 +6031,21 @@
             }).join('')}
           </div>
         `;
+      } else if (adminTab === 'users' && isAdmin()) {
+        content = `
+          <div class="admin-section">
+            <h3 class="admin-section-title">User Management</h3>
+            <p style="color: var(--text-secondary); font-size: 13px; margin-bottom: 16px;">
+              Manage user accounts and security settings. Enable Slack 2FA to require admin approval for logins.
+            </p>
+            <button class="btn btn-primary btn-sm" onclick="openCreateUserModal()" style="margin-bottom: 16px;">+ Add User</button>
+            <div id="users-list">
+              <p style="color: var(--text-muted); text-align: center; padding: 20px;">Loading users...</p>
+            </div>
+          </div>
+        `;
+        // Load users after render
+        setTimeout(loadUsers, 0);
       } else if (adminTab === 'approvals' && isAdmin()) {
         content = `
           <div class="admin-section">
@@ -5290,6 +6126,241 @@
         }
       } catch (e) {
         showAlert('Failed to reject change', 'error');
+      }
+    }
+
+    // ==================== USER MANAGEMENT ====================
+    let allUsers = [];
+
+    async function loadUsers() {
+      try {
+        const response = await authFetch(`${API_URL}/api/users`);
+        const data = await response.json();
+
+        if (!data.success) {
+          throw new Error(data.error || 'Failed to load users');
+        }
+
+        allUsers = data.users || [];
+        renderUsersList();
+      } catch (e) {
+        console.error('Failed to load users:', e);
+        const container = document.getElementById('users-list');
+        if (container) {
+          container.innerHTML = '<p style="color: var(--status-offline); text-align: center; padding: 20px;">Failed to load users</p>';
+        }
+      }
+    }
+
+    function renderUsersList() {
+      const container = document.getElementById('users-list');
+      if (!container) return;
+
+      if (allUsers.length === 0) {
+        container.innerHTML = '<p style="color: var(--text-muted); text-align: center; padding: 20px;">No users found</p>';
+        return;
+      }
+
+      container.innerHTML = allUsers.map(user => `
+        <div class="device-item" style="margin-bottom: 12px;">
+          <div class="device-info">
+            <div class="device-name">
+              <span style="color: var(--accent-blue);">👤</span>
+              ${user.username}
+              ${user.id === currentUser.id ? '<span style="font-size: 11px; color: var(--text-muted); margin-left: 8px;">(you)</span>' : ''}
+            </div>
+            <div class="device-meta">
+              Role: <strong>${user.role}</strong> ·
+              Created: ${formatIsraelTime(user.created_at)}
+              ${user.slack_2fa_enabled ? '· <span style="color: var(--status-online);">🔐 Slack 2FA enabled</span>' : ''}
+            </div>
+          </div>
+          <div class="device-actions" style="display: flex; align-items: center; gap: 12px;">
+            <label class="toggle-switch" title="${user.slack_2fa_enabled ? 'Disable' : 'Enable'} Slack 2FA">
+              <input type="checkbox" ${user.slack_2fa_enabled ? 'checked' : ''}
+                onchange="toggleSlack2FA(${user.id}, this.checked)"
+                ${user.id === currentUser.id ? 'disabled title="Cannot change your own 2FA setting"' : ''}>
+              <span class="toggle-slider"></span>
+            </label>
+            <span style="font-size: 11px; color: var(--text-muted); min-width: 60px;">Slack 2FA</span>
+            ${user.id !== currentUser.id ? `
+              <button class="btn btn-secondary btn-sm" onclick="resetUserPassword(${user.id}, '${user.username}')">🔑 Reset</button>
+              <button class="btn btn-danger btn-sm" onclick="deleteUser(${user.id}, '${user.username}')">🗑️</button>
+            ` : ''}
+          </div>
+        </div>
+      `).join('');
+    }
+
+    async function toggleSlack2FA(userId, enabled) {
+      try {
+        const response = await authFetch(`${API_URL}/api/users/${userId}/slack-2fa`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ enabled })
+        });
+
+        const data = await response.json();
+
+        if (data.success) {
+          showAlert(`Slack 2FA ${enabled ? 'enabled' : 'disabled'} successfully`, 'success');
+          // Update local state
+          const userIndex = allUsers.findIndex(u => u.id === userId);
+          if (userIndex !== -1) {
+            allUsers[userIndex].slack_2fa_enabled = enabled ? 1 : 0;
+          }
+        } else {
+          throw new Error(data.error || 'Failed to toggle Slack 2FA');
+        }
+      } catch (e) {
+        showAlert('Failed to toggle Slack 2FA: ' + e.message, 'error');
+        // Reload to reset checkbox state
+        loadUsers();
+      }
+    }
+
+    async function deleteUser(userId, username) {
+      if (!confirm(`Are you sure you want to delete user "${username}"? This cannot be undone.`)) {
+        return;
+      }
+
+      try {
+        const response = await authFetch(`${API_URL}/api/users/${userId}`, {
+          method: 'DELETE'
+        });
+
+        const data = await response.json();
+
+        if (data.success) {
+          showAlert(`User "${username}" deleted successfully`, 'success');
+          loadUsers();
+        } else {
+          throw new Error(data.error || 'Failed to delete user');
+        }
+      } catch (e) {
+        showAlert('Failed to delete user: ' + e.message, 'error');
+      }
+    }
+
+    async function resetUserPassword(userId, username) {
+      if (!confirm(`Reset password for "${username}" to "ob123456"? They will be required to change it on next login.`)) {
+        return;
+      }
+
+      try {
+        const response = await authFetch(`${API_URL}/api/users/${userId}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ password: 'ob123456', role: allUsers.find(u => u.id === userId)?.role || 'user' })
+        });
+
+        const data = await response.json();
+
+        if (data.success) {
+          // Also mark password reset required
+          await authFetch(`${API_URL}/api/auth/admin-password-reset/${userId}`, {
+            method: 'POST'
+          }).catch(() => {});
+
+          showAlert(`Password for "${username}" has been reset to "ob123456"`, 'success');
+        } else {
+          throw new Error(data.error || 'Failed to reset password');
+        }
+      } catch (e) {
+        showAlert('Failed to reset password: ' + e.message, 'error');
+      }
+    }
+
+    function openCreateUserModal() {
+      const modal = document.createElement('div');
+      modal.className = 'modal-overlay';
+      modal.id = 'create-user-modal';
+      modal.innerHTML = `
+        <div class="modal" style="max-width: 400px;">
+          <div class="modal-header">
+            <h3>Create New User</h3>
+            <button class="modal-close" onclick="closeCreateUserModal()">×</button>
+          </div>
+          <div class="modal-content">
+            <div class="form-group">
+              <label class="form-label">Username</label>
+              <input type="text" class="form-input" id="new-user-username" placeholder="Enter username" required>
+            </div>
+            <div class="form-group">
+              <label class="form-label">Password</label>
+              <input type="password" class="form-input" id="new-user-password" placeholder="Enter password (min 6 chars)" required>
+            </div>
+            <div class="form-group">
+              <label class="form-label">Role</label>
+              <select class="form-select" id="new-user-role">
+                <option value="user">User</option>
+                <option value="admin">Admin</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label class="form-label" style="display: flex; align-items: center; gap: 12px;">
+                <input type="checkbox" id="new-user-slack-2fa">
+                Enable Slack 2FA (require login approval)
+              </label>
+            </div>
+          </div>
+          <div class="modal-footer">
+            <button class="btn btn-secondary" onclick="closeCreateUserModal()">Cancel</button>
+            <button class="btn btn-primary" onclick="createUser()">Create User</button>
+          </div>
+        </div>
+      `;
+      document.body.appendChild(modal);
+    }
+
+    function closeCreateUserModal() {
+      const modal = document.getElementById('create-user-modal');
+      if (modal) modal.remove();
+    }
+
+    async function createUser() {
+      const username = document.getElementById('new-user-username').value.trim();
+      const password = document.getElementById('new-user-password').value;
+      const role = document.getElementById('new-user-role').value;
+      const slack2fa = document.getElementById('new-user-slack-2fa').checked;
+
+      if (!username || !password) {
+        showAlert('Username and password are required', 'error');
+        return;
+      }
+
+      if (password.length < 6) {
+        showAlert('Password must be at least 6 characters', 'error');
+        return;
+      }
+
+      try {
+        const response = await authFetch(`${API_URL}/api/users`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ username, password, role })
+        });
+
+        const data = await response.json();
+
+        if (data.success) {
+          // If Slack 2FA should be enabled, do that now
+          if (slack2fa && data.id) {
+            await authFetch(`${API_URL}/api/users/${data.id}/slack-2fa`, {
+              method: 'PATCH',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ enabled: true })
+            }).catch(() => {});
+          }
+
+          showAlert(`User "${username}" created successfully`, 'success');
+          closeCreateUserModal();
+          loadUsers();
+        } else {
+          throw new Error(data.error || 'Failed to create user');
+        }
+      } catch (e) {
+        showAlert('Failed to create user: ' + e.message, 'error');
       }
     }
 
@@ -5615,6 +6686,279 @@
       renderAnalyticsSidebar(false);
     }
 
+    // Open details for Zoom-only room (no Poly device)
+    async function openZoomRoomDetails(roomId, roomName) {
+      // Clear any existing refresh interval
+      if (analyticsRefreshInterval) {
+        clearInterval(analyticsRefreshInterval);
+        analyticsRefreshInterval = null;
+      }
+
+      // Find the room data from zoomOnlyRooms or fetch fresh data
+      let roomData = null;
+      Object.values(zoomOnlyRooms).forEach(rooms => {
+        const found = rooms.find(r => r.id === roomId);
+        if (found) roomData = found;
+      });
+
+      // If not found in zoomOnlyRooms, try to fetch from all zoom rooms
+      if (!roomData) {
+        try {
+          const response = await fetch(`${API_URL}/api/zoom-rooms`);
+          if (response.ok) {
+            const data = await response.json();
+            roomData = data.rooms?.find(r => r.id === roomId);
+          }
+        } catch (e) {
+          console.error('Failed to fetch Zoom room data:', e);
+        }
+      }
+
+      if (!roomData) return;
+
+      // Show in right sidebar using the standard analytics container
+      analyticsOpen = true;
+      analyticsDevice = { id: roomId, name: roomName, type: 'zoomRoom', isRoom: true, isZoomOnly: true };
+
+      // Mark device as selected in sidebar
+      markDeviceSelected(roomId);
+
+      const statusColor = roomData.zoom_status === 'Available' ? 'var(--status-online)' :
+                          roomData.zoom_status === 'InMeeting' ? 'var(--status-warning)' :
+                          'var(--status-offline)';
+      const statusText = roomData.zoom_status === 'Available' ? 'Available' :
+                         roomData.zoom_status === 'InMeeting' ? 'In Meeting' :
+                         roomData.zoom_status === 'Offline' ? 'Offline' :
+                         roomData.zoom_status || 'Unknown';
+
+      const devices = roomData.zoom_devices || [];
+      const onlineDevices = devices.filter(d => d.status === 'Online').length;
+      const totalDevices = devices.length;
+
+      // Fetch uptime history if available
+      let uptimeData = null;
+      try {
+        const uptimeResponse = await fetch(`${API_URL}/api/zoom-rooms/${roomId}/history`);
+        if (uptimeResponse.ok) {
+          uptimeData = await uptimeResponse.json();
+        }
+      } catch (e) {
+        // Uptime history not available yet
+      }
+
+      // Fetch meeting utilization data
+      const utilizationData = await fetchRoomUtilization(roomId);
+
+      const uptimePercent = uptimeData?.uptime_percent ?? null;
+      const historyData = uptimeData?.history || [];
+
+      // Build uptime bar from history (last 24 hours)
+      let uptimeBarHTML = '';
+      if (historyData.length > 0) {
+        const segments = [];
+        const now = new Date();
+        for (let i = 47; i >= 0; i--) {
+          const segmentEnd = new Date(now - i * 30 * 60 * 1000);
+          const segmentStart = new Date(segmentEnd - 30 * 60 * 1000);
+
+          const segmentRecords = historyData.filter(h => {
+            const time = new Date(h.time);
+            return time >= segmentStart && time < segmentEnd;
+          });
+
+          let status = 'unknown';
+          if (segmentRecords.length > 0) {
+            const anyDown = segmentRecords.some(h => h.status === 'Offline');
+            status = anyDown ? 'down' : 'up';
+          }
+          segments.push({ status, time: segmentStart });
+        }
+
+        uptimeBarHTML = `
+          <div class="uptime-bar" style="display: flex; height: 24px; gap: 1px; border-radius: 4px; overflow: hidden; margin-bottom: 8px;">
+            ${segments.map((s, i) => `
+              <div style="flex: 1; background: ${s.status === 'up' ? 'var(--status-online)' : s.status === 'down' ? 'var(--status-offline)' : 'var(--bg-overlay)'};"
+                   title="${s.time.toLocaleTimeString()} - ${s.status}"></div>
+            `).join('')}
+          </div>
+          <div style="display: flex; justify-content: space-between; font-size: 10px; color: var(--text-muted);">
+            <span>24h ago</span>
+            <span>Now</span>
+          </div>
+        `;
+      }
+
+      // Render in the standard analytics container
+      document.getElementById('analytics-container').innerHTML = `
+        <div class="analytics-overlay ${analyticsOpen ? 'open' : ''}" onclick="closeAnalytics()"></div>
+        <div class="analytics-sidebar ${analyticsOpen ? 'open' : ''}">
+          <div class="analytics-header">
+            <div class="analytics-header-top">
+              <div>
+                <h2 class="analytics-title">🎥 ${roomName}</h2>
+                <p class="analytics-subtitle">Zoom Room • ${roomData.floor || 'Unknown Floor'}</p>
+              </div>
+              <button class="analytics-close" onclick="closeAnalytics()">&times;</button>
+            </div>
+            <div class="analytics-status ${roomData.zoom_status === 'Available' ? 'up' : roomData.zoom_status === 'InMeeting' ? 'warning' : 'down'}">
+              <span style="font-size: 10px;">●</span>
+              ${statusText}
+              ${roomData.zoom_in_meeting ? ' • 📞 In Call' : ''}
+            </div>
+          </div>
+
+          <div class="analytics-actions" style="display: flex; gap: 8px; padding: 12px 16px; border-bottom: 1px solid var(--border-subtle); flex-wrap: wrap;">
+            <button onclick="highlightDevice('zoom-${roomId}')" class="btn btn-sm btn-secondary" style="flex: 1; min-width: 100px;">
+              📍 Locate on Map
+            </button>
+            <button onclick="navigator.clipboard.writeText('${roomData.zoom_serial || ''}'); showAlert('Serial copied!', 'success');" class="btn btn-sm btn-secondary" style="flex: 1; min-width: 100px;" ${!roomData.zoom_serial ? 'disabled' : ''}>
+              📋 Copy Serial
+            </button>
+          </div>
+
+          <div class="analytics-content">
+            <div class="analytics-section">
+              <div class="analytics-section-title">24h Uptime</div>
+              ${uptimeBarHTML || '<div style="color: var(--text-muted); font-size: 12px;">No history data yet</div>'}
+              <div class="stats-grid" style="margin-top: 12px;">
+                <div class="stat-card">
+                  <div class="stat-value ${uptimePercent !== null && uptimePercent >= 99 ? 'green' : uptimePercent !== null && uptimePercent >= 90 ? 'yellow' : 'red'}">${uptimePercent !== null ? uptimePercent.toFixed(1) + '%' : '--'}</div>
+                  <div class="stat-label">Uptime</div>
+                </div>
+                <div class="stat-card">
+                  <div class="stat-value ${onlineDevices === totalDevices ? 'green' : 'yellow'}">${onlineDevices}/${totalDevices}</div>
+                  <div class="stat-label">Devices</div>
+                </div>
+                <div class="stat-card">
+                  <div class="stat-value" style="color: ${roomData.zoom_health === 'Good' || roomData.zoom_health === 'Healthy' ? 'var(--status-online)' : 'var(--text-muted)'};">${roomData.zoom_health || 'Unknown'}</div>
+                  <div class="stat-label">Health</div>
+                </div>
+              </div>
+            </div>
+
+            <div class="analytics-section">
+              <div class="analytics-section-title">📅 Meeting Utilization (7 Days)</div>
+              ${utilizationData && utilizationData.daily_stats ? `
+                ${renderUtilizationChart(utilizationData.daily_stats)}
+                <div class="stats-grid" style="margin-top: 12px;">
+                  <div class="stat-card">
+                    <div class="stat-value" style="color: ${utilizationData.avg_utilization > 70 ? 'var(--status-offline)' : utilizationData.avg_utilization > 40 ? 'var(--status-warning)' : 'var(--status-online)'};">${utilizationData.avg_utilization?.toFixed(0) || 0}%</div>
+                    <div class="stat-label">Avg Utilization</div>
+                  </div>
+                  <div class="stat-card">
+                    <div class="stat-value" style="color: var(--accent-primary);">${utilizationData.total_meetings || 0}</div>
+                    <div class="stat-label">Total Meetings</div>
+                  </div>
+                  <div class="stat-card">
+                    <div class="stat-value">${Math.round((utilizationData.total_meeting_minutes || 0) / 60)}h</div>
+                    <div class="stat-label">Meeting Hours</div>
+                  </div>
+                </div>
+              ` : '<div style="color: var(--text-muted); font-size: 12px;">No utilization data yet</div>'}
+            </div>
+
+            ${devices.length > 0 ? `
+            <div class="analytics-section">
+              <div class="analytics-section-title">Devices (${devices.length})</div>
+              <div style="display: flex; flex-direction: column; gap: 8px;">
+                ${devices.map(dev => `
+                  <div style="background: ${dev.status === 'Online' ? 'rgba(34, 197, 94, 0.1)' : 'rgba(239, 68, 68, 0.1)'}; border: 1px solid ${dev.status === 'Online' ? 'rgba(34, 197, 94, 0.2)' : 'rgba(239, 68, 68, 0.2)'}; border-radius: 6px; padding: 10px;">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
+                      <span style="font-weight: 600; color: ${dev.status === 'Online' ? '#86EFAC' : '#FCA5A5'};">${dev.device_model || dev.device_type || 'Unknown Device'}</span>
+                      <span style="padding: 2px 8px; border-radius: 4px; font-size: 10px; background: ${dev.status === 'Online' ? '#22C55E' : '#EF4444'}; color: white;">${dev.status || 'Unknown'}</span>
+                    </div>
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 4px; font-size: 11px;">
+                      <div>
+                        <span style="color: #64748B;">Type:</span>
+                        <span style="color: #94A3B8; margin-left: 4px;">${dev.device_type || 'Unknown'}</span>
+                      </div>
+                      ${dev.ip_address ? `
+                      <div>
+                        <span style="color: #64748B;">IP:</span>
+                        <span style="color: #60A5FA; margin-left: 4px;">${dev.ip_address}</span>
+                      </div>
+                      ` : ''}
+                      ${dev.serial_number ? `
+                      <div style="grid-column: span 2;">
+                        <span style="color: #64748B;">Serial:</span>
+                        <span style="color: #94A3B8; margin-left: 4px; font-family: monospace;">${dev.serial_number}</span>
+                      </div>
+                      ` : ''}
+                      ${dev.device_firmware ? `
+                      <div style="grid-column: span 2;">
+                        <span style="color: #64748B;">Firmware:</span>
+                        <span style="color: #94A3B8; margin-left: 4px;">${dev.device_firmware}</span>
+                      </div>
+                      ` : ''}
+                    </div>
+                  </div>
+                `).join('')}
+              </div>
+            </div>
+            ` : ''}
+
+            <div class="analytics-section">
+              <div class="analytics-section-title">Room Info</div>
+              <div style="display: flex; flex-direction: column; gap: 8px; font-size: 12px;">
+                <div style="display: flex; justify-content: space-between;">
+                  <span style="color: var(--text-muted);">Full Name</span>
+                  <span style="color: var(--text-primary);">${roomData.name}</span>
+                </div>
+                <div style="display: flex; justify-content: space-between;">
+                  <span style="color: var(--text-muted);">Display Name</span>
+                  <span style="color: var(--text-primary);">${roomData.displayName}</span>
+                </div>
+                <div style="display: flex; justify-content: space-between;">
+                  <span style="color: var(--text-muted);">Floor</span>
+                  <span style="color: var(--text-primary);">${roomData.floor || 'Unknown'}</span>
+                </div>
+                <div style="display: flex; justify-content: space-between;">
+                  <span style="color: var(--text-muted);">Room ID</span>
+                  <span style="color: var(--text-primary); font-size: 10px; font-family: monospace;">${roomData.room_id || roomData.id}</span>
+                </div>
+                ${roomData.location ? `
+                <div style="display: flex; justify-content: space-between;">
+                  <span style="color: var(--text-muted);">Location</span>
+                  <span style="color: var(--text-primary);">${roomData.location}</span>
+                </div>
+                ` : ''}
+                ${roomData.last_start_time ? `
+                <div style="display: flex; justify-content: space-between;">
+                  <span style="color: var(--text-muted);">Last Meeting</span>
+                  <span style="color: var(--text-primary);">${new Date(roomData.last_start_time).toLocaleString()}</span>
+                </div>
+                ` : ''}
+              </div>
+            </div>
+
+            ${roomData.zoom_issues && roomData.zoom_issues.length > 0 ? `
+            <div class="analytics-section" style="background: rgba(239, 68, 68, 0.1); border: 1px solid rgba(239, 68, 68, 0.3); border-radius: 8px; padding: 12px;">
+              <div class="analytics-section-title" style="color: #EF4444;">⚠️ Issues (${roomData.zoom_issues.length})</div>
+              <div style="display: flex; flex-direction: column; gap: 4px;">
+                ${roomData.zoom_issues.map(issue => `
+                  <div style="color: #FCA5A5; font-size: 12px;">• ${issue}</div>
+                `).join('')}
+              </div>
+            </div>
+            ` : ''}
+          </div>
+        </div>
+      `;
+    }
+
+    // Helper function to mark device as selected in sidebar
+    function markDeviceSelected(deviceId) {
+      // Remove selected from all items
+      document.querySelectorAll('.device-item.selected, .room-item.selected').forEach(el => {
+        el.classList.remove('selected');
+      });
+      // Find and mark the current device
+      const deviceEl = document.querySelector(`.device-item[onclick*="'${deviceId}'"], .device-item[onclick*="'zoom-${deviceId}'"]`);
+      if (deviceEl) {
+        deviceEl.classList.add('selected');
+      }
+    }
+
     async function openAnalytics(deviceId, deviceName, deviceType, isRoom = false, polyDeviceData = null) {
       // Clear any existing refresh interval
       if (analyticsRefreshInterval) {
@@ -5625,6 +6969,9 @@
       const isPolyDevice = polyDeviceData !== null;
       analyticsDevice = { id: deviceId, name: deviceName, type: deviceType, isRoom, isPolyDevice, polyDeviceData };
       analyticsOpen = true;
+
+      // Mark device as selected in sidebar
+      markDeviceSelected(deviceId);
 
       // Render loading state
       renderAnalyticsSidebar(true);
@@ -5645,6 +6992,11 @@
         analyticsRefreshInterval = null;
         console.log('Analytics auto-refresh disabled');
       }
+
+      // Clear selected state from sidebar
+      document.querySelectorAll('.device-item.selected, .room-item.selected').forEach(el => {
+        el.classList.remove('selected');
+      });
 
       analyticsOpen = false;
       analyticsDevice = null;
@@ -6210,15 +7562,16 @@
 
       // Add one marker per Poly Lens room
       Object.entries(polyRoomGroups).forEach(([roomName, devices]) => {
-        // Filter out disabled and maintenance devices for status calculation
+        // Filter out disabled and maintenance devices for count display
         const activeDevices = devices.filter(d => !d.disabled && !d.maintenance);
-        const allConnected = activeDevices.every(d => d.connected);
-        const anyDisconnected = activeDevices.some(d => !d.connected);
+        // Check ALL devices for connection status (even disabled/maintenance ones should show if disconnected)
+        const anyDeviceDisconnected = devices.some(d => !d.connected);
+        const allDevicesConnected = devices.length > 0 && devices.every(d => d.connected);
         allDevices.push({
           id: `room-${roomName.replace(/\s+/g, '-')}`,
           name: roomName,
           ip: devices.map(d => d.ip).filter(Boolean).join(', '),
-          status: (activeDevices.length === 0 || !anyDisconnected) ? 'up' : 'down',
+          status: allDevicesConnected ? 'up' : 'down',
           type: 'polyLens',
           source: 'polyLensRoom',
           roomDevices: devices,
@@ -6228,16 +7581,78 @@
         });
       });
 
-      const positions = generatePositions(allDevices.length, activeFloor.charCodeAt(0) * 7);
+      // Add Zoom-only rooms (rooms without Poly devices) as markers
+      const currentZoomOnlyRooms = zoomOnlyRooms[activeFloor] || [];
+      currentZoomOnlyRooms.forEach(zoomRoom => {
+        const roomId = `zoom-${zoomRoom.id}`;
+        const isAvailable = zoomRoom.zoom_status === 'Available' || zoomRoom.zoom_status === 'InMeeting';
+        allDevices.push({
+          id: roomId,
+          name: zoomRoom.displayName,
+          fullName: zoomRoom.name,
+          status: isAvailable ? 'up' : 'down',
+          type: 'zoomOnly',
+          source: 'zoomOnly',
+          zoom_status: zoomRoom.zoom_status,
+          zoom_in_meeting: zoomRoom.in_meeting,
+          zoom_id: zoomRoom.id,
+          zoom_ip: zoomRoom.zoom_ip,
+          zoom_serial: zoomRoom.zoom_serial,
+          zoom_device_type: zoomRoom.zoom_device_type,
+          zoom_devices: zoomRoom.zoom_devices || [],
+          pos_x: null,
+          pos_y: null
+        });
+      });
 
-      allDevices.forEach((device, idx) => {
+      // Apply quick filters to allDevices
+      let filteredDevices = allDevices;
+      if (activeFilters.offlineOnly || activeFilters.lowToner || activeFilters.inMeeting) {
+        filteredDevices = allDevices.filter(device => {
+          // Offline filter
+          if (activeFilters.offlineOnly) {
+            if (device.source === 'polyLensRoom') {
+              const hasOffline = device.roomDevices?.some(d => !d.connected && !d.disabled);
+              if (!hasOffline) return false;
+            } else if (device.status !== 'down' || device.disabled) {
+              return false;
+            }
+          }
+
+          // Low toner filter (only for printers)
+          if (activeFilters.lowToner) {
+            if (device.type !== 'printers') return false;
+            const toner = printerStatusData[device.id]?.toner || {};
+            const hasLowToner = Object.values(toner).some(level => level !== null && level < 20);
+            if (!hasLowToner) return false;
+          }
+
+          // In meeting filter (only for rooms)
+          if (activeFilters.inMeeting) {
+            if (device.source === 'polyLensRoom') {
+              const inMeeting = device.roomDevices?.some(d => d.zoom_in_meeting);
+              if (!inMeeting) return false;
+            } else if (device.source === 'zoomOnly') {
+              if (!device.zoom_in_meeting) return false;
+            } else {
+              return false; // Not a room
+            }
+          }
+
+          return true;
+        });
+      }
+
+      const positions = generatePositions(filteredDevices.length, activeFloor.charCodeAt(0) * 7);
+
+      filteredDevices.forEach((device, idx) => {
         // Use saved position if available, otherwise use generated position
         // In TV mode, prefer TV positions if available
         let pos;
-        const isRoomMarker = device.source === 'polyLensRoom';
+        const isRoomMarker = device.source === 'polyLensRoom' || device.source === 'zoomOnly';
 
         if (isRoomMarker) {
-          // Check for saved room position
+          // Check for saved room position (for both Poly rooms and Zoom-only rooms)
           const savedRoomPos = roomPositions[device.id];
           if (savedRoomPos && savedRoomPos.pos_x !== null && savedRoomPos.pos_y !== null) {
             pos = { x: savedRoomPos.pos_x, y: savedRoomPos.pos_y };
@@ -6258,50 +7673,111 @@
         const typeInfo = deviceTypes[device.type] || deviceTypes.polyLens;
         const status = statusColors[device.status] || statusColors.unknown;
 
-        if (isRoomMarker) {
-          // Room marker with multiple devices
+        if (device.source === 'polyLensRoom') {
+          // Poly Lens room marker with multiple devices
           const roomDevices = device.roomDevices || [];
           // Filter out disabled and maintenance devices for status calculation
           const activeDevices = roomDevices.filter(d => !d.disabled && !d.maintenance);
           const onlineCount = activeDevices.filter(d => d.connected).length;
           const offlineCount = activeDevices.length - onlineCount;
 
+          // Get Zoom status and device info from any device in the room
+          const zoomDevice = roomDevices.find(d => d.zoom_status);
+          const zoomStatus = zoomDevice?.zoom_status || null;
+          const zoomInMeeting = roomDevices.some(d => d.zoom_in_meeting);
+          const zoomIp = zoomDevice?.zoom_ip || null;
+          const zoomSerial = zoomDevice?.zoom_serial || null;
+          const zoomDeviceType = zoomDevice?.zoom_device_type || null;
+          const zoomDevices = zoomDevice?.zoom_devices || [];
+          const zoomStatusColor = zoomStatus === 'Available' ? '#22C55E' :
+                                  zoomStatus === 'InMeeting' ? '#F59E0B' :
+                                  zoomStatus === 'Offline' ? '#EF4444' : '#6B7280';
+          const zoomStatusText = zoomStatus === 'Available' ? 'Available' :
+                                 zoomStatus === 'InMeeting' ? 'In Meeting' :
+                                 zoomStatus === 'Offline' ? 'Offline' : null;
+
           const popupBelowClass = pos.y < 30 ? 'popup-below' : '';
           deviceMarkersHTML += `
             <div class="device-marker ${popupBelowClass}" data-id="${device.id}" style="left: ${pos.x}%; top: ${pos.y}%;"
               ${editMode ? 'draggable="true" onmousedown="startDrag(event, this)" onclick="event.stopPropagation(); event.preventDefault();"' : `onclick="event.stopPropagation(); openAnalytics('${device.id}', '${device.name.replace(/'/g, "\\'")}', 'polyLens', true)"`}>
               ${offlineCount > 0 && activeDevices.length > 0 ? `<div class="device-ping" style="background: ${statusColors.down.pulse};"></div>` : ''}
-              <div class="device-dot" style="background: ${status.bg}; border-color: ${typeInfo.color}; min-width: 28px; font-size: 9px;">
-                ${roomDevices.length}
+              <div class="device-dot" style="background: ${zoomInMeeting ? '#F59E0B' : status.bg}; border-color: ${typeInfo.color}; min-width: 28px; font-size: 9px;">
+                ${zoomInMeeting ? '📞' : roomDevices.length}
               </div>
               <div class="device-popup">
                 <div class="popup-header">
                   <span class="popup-icon">🚪</span>
                   <span class="popup-name">${device.name}</span>
+                  ${zoomInMeeting ? '<span style="background: #F59E0B; color: #000; font-size: 9px; padding: 1px 4px; border-radius: 3px; margin-left: 4px;">Meeting</span>' : ''}
                 </div>
-                <div class="popup-details">
-                  <div class="popup-row"><strong>Devices:</strong> <span>${roomDevices.length}</span></div>
-                  <div class="popup-row">
-                    <strong>Status:</strong>
-                    <span class="status-badge" style="background: #22C55E;">${onlineCount} Online</span>
-                    ${offlineCount > 0 ? `<span class="status-badge" style="background: #EF4444; margin-left: 4px;">${offlineCount} Offline</span>` : ''}
+                <div class="popup-details" style="padding: 4px 0;">
+                  <div style="display: flex; gap: 8px; font-size: 10px;">
+                    <span>Poly: <span style="color: #22C55E;">${onlineCount}✓</span>${offlineCount > 0 ? `<span style="color: #EF4444; margin-left: 2px;">${offlineCount}✗</span>` : ''}</span>
+                    ${zoomStatus ? `<span>Zoom: <span style="color: ${zoomStatusColor};">${zoomStatusText}</span></span>` : ''}
                   </div>
                 </div>
-                <div class="popup-section">
-                  <div class="popup-section-title">📹 Devices in Room</div>
-                  ${roomDevices.map(rd => `
-                    <div class="popup-row" style="padding: 6px 0; border-bottom: 1px solid rgba(148,163,184,0.1);">
-                      <div style="display: flex; align-items: center; gap: 6px;">
-                        <span style="color: ${rd.connected ? '#22C55E' : '#EF4444'};">●</span>
-                        <strong>${rd.name}</strong>
-                      </div>
-                      <div style="margin-left: 16px; font-size: 11px; color: #94A3B8;">
-                        <span>${rd.hardwareModel || 'Unknown model'}</span>
-                        ${rd.ip ? `<span style="margin-left: 8px; color: #60A5FA;">IP: ${rd.ip}</span>` : ''}
-                      </div>
+                ${zoomDevices.length > 0 ? `
+                <div class="popup-section" style="padding: 4px 0;">
+                  <div style="font-size: 10px; color: #06B6D4; margin-bottom: 2px;">🎥 Zoom (${zoomDevices.length})</div>
+                  ${zoomDevices.map(zd => `
+                    <div style="font-size: 10px; padding: 2px 0; display: flex; align-items: baseline; gap: 4px;">
+                      <span style="color: ${zd.status === 'Online' ? '#22C55E' : '#EF4444'};">●</span>
+                      <span style="color: #E2E8F0;">${zd.device_model || zd.device_type}</span>
+                      <span style="color: #60A5FA;">${zd.ip_address || ''}</span>
+                      <span style="color: #64748B; font-family: monospace; font-size: 9px;">${zd.serial_number || ''}</span>
                     </div>
                   `).join('')}
                 </div>
+                ` : ''}
+                <div class="popup-section" style="padding: 4px 0;">
+                  <div style="font-size: 10px; color: #F59E0B; margin-bottom: 2px;">📹 Poly (${roomDevices.length})</div>
+                  ${roomDevices.map(rd => `
+                    <div style="font-size: 10px; padding: 2px 0; display: flex; align-items: baseline; gap: 4px;">
+                      <span style="color: ${rd.connected ? '#22C55E' : '#EF4444'};">●</span>
+                      <span style="color: #E2E8F0;">${rd.hardwareModel || rd.name}</span>
+                      <span style="color: #60A5FA;">${rd.ip || ''}</span>
+                      <span style="color: #64748B; font-family: monospace; font-size: 9px;">${rd.serialNumber || ''}</span>
+                    </div>
+                  `).join('')}
+                </div>
+                <div class="popup-arrow"></div>
+              </div>
+            </div>
+          `;
+        } else if (device.source === 'zoomOnly') {
+          // Zoom-only room marker (no Poly device)
+          const popupBelowClass = pos.y < 30 ? 'popup-below' : '';
+          const zoomStatusColor = device.zoom_status === 'Available' ? '#22C55E' :
+                                  device.zoom_status === 'InMeeting' ? '#F59E0B' : '#EF4444';
+          const zoomStatusText = device.zoom_status === 'Available' ? 'Available' :
+                                 device.zoom_status === 'InMeeting' ? 'In Meeting' :
+                                 device.zoom_status === 'Offline' ? 'Offline' : device.zoom_status;
+          deviceMarkersHTML += `
+            <div class="device-marker ${popupBelowClass}" data-id="${device.id}" style="left: ${pos.x}%; top: ${pos.y}%;"
+              ${editMode ? 'draggable="true" onmousedown="startDrag(event, this)" onclick="event.stopPropagation(); event.preventDefault();"' : `onclick="event.stopPropagation(); openZoomRoomDetails('${device.zoom_id}', '${device.name.replace(/'/g, "\\'")}')"`}>
+              ${device.status === 'down' ? `<div class="device-ping" style="background: ${statusColors.down.pulse};"></div>` : ''}
+              <div class="device-dot" style="background: ${zoomStatusColor}; border-color: ${typeInfo.color};">
+                ${device.zoom_in_meeting ? '📞' : '🎥'}
+              </div>
+              <div class="device-popup">
+                <div class="popup-header">
+                  <span class="popup-icon">🎥</span>
+                  <span class="popup-name">${device.name}</span>
+                  <span class="status-badge" style="background: ${zoomStatusColor}; margin-left: 6px; font-size: 9px;">${zoomStatusText}</span>
+                </div>
+                ${device.zoom_devices && device.zoom_devices.length > 0 ? `
+                <div class="popup-section" style="padding: 4px 0;">
+                  <div style="font-size: 10px; color: #06B6D4; margin-bottom: 2px;">Devices (${device.zoom_devices.length})</div>
+                  ${device.zoom_devices.map(zd => `
+                    <div style="font-size: 10px; padding: 2px 0; display: flex; align-items: baseline; gap: 4px;">
+                      <span style="color: ${zd.status === 'Online' ? '#22C55E' : '#EF4444'};">●</span>
+                      <span style="color: #E2E8F0;">${zd.device_model || zd.device_type}</span>
+                      <span style="color: #60A5FA;">${zd.ip_address || ''}</span>
+                      <span style="color: #64748B; font-family: monospace; font-size: 9px;">${zd.serial_number || ''}</span>
+                    </div>
+                  `).join('')}
+                </div>
+                ` : ''}
                 <div class="popup-arrow"></div>
               </div>
             </div>
@@ -6324,85 +7800,59 @@
                 <div class="popup-header">
                   <span class="popup-icon">${typeInfo.icon}</span>
                   <span class="popup-name">${device.name}</span>
+                  <span class="status-badge" style="background: ${status.bg}; margin-left: 6px; font-size: 9px;">${status.label}</span>
                   ${device.health_score !== null && device.health_score !== undefined ? `
-                    <span class="health-badge ${getHealthClass(device.health_score)}" style="margin-left: auto;">
-                      ❤️ ${device.health_score}%
-                    </span>
+                    <span class="health-badge ${getHealthClass(device.health_score)}" style="margin-left: 4px; font-size: 9px;">❤️${device.health_score}%</span>
                   ` : ''}
                 </div>
-                <div class="popup-details">
-                  <div class="popup-row"><strong>Type:</strong> <span>${typeInfo.label}</span></div>
-                  <div class="popup-row"><strong>IP:</strong> <span>${device.ip || 'N/A'}</span></div>
-                  <div class="popup-row">
-                    <strong>Status:</strong>
-                    <span class="status-badge" style="background: ${status.bg};">${status.label}</span>
+                <div class="popup-details" style="padding: 4px 0;">
+                  <div style="font-size: 10px; display: flex; flex-wrap: wrap; gap: 8px;">
+                    <span style="color: #60A5FA;">${device.ip || 'No IP'}</span>
+                    ${device.ping ? `<span style="color: #94A3B8;">${device.ping}ms</span>` : ''}
+                    ${device.serial_number ? `<span style="color: #64748B; font-family: monospace; font-size: 9px;">SN: ${device.serial_number}</span>` : ''}
                   </div>
-                  ${device.ping ? `<div class="popup-row"><strong>Ping:</strong> <span>${device.ping}ms</span></div>` : ''}
                 </div>
                 ${device.notes ? `
-                  <div class="device-notes">
-                    <div class="device-notes-label">📝 Notes</div>
-                    <div class="device-notes-content">${device.notes}</div>
+                  <div style="font-size: 10px; color: #94A3B8; padding: 2px 0; border-top: 1px solid rgba(148,163,184,0.2);">
+                    📝 ${device.notes}
                   </div>
                 ` : ''}
                 ${renderSparkline(device.id)}
                 ${polyDevice ? `
-                  <div class="popup-section">
-                    <div class="popup-section-title">📹 Poly Lens</div>
-                    <div class="popup-row"><strong>Model:</strong> <span>${polyDevice.hardwareModel || 'N/A'}</span></div>
-                    <div class="popup-row"><strong>Room:</strong> <span>${polyDevice.room || 'N/A'}</span></div>
-                    <div class="popup-row">
-                      <strong>Poly Status:</strong>
-                      <span class="status-badge" style="background: ${polyDevice.connected ? '#22C55E' : '#EF4444'};">
-                        ${polyDevice.connected ? 'Connected' : 'Disconnected'}
-                      </span>
-                    </div>
+                  <div style="font-size: 10px; padding: 4px 0; border-top: 1px solid rgba(148,163,184,0.2);">
+                    <span style="color: #F59E0B;">📹 Poly:</span>
+                    <span style="color: ${polyDevice.connected ? '#22C55E' : '#EF4444'};">${polyDevice.connected ? '●' : '○'}</span>
+                    <span style="color: #E2E8F0;">${polyDevice.hardwareModel || ''}</span>
+                    <span style="color: #94A3B8;">${polyDevice.room || ''}</span>
                   </div>
                 ` : ''}
                 ${device.type === 'printers' && printerStatusData[device.id] ? `
-                  <div class="printer-consumables">
-                    <div class="consumables-header">
-                      <div class="consumables-title">
-                        <span class="consumables-title-icon">🎨</span>
-                        <span>Consumables</span>
-                      </div>
-                      <button class="consumables-refresh" onclick="event.stopPropagation(); refreshPrinterStatus(${device.id})">↻ Refresh</button>
-                    </div>
-                    <div class="toner-levels">
+                  <div class="popup-section" style="padding: 4px 0; border-top: 1px solid rgba(148,163,184,0.2);">
+                    <div style="display: flex; align-items: center; gap: 6px; margin-bottom: 4px;">
+                      <span style="font-size: 10px; color: #94A3B8;">Toner:</span>
                       ${['black', 'cyan', 'magenta', 'yellow'].map(color => {
                         const level = printerStatusData[device.id].toner[color];
                         if (level === null || level === undefined) return '';
                         const isLow = level < 20;
-                        const colorLabel = {black: 'K', cyan: 'C', magenta: 'M', yellow: 'Y'}[color];
+                        const bgColor = {black: '#1F2937', cyan: '#06B6D4', magenta: '#EC4899', yellow: '#FACC15'}[color];
                         return `
-                          <div class="toner-bar ${isLow ? 'low' : ''}">
-                            <div class="toner-bar-value">${level}%</div>
-                            <div class="toner-bar-track">
-                              <div class="toner-bar-fill ${color}" style="height: ${level}%;"></div>
+                          <div style="display: flex; align-items: center; gap: 2px;">
+                            <div style="width: 20px; height: 8px; background: #374151; border-radius: 2px; overflow: hidden;">
+                              <div style="width: ${level}%; height: 100%; background: ${bgColor};"></div>
                             </div>
-                            <div class="toner-bar-label">${colorLabel}</div>
-                            ${isLow ? '<span class="toner-low-badge">LOW</span>' : ''}
+                            <span style="font-size: 9px; color: ${isLow ? '#EF4444' : '#94A3B8'};">${level}%</span>
                           </div>
                         `;
                       }).join('')}
                     </div>
                     ${printerStatusData[device.id].paper?.level !== null ? `
-                      <div class="paper-section">
-                        <span class="paper-icon-large">📄</span>
-                        <div class="paper-info">
-                          <div class="paper-label">Paper Level</div>
-                          <div class="paper-bar">
-                            <div class="paper-bar-fill ${printerStatusData[device.id].paper.level < 20 ? (printerStatusData[device.id].paper.level < 10 ? 'empty' : 'low') : ''}"
-                                 style="width: ${printerStatusData[device.id].paper.level || 0}%;"></div>
-                          </div>
+                      <div style="display: flex; align-items: center; gap: 6px;">
+                        <span style="font-size: 10px; color: #94A3B8;">📄 Paper:</span>
+                        <div style="flex: 1; max-width: 60px; height: 6px; background: #374151; border-radius: 2px; overflow: hidden;">
+                          <div style="width: ${printerStatusData[device.id].paper.level || 0}%; height: 100%; background: ${printerStatusData[device.id].paper.level < 20 ? '#EF4444' : '#22C55E'};"></div>
                         </div>
-                        <span class="paper-value">${printerStatusData[device.id].paper.level || 0}%</span>
-                      </div>
-                    ` : ''}
-                    ${printerStatusData[device.id].info?.pageCount ? `
-                      <div class="page-count-row">
-                        <span class="page-count-label">📊 Total Pages Printed</span>
-                        <span class="page-count-value">${printerStatusData[device.id].info.pageCount.toLocaleString()}</span>
+                        <span style="font-size: 9px; color: ${printerStatusData[device.id].paper.level < 20 ? '#EF4444' : '#94A3B8'};">${printerStatusData[device.id].paper.level || 0}%</span>
+                        ${printerStatusData[device.id].info?.pageCount ? `<span style="font-size: 9px; color: #64748B; margin-left: 4px;">📊 ${printerStatusData[device.id].info.pageCount.toLocaleString()}</span>` : ''}
                       </div>
                     ` : ''}
                   </div>
@@ -6417,20 +7867,28 @@
       // Build sidebar with room groupings for Poly devices
       let sidebarHTML = '';
 
-      // Access Points section
-      const aps = currentFloorData.accessPoints || [];
-      if (aps.length > 0) {
-        const apDownCount = aps.filter(d => d.status === 'down').length;
+      // Access Points section (apply filters)
+      let aps = currentFloorData.accessPoints || [];
+      if (activeFilters.offlineOnly) {
+        aps = aps.filter(d => d.status === 'down' && !d.disabled);
+      }
+      if (activeFilters.lowToner || activeFilters.inMeeting) {
+        aps = []; // APs don't have toner or meetings
+      }
+      const allAps = currentFloorData.accessPoints || [];
+      if (allAps.length > 0 && !activeFilters.lowToner && !activeFilters.inMeeting) {
+        const apDownCount = allAps.filter(d => d.status === 'down').length;
+        const showingFiltered = aps.length !== allAps.length;
         sidebarHTML += `
           <div class="device-category">
             <div class="category-header ap collapsed" onclick="toggleCategory(this)">
               <span>📡</span>
               <span class="category-name">Access Points</span>
-              <span class="category-count">${aps.length - apDownCount}/${aps.length}</span>
+              <span class="category-count">${showingFiltered ? aps.length + ' filtered' : (allAps.length - apDownCount) + '/' + allAps.length}</span>
               <span class="collapse-icon">▼</span>
             </div>
             <div class="category-content collapsed">
-              ${aps.map(device => `
+              ${aps.length === 0 ? '<div style="padding: 8px; color: var(--text-muted); font-size: 12px;">No matching devices</div>' : aps.map(device => `
                 <div class="device-item clickable ${device.status === 'down' ? 'down' : ''}" onclick="highlightDevice('${device.id}'); openAnalytics('${device.id}', '${device.name.replace(/'/g, "\\'")}', 'accessPoints')">
                   <div class="device-status-dot ${device.status}"></div>
                   <div class="device-info">
@@ -6448,20 +7906,34 @@
         `;
       }
 
-      // Printers section
-      const printers = currentFloorData.printers || [];
-      if (printers.length > 0) {
-        const printerDownCount = printers.filter(d => d.status === 'down').length;
+      // Printers section (apply filters)
+      const allPrinters = currentFloorData.printers || [];
+      let printers = [...allPrinters];
+      if (activeFilters.offlineOnly) {
+        printers = printers.filter(d => d.status === 'down' && !d.disabled);
+      }
+      if (activeFilters.lowToner) {
+        printers = printers.filter(d => {
+          const toner = printerStatusData[d.id]?.toner || {};
+          return Object.values(toner).some(level => level !== null && level < 20);
+        });
+      }
+      if (activeFilters.inMeeting) {
+        printers = []; // Printers don't have meetings
+      }
+      if (allPrinters.length > 0 && !activeFilters.inMeeting) {
+        const printerDownCount = allPrinters.filter(d => d.status === 'down').length;
+        const showingFilteredPrinters = printers.length !== allPrinters.length;
         sidebarHTML += `
           <div class="device-category">
             <div class="category-header printer collapsed" onclick="toggleCategory(this)">
               <span>🖨️</span>
               <span class="category-name">Printers</span>
-              <span class="category-count">${printers.length - printerDownCount}/${printers.length}</span>
+              <span class="category-count">${showingFilteredPrinters ? printers.length + ' filtered' : (allPrinters.length - printerDownCount) + '/' + allPrinters.length}</span>
               <span class="collapse-icon">▼</span>
             </div>
             <div class="category-content collapsed">
-              ${printers.map(device => {
+              ${printers.length === 0 ? '<div style="padding: 8px; color: var(--text-muted); font-size: 12px;">No matching devices</div>' : printers.map(device => {
                 const ps = printerStatusData[device.id];
                 const toner = ps?.toner || {};
                 const hasLowToner = [toner.black, toner.cyan, toner.magenta, toner.yellow].some(v => v !== null && v < 20);
@@ -6505,30 +7977,53 @@
         `;
       }
 
-      // Poly Lens / Zoom Rooms section - grouped by room
+      // Poly Lens / Zoom Rooms section - grouped by room (apply filters)
       const polyRooms = getPolyLensRooms(activeFloor);
-      const roomNames = Object.keys(polyRooms).sort();
+      let roomNames = Object.keys(polyRooms).sort();
 
-      if (roomNames.length > 0) {
+      // Apply filters to rooms
+      if (activeFilters.offlineOnly) {
+        roomNames = roomNames.filter(roomName => {
+          const roomDevices = polyRooms[roomName];
+          return roomDevices.some(d => !d.connected && !d.disabled);
+        });
+      }
+      if (activeFilters.lowToner) {
+        roomNames = []; // Rooms don't have toner
+      }
+      if (activeFilters.inMeeting) {
+        roomNames = roomNames.filter(roomName => {
+          const roomDevices = polyRooms[roomName];
+          return roomDevices.some(d => d.zoom_in_meeting);
+        });
+      }
+
+      const allRoomNames = Object.keys(polyRooms);
+      if (allRoomNames.length > 0 && !activeFilters.lowToner) {
         const totalPolyDevices = currentPolyData.length;
         const onlinePolyDevices = currentPolyData.filter(d => d.connected).length;
+        const showingFilteredRooms = roomNames.length !== allRoomNames.length;
 
         sidebarHTML += `
           <div class="device-category">
             <div class="category-header poly collapsed" onclick="toggleCategory(this)">
               <span>📹</span>
               <span class="category-name">Zoom Rooms</span>
-              <span class="category-count">${onlinePolyDevices}/${totalPolyDevices}</span>
+              <span class="category-count">${showingFilteredRooms ? roomNames.length + ' filtered' : onlinePolyDevices + '/' + totalPolyDevices}</span>
               <span class="collapse-icon">▼</span>
             </div>
             <div class="category-content collapsed">
-              ${roomNames.map(roomName => {
+              ${roomNames.length === 0 ? '<div style="padding: 8px; color: var(--text-muted); font-size: 12px;">No matching rooms</div>' : roomNames.map(roomName => {
                 const roomDevices = polyRooms[roomName];
-                // Filter out disabled and maintenance devices for status calculation
-                const activeRoomDevices = roomDevices.filter(d => !d.disabled && !d.maintenance);
-                const allOnline = activeRoomDevices.every(d => d.connected);
-                const anyOffline = activeRoomDevices.some(d => !d.connected);
+                // Check ALL devices for connection status (not just active ones)
                 const onlineInRoom = roomDevices.filter(d => d.connected).length;
+                const allOnline = roomDevices.length > 0 && roomDevices.every(d => d.connected);
+                const anyOffline = roomDevices.some(d => !d.connected);
+                // Check Zoom status for any device in room
+                const anyInMeeting = roomDevices.some(d => d.zoom_in_meeting);
+                const zoomStatus = roomDevices.find(d => d.zoom_status)?.zoom_status;
+                // Get Zoom devices from any device in room
+                const zoomDevices = roomDevices.find(d => d.zoom_devices)?.zoom_devices || [];
 
                 const roomId = 'room-' + roomName.replace(/\s+/g, '-');
                 return `
@@ -6536,10 +8031,29 @@
                     <div class="room-header collapsed" onclick="toggleRoom(event, this, '${roomId}')">
                       <div class="room-status ${anyOffline ? 'down' : 'up'}"></div>
                       <span class="room-name">${roomName}</span>
+                      ${anyInMeeting ? '<span style="font-size: 10px; background: var(--status-warning); color: #000; padding: 1px 6px; border-radius: 8px; margin-left: 6px;">In Meeting</span>' : ''}
                       <span style="font-size: 11px; color: #64748B;">${onlineInRoom}/${roomDevices.length}</span>
                       <span class="collapse-icon">▼</span>
                     </div>
                     <div class="room-devices collapsed">
+                      ${zoomDevices.length > 0 ? `
+                        <div style="padding: 6px 8px; margin-bottom: 6px; background: rgba(6, 182, 212, 0.1); border-radius: 6px; border-left: 2px solid #06B6D4;">
+                          <div style="font-size: 10px; color: #06B6D4; font-weight: 600; margin-bottom: 4px;">🎥 Zoom Devices (${zoomDevices.length})</div>
+                          ${zoomDevices.map(zd => `
+                            <div style="padding: 4px 0; font-size: 10px; border-bottom: 1px solid rgba(148,163,184,0.1);">
+                              <div style="display: flex; align-items: center; gap: 4px;">
+                                <span style="color: ${zd.status === 'Online' ? '#22C55E' : '#EF4444'};">●</span>
+                                <strong>${zd.device_model || zd.device_type || 'Device'}</strong>
+                              </div>
+                              <div style="margin-left: 12px; color: #94A3B8;">
+                                ${zd.ip_address ? `<div><span style="color: #60A5FA;">IP: ${zd.ip_address}</span></div>` : ''}
+                                ${zd.serial_number ? `<div style="font-family: monospace;">SN: ${zd.serial_number}</div>` : ''}
+                              </div>
+                            </div>
+                          `).join('')}
+                        </div>
+                      ` : ''}
+                      <div style="font-size: 10px; color: #F59E0B; font-weight: 600; margin-bottom: 4px; padding-left: 8px;">📹 Poly Devices (${roomDevices.length})</div>
                       ${roomDevices.map(device => `
                         <div class="device-item clickable ${!device.connected ? 'down' : ''}" onclick="event.stopPropagation(); highlightDevice('${roomId}'); openAnalytics('${roomId}', '${roomName.replace(/'/g, "\\'")}', 'polyLens', true)">
                           <div class="device-status-dot ${device.connected ? 'up' : 'down'}"></div>
@@ -6547,8 +8061,8 @@
                             <div class="device-name">${device.name}</div>
                             <div class="device-meta">
                               <span class="device-model">${device.hardwareModel || 'Unknown'}</span>
-                              <span>${device.ip || 'No IP'}</span>
                             </div>
+                            ${device.ip ? `<div class="device-meta" style="font-size: 10px;"><span style="color: #60A5FA;">IP: ${device.ip}</span></div>` : ''}
                             ${device.serialNumber ? `<div class="device-meta" style="font-size: 10px; opacity: 0.7;">SN: ${device.serialNumber}</div>` : ''}
                           </div>
                         </div>
@@ -6562,11 +8076,79 @@
         `;
       }
 
+      // Zoom-only rooms section (rooms without Poly devices) - apply filters
+      const allZoomOnly = zoomOnlyRooms[activeFloor] || [];
+      let currentZoomOnly = [...allZoomOnly];
+      if (activeFilters.offlineOnly) {
+        currentZoomOnly = currentZoomOnly.filter(r => r.zoom_status === 'Offline');
+      }
+      if (activeFilters.lowToner) {
+        currentZoomOnly = []; // Zoom rooms don't have toner
+      }
+      if (activeFilters.inMeeting) {
+        currentZoomOnly = currentZoomOnly.filter(r => r.in_meeting);
+      }
+      if (allZoomOnly.length > 0 && !activeFilters.lowToner) {
+        const zoomOnline = allZoomOnly.filter(r => r.zoom_status === 'Available' || r.zoom_status === 'InMeeting').length;
+        const showingFilteredZoom = currentZoomOnly.length !== allZoomOnly.length;
+
+        sidebarHTML += `
+          <div class="device-category">
+            <div class="category-header" style="border-color: #06B6D4; background: rgba(6, 182, 212, 0.1);" onclick="toggleCategory(this)">
+              <span>🎥</span>
+              <span class="category-name">Zoom Only</span>
+              <span class="category-count">${showingFilteredZoom ? currentZoomOnly.length + ' filtered' : zoomOnline + '/' + allZoomOnly.length}</span>
+              <span class="collapse-icon">▼</span>
+            </div>
+            <div class="category-content">
+              ${currentZoomOnly.length === 0 ? '<div style="padding: 8px; color: var(--text-muted); font-size: 12px;">No matching rooms</div>' : currentZoomOnly.map(room => {
+                const devices = room.zoom_devices || [];
+                return `
+                <div class="room-group" style="margin-bottom: 8px;">
+                  <div class="device-item clickable ${room.zoom_status === 'Offline' ? 'down' : ''}" onclick="openZoomRoomDetails('${room.id}', '${room.displayName.replace(/'/g, "\\'")}')">
+                    <div class="device-status-dot ${room.zoom_status === 'Available' ? 'up' : room.zoom_status === 'InMeeting' ? 'warning' : 'down'}"></div>
+                    <div class="device-info">
+                      <div class="device-name">${room.displayName}</div>
+                      <div class="device-meta">
+                        <span style="color: ${room.zoom_status === 'Available' ? 'var(--status-online)' : room.zoom_status === 'InMeeting' ? 'var(--status-warning)' : 'var(--status-offline)'};">
+                          ${room.zoom_status === 'Available' ? '✓ Available' : room.zoom_status === 'InMeeting' ? '📞 In Meeting' : room.zoom_status === 'Offline' ? '⚠ Offline' : room.zoom_status}
+                        </span>
+                        <span style="margin-left: 6px; font-size: 10px; color: #64748B;">${devices.length} device${devices.length !== 1 ? 's' : ''}</span>
+                      </div>
+                    </div>
+                  </div>
+                  ${devices.length > 0 ? `
+                  <div style="margin-left: 20px; padding: 6px 8px; background: rgba(15, 23, 42, 0.5); border-radius: 6px; border-left: 2px solid #06B6D4;">
+                    ${devices.map(zd => `
+                      <div style="padding: 4px 0; font-size: 10px; border-bottom: 1px solid rgba(148,163,184,0.1);">
+                        <div style="display: flex; align-items: center; gap: 4px;">
+                          <span style="color: ${zd.status === 'Online' ? '#22C55E' : '#EF4444'};">●</span>
+                          <strong style="color: var(--text-primary);">${zd.device_model || zd.device_type || 'Device'}</strong>
+                        </div>
+                        <div style="margin-left: 12px; color: #94A3B8;">
+                          ${zd.ip_address ? `<div><span style="color: #60A5FA;">IP: ${zd.ip_address}</span></div>` : ''}
+                          ${zd.serial_number ? `<div style="font-family: monospace;">SN: ${zd.serial_number}</div>` : ''}
+                        </div>
+                      </div>
+                    `).join('')}
+                  </div>
+                  ` : ''}
+                </div>
+              `}).join('')}
+            </div>
+          </div>
+        `;
+      }
+
+      // Show active filter indicator
+      const hasActiveFilters = activeFilters.offlineOnly || activeFilters.lowToner || activeFilters.inMeeting;
+
       // Calculate total stats across all floors
-      const totalStats = { online: 0, offline: 0, polyOnline: 0, polyTotal: 0 };
+      const totalStats = { online: 0, offline: 0, polyOnline: 0, polyTotal: 0, zoomOnline: 0, zoomTotal: 0 };
       floors.forEach(floor => {
         const fd = uptimeKumaData[floor] || { accessPoints: [], printers: [] };
         const pf = polyLensData[floor] || [];
+        const zf = zoomOnlyRooms[floor] || [];
         Object.values(fd).forEach(cat => {
           if (Array.isArray(cat)) {
             cat.forEach(d => {
@@ -6577,6 +8159,9 @@
         });
         totalStats.polyOnline += pf.filter(d => d.connected).length;
         totalStats.polyTotal += pf.length;
+        // Add Zoom-only rooms to stats
+        totalStats.zoomOnline += zf.filter(r => r.zoom_status === 'Available' || r.zoom_status === 'InMeeting').length;
+        totalStats.zoomTotal += zf.length;
       });
       const healthPercent = totalStats.online + totalStats.offline > 0
         ? Math.round((totalStats.online / (totalStats.online + totalStats.offline)) * 100)
@@ -6636,49 +8221,60 @@
 
               <div class="time-display">
                 <span class="time-value">${now}</span>
-                <div class="live-indicator">
-                  <span class="live-dot"></span>
-                  <span>${wsConnected ? 'Live' : 'Polling'}</span>
+                <div id="connection-status" class="connection-status ${wsConnected ? 'connected' : wsReconnecting ? 'reconnecting' : 'disconnected'}">
+                  <span class="status-icon">${wsConnected ? '●' : wsReconnecting ? '↻' : '●'}</span>
+                  ${wsConnected ? 'Live' : wsReconnecting ? 'Reconnecting...' : 'Disconnected'}
                 </div>
+              </div>
+              <div class="last-updated" title="Last data refresh">
+                <span>Updated:</span>
+                <span id="last-updated-time">${lastDataUpdate ? formatLastUpdated() : 'Loading...'}</span>
+                <span class="refresh-icon" onclick="manualRefresh()" title="Refresh now">↻</span>
               </div>
 
               <div class="header-actions">
-                <button class="panel-toggle" onclick="toggleLeftPanel()" title="Toggle sidebar (S)">
-                  ${leftPanelCollapsed ? '▶' : '◀'}
+                <button class="mobile-menu-btn" onclick="toggleMobileMenu()" title="Menu" aria-label="Toggle mobile menu">
+                  <span aria-hidden="true">☰</span>
                 </button>
-                <button class="compact-toggle ${compactMode ? 'active' : ''}" onclick="toggleCompactMode()" title="Compact mode (C)">
-                  ${compactMode ? '▢' : '▣'}
+                <button class="panel-toggle" onclick="toggleLeftPanel()" title="Toggle sidebar (S)" aria-label="Toggle sidebar" aria-expanded="${!leftPanelCollapsed}">
+                  <span aria-hidden="true">${leftPanelCollapsed ? '▶' : '◀'}</span>
                 </button>
-                <button class="compact-toggle ${alertSoundsEnabled ? 'active' : ''}" onclick="toggleAlertSounds()" title="Alert sounds">
-                  ${alertSoundsEnabled ? '🔔' : '🔕'}
+                <button class="compact-toggle ${compactMode ? 'active' : ''}" onclick="toggleCompactMode()" title="Compact mode (C)" aria-label="Toggle compact mode" aria-pressed="${compactMode}">
+                  <span aria-hidden="true">${compactMode ? '▢' : '▣'}</span>
+                </button>
+                <button class="compact-toggle ${alertSoundsEnabled ? 'active' : ''}" onclick="toggleAlertSounds()" title="Alert sounds" aria-label="Toggle alert sounds" aria-pressed="${alertSoundsEnabled}">
+                  <span aria-hidden="true">${alertSoundsEnabled ? '🔔' : '🔕'}</span>
+                </button>
+                <button class="compact-toggle ${pushNotificationsEnabled ? 'active' : ''}" onclick="togglePushNotifications()" title="Push notifications" aria-label="Toggle push notifications" aria-pressed="${pushNotificationsEnabled}">
+                  <span aria-hidden="true">${pushNotificationsEnabled ? '📲' : '📵'}</span>
                 </button>
                 ${editMode ? `
-                  <button class="header-btn primary" onclick="savePositionChanges()">
-                    💾 Save${getPendingCount() > 0 ? ` (${getPendingCount()})` : ''}
+                  <button class="header-btn primary" onclick="savePositionChanges()" aria-label="Save position changes">
+                    <span aria-hidden="true">💾</span> Save${getPendingCount() > 0 ? ` (${getPendingCount()})` : ''}
                   </button>
-                  <button class="header-btn" onclick="cancelPositionChanges()" style="border-color: var(--status-offline);">
-                    ✕ Cancel
+                  <button class="header-btn" onclick="cancelPositionChanges()" style="border-color: var(--status-offline);" aria-label="Cancel editing">
+                    <span aria-hidden="true">✕</span> Cancel
                   </button>
                 ` : `
-                  <button class="header-btn" onclick="toggleEditMode()">✏️ Edit</button>
+                  <button class="header-btn" onclick="toggleEditMode()" aria-label="Enable edit mode"><span aria-hidden="true">✏️</span> Edit</button>
                 `}
-                <button class="header-btn" onclick="openCustomizeModal()" title="Customize Dashboard">
-                  🎨
+                <button class="header-btn" onclick="openCustomizeModal()" title="Customize Dashboard" aria-label="Customize dashboard">
+                  <span aria-hidden="true">🎨</span><span class="sr-only">Customize</span>
                 </button>
-                <button class="header-btn" onclick="window.location.href='reports.html'" title="Uptime Reports">
-                  📊
+                <button class="header-btn" onclick="window.location.href='reports.html'" title="Uptime Reports" aria-label="View uptime reports">
+                  <span aria-hidden="true">📊</span><span class="sr-only">Reports</span>
                 </button>
-                <button class="header-btn" onclick="window.location.href='topology.html'" title="Network Topology">
-                  🔗
+                <button class="header-btn" onclick="window.location.href='topology.html'" title="Network Topology" aria-label="View network topology">
+                  <span aria-hidden="true">🔗</span><span class="sr-only">Topology</span>
                 </button>
-                <button class="header-btn" onclick="window.location.href='3d-floor-view.html'" title="3D Floor View">
-                  🏠
+                <button class="header-btn" onclick="window.location.href='3d-floor-view.html'" title="3D Floor View" aria-label="View 3D floor">
+                  <span aria-hidden="true">🏠</span><span class="sr-only">3D View</span>
                 </button>
-                <button class="header-btn" onclick="window.location.href='wall-editor.html'" title="Wall Editor">
-                  🏗️
+                <button class="header-btn" onclick="window.location.href='wall-editor.html'" title="Wall Editor" aria-label="Edit walls">
+                  <span aria-hidden="true">🏗️</span><span class="sr-only">Wall Editor</span>
                 </button>
-                <button class="header-btn" onclick="window.location.href='settings.html'" title="Settings">
-                  ⚙️${isAdmin() && pendingChangesCount > 0 ? `<span class="pending-badge">${pendingChangesCount}</span>` : ''}
+                <button class="header-btn" onclick="window.location.href='settings.html'" title="Settings" aria-label="Open settings">
+                  <span aria-hidden="true">⚙️</span>${isAdmin() && pendingChangesCount > 0 ? `<span class="pending-badge" aria-label="${pendingChangesCount} pending changes">${pendingChangesCount}</span>` : ''}<span class="sr-only">Settings</span>
                 </button>
               </div>
 
@@ -6703,6 +8299,9 @@
             </div>
           </div>
 
+          <!-- Mobile Overlay -->
+          <div class="mobile-overlay" onclick="closeMobileMenu()"></div>
+
           <!-- MAIN CONTENT - 3 Column Layout -->
           <div class="main-content ${editMode ? 'edit-mode' : ''} ${leftPanelCollapsed ? 'left-collapsed' : ''}">
 
@@ -6719,6 +8318,9 @@
                   const deviceCount = counts.total + polyFloor.length;
                   const issueCount = counts.down + polyFloor.filter(d => !d.connected).length;
                   const isActive = floor === activeFloor;
+                  const health = floorHealthData[floor];
+                  const healthScore = health?.health_score ?? 100;
+                  const healthColor = getFloorHealthColor(healthScore);
 
                   return `
                     <div class="floor-item ${isActive ? 'active' : ''} ${issueCount > 0 ? 'has-issues' : ''}"
@@ -6732,11 +8334,30 @@
                             ${issueCount > 0 ? `● ${issueCount} issue${issueCount > 1 ? 's' : ''}` : '✓ OK'}
                           </span>
                         </div>
+                        <div class="floor-health">
+                          <div class="floor-health-bar">
+                            <div class="floor-health-fill" style="width: ${healthScore}%; background: ${healthColor};"></div>
+                          </div>
+                          <span class="floor-health-score" style="color: ${healthColor};">${healthScore}%</span>
+                        </div>
                       </div>
                     </div>
                   `;
                 }).join('')}
               </nav>
+
+              <!-- Quick Filters -->
+              <div class="quick-filters" role="group" aria-label="Device filters">
+                <button class="filter-btn ${activeFilters.offlineOnly ? 'active' : ''}" onclick="toggleFilter('offlineOnly')" title="Show only offline devices" aria-pressed="${activeFilters.offlineOnly}" aria-label="Filter offline devices (${getFilterCounts().offlineCount})">
+                  <span aria-hidden="true">🔴</span> Offline <span class="filter-count">${getFilterCounts().offlineCount}</span>
+                </button>
+                <button class="filter-btn ${activeFilters.lowToner ? 'active' : ''}" onclick="toggleFilter('lowToner')" title="Show printers with low toner" aria-pressed="${activeFilters.lowToner}" aria-label="Filter low toner printers (${getFilterCounts().lowTonerCount})">
+                  <span aria-hidden="true">🎨</span> Low Toner <span class="filter-count">${getFilterCounts().lowTonerCount}</span>
+                </button>
+                <button class="filter-btn ${activeFilters.inMeeting ? 'active' : ''}" onclick="toggleFilter('inMeeting')" title="Show rooms in meeting" aria-pressed="${activeFilters.inMeeting}" aria-label="Filter rooms in meeting (${getFilterCounts().inMeetingCount})">
+                  <span aria-hidden="true">📞</span> In Meeting <span class="filter-count">${getFilterCounts().inMeetingCount}</span>
+                </button>
+              </div>
 
               <div class="quick-stats">
                 <div class="quick-stat-item" onclick="showDevicesByType('accessPoints')" title="View all Access Points">
@@ -6778,11 +8399,11 @@
                 `}
               </div>
 
-              <div class="map-controls">
-                <button class="map-control-btn" onclick="zoomIn()" title="Zoom In">+</button>
-                <button class="map-control-btn" onclick="zoomOut()" title="Zoom Out">−</button>
-                <button class="map-control-btn" onclick="resetZoom()" title="Reset">⟲</button>
-                <button class="map-control-btn" onclick="toggleFullscreen()" title="Fullscreen">⛶</button>
+              <div class="map-controls" role="toolbar" aria-label="Map controls">
+                <button class="map-control-btn" onclick="zoomIn()" title="Zoom In" aria-label="Zoom in">+</button>
+                <button class="map-control-btn" onclick="zoomOut()" title="Zoom Out" aria-label="Zoom out">−</button>
+                <button class="map-control-btn" onclick="resetZoom()" title="Reset" aria-label="Reset view">⟲</button>
+                <button class="map-control-btn" onclick="toggleFullscreen()" title="Fullscreen" aria-label="Toggle fullscreen">⛶</button>
               </div>
             </main>
 
@@ -6791,15 +8412,21 @@
               <div class="device-list-header">
                 <h2 class="device-list-title">${activeFloor} Devices</h2>
                 <div class="device-search">
-                  <input type="text" placeholder="Search devices..." onkeyup="filterDevices(this.value)">
+                  <input type="text" placeholder="Search devices..." onkeyup="filterDevices(this.value)" aria-label="Search devices" role="searchbox">
                 </div>
               </div>
 
               <div class="device-list">
                 ${sidebarHTML || `
-                  <div style="text-align: center; padding: var(--space-xl); color: var(--text-muted);">
-                    <div style="font-size: 2rem; margin-bottom: var(--space-sm);">📭</div>
-                    <div>No devices found</div>
+                  <div class="empty-state">
+                    <div class="empty-state-icon">${(activeFilters.offlineOnly || activeFilters.lowToner || activeFilters.inMeeting) ? '🔍' : '📭'}</div>
+                    <div class="empty-state-title">${(activeFilters.offlineOnly || activeFilters.lowToner || activeFilters.inMeeting) ? 'No matching devices' : 'No devices found'}</div>
+                    <div class="empty-state-text">${(activeFilters.offlineOnly || activeFilters.lowToner || activeFilters.inMeeting)
+                      ? 'Try adjusting your filters or switch to a different floor'
+                      : 'Add devices to start monitoring this floor'}</div>
+                    ${(activeFilters.offlineOnly || activeFilters.lowToner || activeFilters.inMeeting) ? `
+                      <button class="btn btn-sm btn-secondary" onclick="clearAllFilters()" style="margin-top: 8px;">Clear Filters</button>
+                    ` : ''}
                   </div>
                 `}
               </div>
@@ -6886,8 +8513,39 @@
         isDragging = false;
         currentDragElement = null;
       }
-      activeFloor = floor;
-      render();
+
+      // Skip if same floor or transitioning
+      if (floor === activeFloor || isFloorTransitioning) return;
+
+      // Animate floor transition
+      isFloorTransitioning = true;
+      const mapContainer = document.querySelector('.floor-map');
+
+      if (mapContainer) {
+        mapContainer.style.opacity = '0';
+        mapContainer.style.transform = 'scale(0.98)';
+
+        setTimeout(() => {
+          activeFloor = floor;
+          render();
+
+          requestAnimationFrame(() => {
+            const newMap = document.querySelector('.floor-map');
+            if (newMap) {
+              newMap.style.transition = 'opacity 0.3s ease, transform 0.3s ease';
+              newMap.style.opacity = '1';
+              newMap.style.transform = 'scale(1)';
+            }
+            setTimeout(() => {
+              isFloorTransitioning = false;
+            }, 300);
+          });
+        }, 250);
+      } else {
+        activeFloor = floor;
+        render();
+        isFloorTransitioning = false;
+      }
     }
 
     function toggleLeftPanel() {
@@ -6924,48 +8582,303 @@
 
       try {
         const audioContext = new (window.AudioContext || window.webkitAudioContext)();
-        const oscillator = audioContext.createOscillator();
-        const gainNode = audioContext.createGain();
 
-        oscillator.connect(gainNode);
-        gainNode.connect(audioContext.destination);
+        const playTone = (freq, duration, startTime = 0, waveType = 'sine', volume = 0.3) => {
+          const osc = audioContext.createOscillator();
+          const gain = audioContext.createGain();
+          osc.connect(gain);
+          gain.connect(audioContext.destination);
+          osc.type = waveType;
+          osc.frequency.setValueAtTime(freq, audioContext.currentTime + startTime);
+          gain.gain.setValueAtTime(volume, audioContext.currentTime + startTime);
+          gain.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + startTime + duration);
+          osc.start(audioContext.currentTime + startTime);
+          osc.stop(audioContext.currentTime + startTime + duration);
+        };
 
-        if (type === 'alert') {
-          // Alert sound - two quick beeps
-          oscillator.type = 'sine';
-          oscillator.frequency.setValueAtTime(800, audioContext.currentTime);
-          gainNode.gain.setValueAtTime(0.3, audioContext.currentTime);
-          gainNode.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.2);
+        switch (type) {
+          case 'offline':
+            // Urgent descending alarm - device went offline
+            playTone(880, 0.15, 0);
+            playTone(660, 0.15, 0.18);
+            playTone(440, 0.25, 0.36);
+            break;
 
-          oscillator.start(audioContext.currentTime);
-          oscillator.stop(audioContext.currentTime + 0.15);
+          case 'online':
+            // Pleasant ascending chime - device back online
+            playTone(440, 0.12, 0, 'sine', 0.2);
+            playTone(550, 0.12, 0.12, 'sine', 0.2);
+            playTone(660, 0.2, 0.24, 'sine', 0.2);
+            break;
 
-          // Second beep
-          setTimeout(() => {
-            const osc2 = audioContext.createOscillator();
-            const gain2 = audioContext.createGain();
-            osc2.connect(gain2);
-            gain2.connect(audioContext.destination);
-            osc2.type = 'sine';
-            osc2.frequency.setValueAtTime(600, audioContext.currentTime);
-            gain2.gain.setValueAtTime(0.3, audioContext.currentTime);
-            gain2.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.2);
-            osc2.start(audioContext.currentTime);
-            osc2.stop(audioContext.currentTime + 0.15);
-          }, 200);
-        } else if (type === 'enable') {
-          // Soft confirmation sound
-          oscillator.type = 'sine';
-          oscillator.frequency.setValueAtTime(440, audioContext.currentTime);
-          oscillator.frequency.setValueAtTime(550, audioContext.currentTime + 0.1);
-          gainNode.gain.setValueAtTime(0.2, audioContext.currentTime);
-          gainNode.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.2);
-          oscillator.start(audioContext.currentTime);
-          oscillator.stop(audioContext.currentTime + 0.2);
+          case 'lowToner':
+            // Warning beeps - low toner
+            playTone(600, 0.1, 0, 'triangle', 0.25);
+            playTone(600, 0.1, 0.15, 'triangle', 0.25);
+            playTone(500, 0.15, 0.3, 'triangle', 0.25);
+            break;
+
+          case 'meeting':
+            // Soft notification - meeting started/ended
+            playTone(523, 0.1, 0, 'sine', 0.15);
+            playTone(659, 0.15, 0.12, 'sine', 0.15);
+            break;
+
+          case 'critical':
+            // Urgent repeated alarm - critical issue
+            for (let i = 0; i < 3; i++) {
+              playTone(880, 0.08, i * 0.2, 'square', 0.2);
+              playTone(660, 0.08, i * 0.2 + 0.1, 'square', 0.2);
+            }
+            break;
+
+          case 'enable':
+            // Soft confirmation sound
+            playTone(440, 0.1, 0, 'sine', 0.2);
+            playTone(550, 0.15, 0.1, 'sine', 0.2);
+            break;
+
+          case 'alert':
+          default:
+            // Standard alert - two quick beeps
+            playTone(800, 0.15, 0);
+            playTone(600, 0.15, 0.2);
+            break;
         }
       } catch (e) {
         console.log('Audio not supported');
       }
+    }
+
+    // ==================== PUSH NOTIFICATIONS ====================
+    let pushNotificationsEnabled = localStorage.getItem('pushNotificationsEnabled') === 'true';
+
+    async function requestPushPermission() {
+      if (!('Notification' in window)) {
+        showAlert('Push notifications not supported in this browser', 'warning');
+        return false;
+      }
+
+      if (Notification.permission === 'granted') {
+        pushNotificationsEnabled = true;
+        localStorage.setItem('pushNotificationsEnabled', 'true');
+        return true;
+      }
+
+      if (Notification.permission === 'denied') {
+        showAlert('Push notifications were denied. Please enable in browser settings.', 'warning');
+        return false;
+      }
+
+      const permission = await Notification.requestPermission();
+      if (permission === 'granted') {
+        pushNotificationsEnabled = true;
+        localStorage.setItem('pushNotificationsEnabled', 'true');
+        showAlert('Push notifications enabled!', 'success');
+        return true;
+      }
+      return false;
+    }
+
+    function sendPushNotification(title, options = {}) {
+      if (!pushNotificationsEnabled || Notification.permission !== 'granted') return;
+
+      const notification = new Notification(title, {
+        icon: '🏢',
+        badge: '🏢',
+        tag: options.tag || 'office-monitor',
+        renotify: options.renotify || false,
+        requireInteraction: options.requireInteraction || false,
+        ...options
+      });
+
+      notification.onclick = () => {
+        window.focus();
+        notification.close();
+        if (options.onClick) options.onClick();
+      };
+
+      // Auto-close after 10 seconds
+      setTimeout(() => notification.close(), 10000);
+    }
+
+    function togglePushNotifications() {
+      if (pushNotificationsEnabled) {
+        pushNotificationsEnabled = false;
+        localStorage.setItem('pushNotificationsEnabled', 'false');
+        showAlert('Push notifications disabled', 'info');
+      } else {
+        requestPushPermission();
+      }
+      render();
+    }
+
+    // ==================== FLOOR HEALTH ====================
+    let floorHealthData = {};
+
+    async function fetchFloorHealth() {
+      try {
+        const response = await fetch(`${API_URL}/api/floors/health`);
+        if (response.ok) {
+          const data = await response.json();
+          if (data.success) {
+            floorHealthData = {};
+            data.floors.forEach(f => {
+              floorHealthData[f.floor] = f;
+            });
+          }
+        }
+      } catch (e) {
+        console.error('Failed to fetch floor health:', e);
+      }
+    }
+
+    function getFloorHealthColor(score) {
+      if (score >= 95) return 'var(--status-online)';
+      if (score >= 80) return 'var(--status-warning)';
+      return 'var(--status-offline)';
+    }
+
+    // ==================== DEVICE TAGS ====================
+    let allTags = [];
+
+    async function fetchAllTags() {
+      try {
+        const response = await fetch(`${API_URL}/api/tags`);
+        if (response.ok) {
+          const data = await response.json();
+          if (data.success) {
+            allTags = data.tags;
+          }
+        }
+      } catch (e) {
+        console.error('Failed to fetch tags:', e);
+      }
+    }
+
+    async function addTagToDevice(deviceId, tag) {
+      const monitor = allMonitors.find(m => m.id == deviceId);
+      if (!monitor) return;
+
+      let tags = [];
+      try {
+        tags = JSON.parse(monitor.tags || '[]');
+      } catch (e) {
+        tags = [];
+      }
+
+      if (!tags.includes(tag)) {
+        tags.push(tag);
+        await authFetch(`${API_URL}/api/monitors/${deviceId}/tags`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ tags })
+        });
+        monitor.tags = JSON.stringify(tags);
+        if (!allTags.includes(tag)) allTags.push(tag);
+        render();
+      }
+    }
+
+    async function removeTagFromDevice(deviceId, tag) {
+      const monitor = allMonitors.find(m => m.id == deviceId);
+      if (!monitor) return;
+
+      let tags = [];
+      try {
+        tags = JSON.parse(monitor.tags || '[]');
+      } catch (e) {
+        tags = [];
+      }
+
+      tags = tags.filter(t => t !== tag);
+      await authFetch(`${API_URL}/api/monitors/${deviceId}/tags`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ tags })
+      });
+      monitor.tags = JSON.stringify(tags);
+      render();
+    }
+
+    function renderDeviceTags(deviceId) {
+      const monitor = allMonitors.find(m => m.id == deviceId);
+      if (!monitor) return '';
+
+      let tags = [];
+      try {
+        tags = JSON.parse(monitor.tags || '[]');
+      } catch (e) {
+        tags = [];
+      }
+
+      return `
+        <div class="device-tags">
+          ${tags.map(tag => `
+            <span class="device-tag">
+              ${tag}
+              <span class="tag-remove" onclick="event.stopPropagation(); removeTagFromDevice(${deviceId}, '${tag}')">&times;</span>
+            </span>
+          `).join('')}
+          <span class="device-tag editable" onclick="event.stopPropagation(); promptAddTag(${deviceId})">+ Add</span>
+        </div>
+      `;
+    }
+
+    function promptAddTag(deviceId) {
+      const tag = prompt('Enter tag name:');
+      if (tag && tag.trim()) {
+        addTagToDevice(deviceId, tag.trim().toLowerCase());
+      }
+    }
+
+    // ==================== MOBILE MENU ====================
+    let mobileMenuOpen = false;
+
+    function toggleMobileMenu() {
+      mobileMenuOpen = !mobileMenuOpen;
+      document.querySelector('.left-panel')?.classList.toggle('mobile-open', mobileMenuOpen);
+      document.querySelector('.mobile-overlay')?.classList.toggle('active', mobileMenuOpen);
+    }
+
+    function closeMobileMenu() {
+      mobileMenuOpen = false;
+      document.querySelector('.left-panel')?.classList.remove('mobile-open');
+      document.querySelector('.mobile-overlay')?.classList.remove('active');
+    }
+
+    // ==================== MEETING UTILIZATION ====================
+    async function fetchRoomUtilization(roomId) {
+      try {
+        const response = await fetch(`${API_URL}/api/zoom-rooms/${roomId}/utilization?days=7`);
+        if (response.ok) {
+          return await response.json();
+        }
+      } catch (e) {
+        console.error('Failed to fetch room utilization:', e);
+      }
+      return null;
+    }
+
+    function renderUtilizationChart(dailyStats) {
+      if (!dailyStats || dailyStats.length === 0) {
+        return '<div style="color: var(--text-muted); font-size: 11px;">No utilization data yet</div>';
+      }
+
+      return `
+        <div class="utilization-bar">
+          ${dailyStats.map(d => {
+            const color = d.utilization > 70 ? 'var(--status-offline)' :
+                          d.utilization > 40 ? 'var(--status-warning)' :
+                          d.utilization > 0 ? 'var(--status-online)' : 'var(--bg-overlay)';
+            return `<div class="utilization-segment" style="background: ${color};" title="${d.date}: ${d.utilization}% (${d.meeting_count} meetings)"></div>`;
+          }).join('')}
+        </div>
+        <div class="utilization-legend">
+          <span>${dailyStats[0]?.date || ''}</span>
+          <span>${dailyStats[dailyStats.length - 1]?.date || ''}</span>
+        </div>
+      `;
     }
 
     // ==================== DASHBOARD CUSTOMIZATION ====================
@@ -7138,6 +9051,8 @@
 
     function checkForStatusChanges() {
       let newOfflineDevices = [];
+      let newOnlineDevices = [];
+      let lowTonerPrinters = [];
 
       // Check all floors for status changes
       Object.values(uptimeKumaData).forEach(floor => {
@@ -7148,8 +9063,24 @@
               const currentStatus = device.status;
 
               // Device went offline
-              if (prevStatus === 'up' && currentStatus === 'down') {
+              if (prevStatus === 'up' && currentStatus === 'down' && !device.disabled && !device.maintenance) {
                 newOfflineDevices.push(device.name);
+              }
+
+              // Device came back online
+              if (prevStatus === 'down' && currentStatus === 'up') {
+                newOnlineDevices.push(device.name);
+              }
+
+              // Check for low toner on printers
+              if (type === 'printers' && printerStatusData[device.id]) {
+                const toner = printerStatusData[device.id].toner || {};
+                const hasLowToner = Object.values(toner).some(level => level !== null && level < 10);
+                const prevLowToner = previousDeviceStatuses[`${device.id}_lowToner`];
+                if (hasLowToner && !prevLowToner) {
+                  lowTonerPrinters.push(device.name);
+                }
+                previousDeviceStatuses[`${device.id}_lowToner`] = hasLowToner;
               }
 
               // Update stored status
@@ -7159,17 +9090,44 @@
         });
       });
 
-      // Play alert if any device went offline
+      // Handle offline alerts (highest priority)
       if (newOfflineDevices.length > 0) {
-        playAlertSound('alert');
-        // Show notification
-        if (Notification.permission === 'granted') {
-          new Notification('Device Offline', {
+        const isCritical = newOfflineDevices.length >= 3;
+        playAlertSound(isCritical ? 'critical' : 'offline');
+        sendPushNotification(
+          isCritical ? '🚨 Critical: Multiple Devices Offline' : '🔴 Device Offline',
+          {
             body: newOfflineDevices.join(', ') + ' went offline',
-            icon: '🔴'
-          });
-        }
+            tag: 'offline-alert',
+            renotify: true,
+            requireInteraction: isCritical
+          }
+        );
+        addNotification('offline', `${newOfflineDevices.join(', ')} went offline`);
       }
+
+      // Handle back online notifications
+      if (newOnlineDevices.length > 0) {
+        playAlertSound('online');
+        sendPushNotification('✅ Device Back Online', {
+          body: newOnlineDevices.join(', ') + ' is back online',
+          tag: 'online-alert'
+        });
+        addNotification('online', `${newOnlineDevices.join(', ')} is back online`);
+      }
+
+      // Handle low toner warnings
+      if (lowTonerPrinters.length > 0) {
+        playAlertSound('lowToner');
+        sendPushNotification('🎨 Low Toner Warning', {
+          body: lowTonerPrinters.join(', ') + ' has critically low toner (<10%)',
+          tag: 'toner-alert'
+        });
+        addNotification('warning', `${lowTonerPrinters.join(', ')} has low toner`);
+      }
+
+      // Refresh floor health data periodically
+      fetchFloorHealth();
     }
 
     // ==================== KEYBOARD SHORTCUTS ====================
@@ -7216,7 +9174,38 @@
       return count;
     }
 
-    // Show low toner printers modal
+    // Sidebar list view state
+    let sidebarListView = null;
+
+    // Show sidebar list view (replaces device list in right panel)
+    function showSidebarList(title, content) {
+      sidebarListView = { title, content };
+      const deviceList = document.querySelector('.device-list');
+      if (deviceList) {
+        deviceList.innerHTML = `
+          <div class="sidebar-list-view">
+            <div class="sidebar-list-header" style="display: flex; align-items: center; gap: 10px; padding: 12px 16px; background: var(--bg-elevated); border-bottom: 1px solid var(--border-subtle);">
+              <button onclick="closeSidebarList()" style="background: none; border: none; color: var(--text-secondary); cursor: pointer; font-size: 18px; padding: 4px;">←</button>
+              <h3 style="font-size: 14px; font-weight: 600; color: var(--text-primary); margin: 0;">${title}</h3>
+            </div>
+            <div class="sidebar-list-content" style="overflow-y: auto; max-height: calc(100vh - 350px);">
+              ${content}
+            </div>
+            <div style="padding: 10px 16px; background: var(--bg-secondary); font-size: 11px; color: var(--text-muted); text-align: center; border-top: 1px solid var(--border-subtle);">
+              Click a device to locate it on the map
+            </div>
+          </div>
+        `;
+      }
+    }
+
+    // Close sidebar list and restore device list
+    function closeSidebarList() {
+      sidebarListView = null;
+      renderDashboard(); // Re-render to restore device list
+    }
+
+    // Show low toner printers in sidebar
     function showLowTonerPrinters() {
       const lowToner = [];
       Object.entries(printerStatusData).forEach(([id, ps]) => {
@@ -7245,46 +9234,32 @@
         return;
       }
 
-      // Show modal with clickable list
-      document.getElementById('modal-container').innerHTML = `
-        <div class="modal open" onclick="if(event.target === this) closeStatusModal()">
-          <div class="modal-content" style="max-width: 450px;">
-            <div class="modal-header">
-              <h3 class="modal-title">⚠️ Low Toner Printers (${lowToner.length})</h3>
-              <button class="admin-close" onclick="closeStatusModal()">&times;</button>
-            </div>
-            <div style="max-height: 400px; overflow-y: auto;">
-              ${lowToner.map(p => `
-                <div class="status-list-item" onclick="closeStatusModal(); highlightDevice('${p.id}');" style="cursor: pointer; padding: 12px 16px; border-bottom: 1px solid var(--border-subtle); display: flex; justify-content: space-between; align-items: center; transition: background 0.15s;">
-                  <div>
-                    <div style="font-weight: 600; color: var(--text-primary);">${p.name}</div>
-                    <div style="font-size: 11px; color: var(--text-muted);">${p.floor || 'Unknown floor'}</div>
-                  </div>
-                  <div style="display: flex; gap: 6px; align-items: center;">
-                    ${p.low.map(l => `
-                      <div style="display: flex; flex-direction: column; align-items: center; min-width: 28px;">
-                        <div style="width: 12px; height: 12px; border-radius: 50%; background: ${l.color === 'black' ? '#374151' : l.color}; border: 1px solid rgba(255,255,255,0.2);"></div>
-                        <span style="font-size: 9px; color: var(--status-warning); font-weight: 600;">${l.level}%</span>
-                      </div>
-                    `).join('')}
-                    <span style="color: var(--accent); font-size: 16px; margin-left: 8px;">📍</span>
-                  </div>
-                </div>
-              `).join('')}
-            </div>
-            <div style="padding: 12px 16px; background: var(--bg-secondary); border-radius: 0 0 8px 8px; font-size: 11px; color: var(--text-muted); text-align: center;">
-              Click a printer to locate it on the map
-            </div>
+      const content = lowToner.map(p => `
+        <div class="status-list-item" onclick="closeSidebarList(); highlightDevice('${p.id}');" style="cursor: pointer; padding: 12px 16px; border-bottom: 1px solid var(--border-subtle); display: flex; justify-content: space-between; align-items: center; transition: background 0.15s;">
+          <div>
+            <div style="font-weight: 600; color: var(--text-primary);">${p.name}</div>
+            <div style="font-size: 11px; color: var(--text-muted);">${p.floor || 'Unknown floor'}</div>
+          </div>
+          <div style="display: flex; gap: 6px; align-items: center;">
+            ${p.low.map(l => `
+              <div style="display: flex; flex-direction: column; align-items: center; min-width: 28px;">
+                <div style="width: 12px; height: 12px; border-radius: 50%; background: ${l.color === 'black' ? '#374151' : l.color}; border: 1px solid rgba(255,255,255,0.2);"></div>
+                <span style="font-size: 9px; color: var(--status-warning); font-weight: 600;">${l.level}%</span>
+              </div>
+            `).join('')}
+            <span style="color: var(--accent-blue); font-size: 16px; margin-left: 8px;">📍</span>
           </div>
         </div>
-      `;
+      `).join('');
+
+      showSidebarList(`⚠️ Low Toner Printers (${lowToner.length})`, content);
     }
 
     function closeStatusModal() {
       document.getElementById('modal-container').innerHTML = '';
     }
 
-    // Show health details
+    // Show health details in sidebar
     function showHealthDetails() {
       const total = totalStats.online + totalStats.offline;
       const health = total > 0 ? Math.round((totalStats.online / total) * 100) : 100;
@@ -7304,53 +9279,45 @@
       });
       lowHealthDevices.sort((a, b) => (a.health_score || 0) - (b.health_score || 0));
 
-      document.getElementById('modal-container').innerHTML = `
-        <div class="modal open" onclick="if(event.target === this) closeStatusModal()">
-          <div class="modal-content" style="max-width: 450px;">
-            <div class="modal-header">
-              <h3 class="modal-title">💚 Network Health</h3>
-              <button class="admin-close" onclick="closeStatusModal()">&times;</button>
+      const content = `
+        <div style="padding: 20px; text-align: center; border-bottom: 1px solid var(--border-subtle);">
+          <div style="font-size: 48px; font-weight: 700; color: ${health >= 90 ? 'var(--status-online)' : health >= 70 ? 'var(--status-warning)' : 'var(--status-offline)'};">${health}%</div>
+          <div style="display: flex; justify-content: center; gap: 30px; margin-top: 12px;">
+            <div style="text-align: center;">
+              <div style="font-size: 20px; font-weight: 600; color: var(--status-online);">${totalStats.online}</div>
+              <div style="font-size: 11px; color: var(--text-muted);">Online</div>
             </div>
-            <div style="padding: 20px; text-align: center; border-bottom: 1px solid var(--border-subtle);">
-              <div style="font-size: 48px; font-weight: 700; color: ${health >= 90 ? 'var(--status-online)' : health >= 70 ? 'var(--status-warning)' : 'var(--status-offline)'};">${health}%</div>
-              <div style="display: flex; justify-content: center; gap: 30px; margin-top: 12px;">
-                <div style="text-align: center;">
-                  <div style="font-size: 20px; font-weight: 600; color: var(--status-online);">${totalStats.online}</div>
-                  <div style="font-size: 11px; color: var(--text-muted);">Online</div>
-                </div>
-                <div style="text-align: center;">
-                  <div style="font-size: 20px; font-weight: 600; color: var(--status-offline);">${totalStats.offline}</div>
-                  <div style="font-size: 11px; color: var(--text-muted);">Offline</div>
-                </div>
-                <div style="text-align: center;">
-                  <div style="font-size: 20px; font-weight: 600; color: var(--text-primary);">${total}</div>
-                  <div style="font-size: 11px; color: var(--text-muted);">Total</div>
-                </div>
-              </div>
+            <div style="text-align: center;">
+              <div style="font-size: 20px; font-weight: 600; color: var(--status-offline);">${totalStats.offline}</div>
+              <div style="font-size: 11px; color: var(--text-muted);">Offline</div>
             </div>
-            ${lowHealthDevices.length > 0 ? `
-              <div style="padding: 12px 16px; background: var(--bg-secondary);">
-                <div style="font-size: 12px; font-weight: 600; color: var(--text-muted); margin-bottom: 8px;">⚠️ Devices Needing Attention</div>
-              </div>
-              <div style="max-height: 200px; overflow-y: auto;">
-                ${lowHealthDevices.slice(0, 10).map(d => `
-                  <div class="status-list-item" onclick="closeStatusModal(); highlightDevice('${d.id}');" style="cursor: pointer; padding: 10px 16px; border-bottom: 1px solid var(--border-subtle); display: flex; justify-content: space-between; align-items: center;">
-                    <div style="font-weight: 500; color: var(--text-primary);">${d.name}</div>
-                    <div style="display: flex; align-items: center; gap: 8px;">
-                      <span style="font-size: 12px; color: ${d.health_score >= 70 ? 'var(--status-warning)' : 'var(--status-offline)'}; font-weight: 600;">${d.health_score}%</span>
-                      <span style="color: var(--accent);">📍</span>
-                    </div>
-                  </div>
-                `).join('')}
-              </div>
-            ` : `
-              <div style="padding: 20px; text-align: center; color: var(--text-muted);">
-                All devices are healthy!
-              </div>
-            `}
+            <div style="text-align: center;">
+              <div style="font-size: 20px; font-weight: 600; color: var(--text-primary);">${total}</div>
+              <div style="font-size: 11px; color: var(--text-muted);">Total</div>
+            </div>
           </div>
         </div>
+        ${lowHealthDevices.length > 0 ? `
+          <div style="padding: 12px 16px; background: var(--bg-secondary);">
+            <div style="font-size: 12px; font-weight: 600; color: var(--text-muted);">⚠️ Devices Needing Attention</div>
+          </div>
+          ${lowHealthDevices.slice(0, 10).map(d => `
+            <div class="status-list-item" onclick="closeSidebarList(); highlightDevice('${d.id}');" style="cursor: pointer; padding: 10px 16px; border-bottom: 1px solid var(--border-subtle); display: flex; justify-content: space-between; align-items: center;">
+              <div style="font-weight: 500; color: var(--text-primary);">${d.name}</div>
+              <div style="display: flex; align-items: center; gap: 8px;">
+                <span style="font-size: 12px; color: ${d.health_score >= 70 ? 'var(--status-warning)' : 'var(--status-offline)'}; font-weight: 600;">${d.health_score}%</span>
+                <span style="color: var(--accent-blue);">📍</span>
+              </div>
+            </div>
+          `).join('')}
+        ` : `
+          <div style="padding: 20px; text-align: center; color: var(--text-muted);">
+            All devices are healthy!
+          </div>
+        `}
       `;
+
+      showSidebarList('💚 Network Health', content);
     }
 
     // ==================== GLOBAL SEARCH ====================
@@ -7802,15 +9769,102 @@
 
       items.forEach(item => {
         const text = item.textContent.toLowerCase();
-        item.style.display = text.includes(q) ? '' : 'none';
+        const matches = text.includes(q);
+        item.style.display = matches ? '' : 'none';
+
+        // Highlight matching text in device names
+        if (matches && q.length > 0) {
+          const nameEl = item.querySelector('.device-name');
+          if (nameEl && !nameEl.dataset.originalText) {
+            nameEl.dataset.originalText = nameEl.innerHTML;
+          }
+          if (nameEl && nameEl.dataset.originalText) {
+            nameEl.innerHTML = highlightSearchText(nameEl.dataset.originalText, query);
+          }
+        } else {
+          const nameEl = item.querySelector('.device-name');
+          if (nameEl && nameEl.dataset.originalText) {
+            nameEl.innerHTML = nameEl.dataset.originalText;
+          }
+        }
       });
     }
 
-    // User menu
+    // User menu dropdown
+    let userMenuOpen = false;
     function toggleUserMenu() {
-      // Simple logout for now
-      if (confirm('Logout?')) {
-        logout();
+      userMenuOpen = !userMenuOpen;
+      const existingMenu = document.getElementById('user-menu-dropdown');
+
+      if (existingMenu) {
+        existingMenu.remove();
+        userMenuOpen = false;
+        return;
+      }
+
+      const userMenu = document.querySelector('.user-menu');
+      const rect = userMenu.getBoundingClientRect();
+
+      const dropdown = document.createElement('div');
+      dropdown.id = 'user-menu-dropdown';
+      dropdown.style.cssText = `
+        position: fixed;
+        top: ${rect.bottom + 8}px;
+        right: ${window.innerWidth - rect.right}px;
+        background: var(--bg-elevated);
+        border: 1px solid var(--border-default);
+        border-radius: var(--radius-md);
+        box-shadow: var(--shadow-lg);
+        z-index: 1000;
+        min-width: 180px;
+        overflow: hidden;
+      `;
+
+      dropdown.innerHTML = `
+        <div style="padding: 12px 16px; border-bottom: 1px solid var(--border-subtle);">
+          <div style="font-weight: 600; color: var(--text-primary);">${currentUser?.username || 'Guest'}</div>
+          <div style="font-size: 11px; color: var(--text-muted);">${currentUser?.role === 'admin' ? 'Administrator' : 'User'}</div>
+        </div>
+        <div class="user-menu-item" onclick="closeUserMenu(); showChangePasswordModal();" style="padding: 10px 16px; cursor: pointer; display: flex; align-items: center; gap: 10px; transition: background 0.15s;">
+          <span>🔐</span>
+          <span>Change Password</span>
+        </div>
+        <div class="user-menu-item" onclick="closeUserMenu(); logout();" style="padding: 10px 16px; cursor: pointer; display: flex; align-items: center; gap: 10px; color: var(--status-offline); transition: background 0.15s;">
+          <span>🚪</span>
+          <span>Logout</span>
+        </div>
+      `;
+
+      // Add hover styles
+      dropdown.querySelectorAll('.user-menu-item').forEach(item => {
+        item.addEventListener('mouseenter', () => {
+          item.style.background = 'var(--bg-overlay)';
+        });
+        item.addEventListener('mouseleave', () => {
+          item.style.background = 'transparent';
+        });
+      });
+
+      document.body.appendChild(dropdown);
+
+      // Close menu when clicking outside
+      setTimeout(() => {
+        document.addEventListener('click', closeUserMenuOnClickOutside);
+      }, 10);
+    }
+
+    function closeUserMenu() {
+      const dropdown = document.getElementById('user-menu-dropdown');
+      if (dropdown) dropdown.remove();
+      userMenuOpen = false;
+      document.removeEventListener('click', closeUserMenuOnClickOutside);
+    }
+
+    function closeUserMenuOnClickOutside(e) {
+      const dropdown = document.getElementById('user-menu-dropdown');
+      const userMenu = document.querySelector('.user-menu');
+      if (dropdown && !dropdown.contains(e.target) && !userMenu.contains(e.target)) {
+        closeUserMenu();
       }
     }
 
@@ -7844,36 +9898,23 @@
         });
       }
 
-      document.getElementById('modal-container').innerHTML = `
-        <div class="modal open" onclick="if(event.target === this) closeStatusModal()">
-          <div class="modal-content" style="max-width: 500px;">
-            <div class="modal-header">
-              <h3 class="modal-title">${typeLabels[deviceType] || deviceType} (${devices.length})</h3>
-              <button class="admin-close" onclick="closeStatusModal()">&times;</button>
-            </div>
-            <div style="max-height: 400px; overflow-y: auto;">
-              ${devices.length > 0 ? devices.map(d => `
-                <div class="status-list-item" onclick="closeStatusModal(); highlightDevice('${d.id || d.room}');" style="cursor: pointer; padding: 12px 16px; border-bottom: 1px solid var(--border-subtle); display: flex; justify-content: space-between; align-items: center; transition: background 0.15s;">
-                  <div style="display: flex; align-items: center; gap: 10px;">
-                    <span style="width: 10px; height: 10px; border-radius: 50%; background: ${d.status === 'up' || d.connected ? 'var(--status-online)' : 'var(--status-offline)'};"></span>
-                    <div>
-                      <div style="font-weight: 600; color: var(--text-primary);">${d.name || d.room}</div>
-                      <div style="font-size: 11px; color: var(--text-muted);">${d.floor} ${d.ip || d.hostname ? '• ' + (d.ip || d.hostname) : ''}</div>
-                    </div>
-                  </div>
-                  <span style="color: var(--accent); font-size: 16px;">📍</span>
-                </div>
-              `).join('') : '<p style="color: var(--text-muted); text-align: center; padding: 20px;">No devices found</p>'}
-            </div>
-            <div style="padding: 12px 16px; background: var(--bg-secondary); border-radius: 0 0 8px 8px; font-size: 11px; color: var(--text-muted); text-align: center;">
-              Click a device to locate it on the map
+      const content = devices.length > 0 ? devices.map(d => `
+        <div class="status-list-item" onclick="closeSidebarList(); highlightDevice('${d.id || d.room}');" style="cursor: pointer; padding: 12px 16px; border-bottom: 1px solid var(--border-subtle); display: flex; justify-content: space-between; align-items: center; transition: background 0.15s;">
+          <div style="display: flex; align-items: center; gap: 10px;">
+            <span style="width: 10px; height: 10px; border-radius: 50%; background: ${d.status === 'up' || d.connected ? 'var(--status-online)' : 'var(--status-offline)'};"></span>
+            <div>
+              <div style="font-weight: 600; color: var(--text-primary);">${d.name || d.room}</div>
+              <div style="font-size: 11px; color: var(--text-muted);">${d.floor} ${d.ip || d.hostname ? '• ' + (d.ip || d.hostname) : ''}</div>
             </div>
           </div>
+          <span style="color: var(--accent-blue); font-size: 16px;">📍</span>
         </div>
-      `;
+      `).join('') : '<p style="color: var(--text-muted); text-align: center; padding: 20px;">No devices found</p>';
+
+      showSidebarList(`${typeLabels[deviceType] || deviceType} (${devices.length})`, content);
     }
 
-    // Status detail modal
+    // Status detail in sidebar
     function showStatusDetail(type) {
       const floors = Object.keys(uptimeKumaData).length > 0
         ? Object.keys(uptimeKumaData)
@@ -7904,34 +9945,21 @@
         });
       }
 
-      // Show modal with clickable device list
-      document.getElementById('modal-container').innerHTML = `
-        <div class="modal open" onclick="if(event.target === this) closeStatusModal()">
-          <div class="modal-content" style="max-width: 500px;">
-            <div class="modal-header">
-              <h3 class="modal-title">${type === 'online' ? '✅ Online Devices' : type === 'offline' ? '❌ Offline Devices' : '📹 Zoom Devices'} (${devices.length})</h3>
-              <button class="admin-close" onclick="closeStatusModal()">&times;</button>
-            </div>
-            <div style="max-height: 400px; overflow-y: auto;">
-              ${devices.length > 0 ? devices.map(d => `
-                <div class="status-list-item" onclick="closeStatusModal(); highlightDevice('${d.id}');" style="cursor: pointer; padding: 12px 16px; border-bottom: 1px solid var(--border-subtle); display: flex; justify-content: space-between; align-items: center; transition: background 0.15s;">
-                  <div style="display: flex; align-items: center; gap: 10px;">
-                    <span class="device-status-dot ${d.status === 'up' || d.connected ? 'online' : 'offline'}" style="width: 10px; height: 10px; border-radius: 50%;"></span>
-                    <div>
-                      <div style="font-weight: 600; color: var(--text-primary);">${d.name}</div>
-                      <div style="font-size: 11px; color: var(--text-muted);">${d.floor} • ${d.ip || d.hostname || 'No IP'}</div>
-                    </div>
-                  </div>
-                  <span style="color: var(--accent); font-size: 16px;">📍</span>
-                </div>
-              `).join('') : '<p style="color: var(--text-muted); text-align: center; padding: 20px;">No devices found</p>'}
-            </div>
-            <div style="padding: 12px 16px; background: var(--bg-secondary); border-radius: 0 0 8px 8px; font-size: 11px; color: var(--text-muted); text-align: center;">
-              Click a device to locate it on the map
+      const content = devices.length > 0 ? devices.map(d => `
+        <div class="status-list-item" onclick="closeSidebarList(); highlightDevice('${d.id}');" style="cursor: pointer; padding: 12px 16px; border-bottom: 1px solid var(--border-subtle); display: flex; justify-content: space-between; align-items: center; transition: background 0.15s;">
+          <div style="display: flex; align-items: center; gap: 10px;">
+            <span style="width: 10px; height: 10px; border-radius: 50%; background: ${d.status === 'up' || d.connected ? 'var(--status-online)' : 'var(--status-offline)'};"></span>
+            <div>
+              <div style="font-weight: 600; color: var(--text-primary);">${d.name}</div>
+              <div style="font-size: 11px; color: var(--text-muted);">${d.floor} • ${d.ip || d.hostname || 'No IP'}</div>
             </div>
           </div>
+          <span style="color: var(--accent-blue); font-size: 16px;">📍</span>
         </div>
-      `;
+      `).join('') : '<p style="color: var(--text-muted); text-align: center; padding: 20px;">No devices found</p>';
+
+      const title = type === 'online' ? '✅ Online Devices' : type === 'offline' ? '❌ Offline Devices' : '📹 Zoom Devices';
+      showSidebarList(`${title} (${devices.length})`, content);
     }
 
     // Data source info modal
@@ -7997,6 +10025,13 @@
         return;
       }
 
+      // Show penguin loader while loading
+      document.getElementById('app').innerHTML = `
+        <div style="min-height: 100vh; display: flex; align-items: center; justify-content: center; background: var(--bg-base);">
+          ${renderPenguinLoader('Building your dashboard...')}
+        </div>
+      `;
+
       loadDashboardConfig(); // Load user's dashboard customization
       await fetchAllData();
       await fetchAllMonitors(); // Fetch full monitor data including serial numbers
@@ -8034,6 +10069,60 @@
       }
     }
     init();
+
+    // Scroll shadow functionality
+    function setupScrollShadows() {
+      const scrollContainers = document.querySelectorAll('.device-list, .analytics-content, .category-devices');
+      scrollContainers.forEach(container => {
+        if (container.classList.contains('scroll-initialized')) return;
+        container.classList.add('scroll-initialized', 'scroll-container');
+
+        // Create shadow elements
+        const topShadow = document.createElement('div');
+        topShadow.className = 'scroll-shadow-top';
+        const bottomShadow = document.createElement('div');
+        bottomShadow.className = 'scroll-shadow-bottom';
+        container.style.position = 'relative';
+        container.appendChild(topShadow);
+        container.appendChild(bottomShadow);
+
+        const updateShadows = () => {
+          const hasScrollTop = container.scrollTop > 0;
+          const hasScrollBottom = container.scrollTop < (container.scrollHeight - container.clientHeight - 1);
+          container.classList.toggle('has-scroll-top', hasScrollTop);
+          container.classList.toggle('has-scroll-bottom', hasScrollBottom);
+        };
+
+        container.addEventListener('scroll', updateShadows);
+        updateShadows();
+      });
+    }
+
+    // Search text highlighting helper
+    function highlightSearchText(text, searchTerm) {
+      if (!searchTerm || !text) return text;
+      const regex = new RegExp(`(${searchTerm.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')})`, 'gi');
+      return text.replace(regex, '<span class="search-highlight">$1</span>');
+    }
+
+    // Staggered animation for device items
+    function animateDeviceItems() {
+      const items = document.querySelectorAll('.device-item:not(.animate-initialized)');
+      items.forEach((item, index) => {
+        item.classList.add('animate-initialized', 'animate-in');
+        item.style.animationDelay = `${Math.min(index * 30, 300)}ms`;
+      });
+    }
+
+    // Run polish setup after each render
+    const originalRender = render;
+    render = function() {
+      originalRender.apply(this, arguments);
+      requestAnimationFrame(() => {
+        setupScrollShadows();
+        animateDeviceItems();
+      });
+    };
 
     // Auto-refresh every 30 seconds (only when logged in)
     setInterval(async () => {
@@ -8245,6 +10334,283 @@
       background: var(--bg-elevated);
       color: var(--text-primary);
     }
+
+    /* ==========================================
+       POLISH & ACCESSIBILITY IMPROVEMENTS
+       ========================================== */
+
+    /* 1. Active/Press States for All Buttons */
+    .btn:active,
+    .btn-primary:active,
+    .btn-secondary:active,
+    .btn-danger:active,
+    .btn-warning:active,
+    .btn-success:active,
+    .btn-outline:active {
+      transform: scale(0.96);
+      opacity: 0.9;
+    }
+    .header-btn:active,
+    .popup-btn:active,
+    .filter-btn:active,
+    .floor-btn:active {
+      transform: scale(0.95);
+    }
+    .quick-filter-btn:active {
+      transform: scale(0.97);
+    }
+
+    /* 2. Standardized Input Focus Styles */
+    input:focus,
+    select:focus,
+    textarea:focus,
+    .form-input:focus,
+    .login-input:focus,
+    .device-search input:focus,
+    .customize-select:focus,
+    .search-input:focus {
+      outline: none;
+      border-color: var(--accent-primary) !important;
+      box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.25) !important;
+    }
+
+    /* 3. Device Selected State in Sidebar */
+    .device-item.selected,
+    .room-item.selected {
+      background: rgba(59, 130, 246, 0.15) !important;
+      border-left: 3px solid var(--accent-primary) !important;
+      box-shadow: inset 0 0 0 1px var(--accent-primary);
+    }
+
+    /* 4. Cursor Consistency */
+    .btn:disabled,
+    .btn[disabled],
+    button:disabled,
+    input:disabled,
+    select:disabled {
+      cursor: not-allowed !important;
+      opacity: 0.5;
+    }
+    .device-item,
+    .room-item,
+    .floor-btn,
+    .category-header,
+    .quick-filter-btn,
+    .filter-btn,
+    .legend-item,
+    .stat-card,
+    .analytics-close,
+    [onclick] {
+      cursor: pointer;
+    }
+    .stat-label,
+    .analytics-section-title,
+    .category-title {
+      cursor: default;
+    }
+
+    /* 5. Empty State for No Filter Results */
+    .empty-state {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 40px 20px;
+      color: var(--text-muted);
+      text-align: center;
+      gap: 12px;
+    }
+    .empty-state-icon {
+      font-size: 48px;
+      opacity: 0.5;
+    }
+    .empty-state-title {
+      font-size: 14px;
+      font-weight: 600;
+      color: var(--text-secondary);
+    }
+    .empty-state-text {
+      font-size: 12px;
+      max-width: 200px;
+    }
+
+    /* 6. Scroll Indicator Shadows */
+    .scroll-container {
+      position: relative;
+    }
+    .scroll-shadow-top,
+    .scroll-shadow-bottom {
+      position: absolute;
+      left: 0;
+      right: 0;
+      height: 24px;
+      pointer-events: none;
+      opacity: 0;
+      transition: opacity 0.2s ease;
+      z-index: 5;
+    }
+    .scroll-shadow-top {
+      top: 0;
+      background: linear-gradient(to bottom, var(--bg-primary) 0%, transparent 100%);
+    }
+    .scroll-shadow-bottom {
+      bottom: 0;
+      background: linear-gradient(to top, var(--bg-primary) 0%, transparent 100%);
+    }
+    .scroll-container.has-scroll-top .scroll-shadow-top,
+    .scroll-container.has-scroll-bottom .scroll-shadow-bottom {
+      opacity: 1;
+    }
+
+    /* 7. Search Text Highlighting */
+    .search-highlight {
+      background: rgba(250, 204, 21, 0.3);
+      color: var(--text-primary);
+      padding: 0 2px;
+      border-radius: 2px;
+    }
+
+    /* 8. Tooltip Fade-in Animations */
+    [title] {
+      position: relative;
+    }
+    .tooltip {
+      position: absolute;
+      bottom: calc(100% + 8px);
+      left: 50%;
+      transform: translateX(-50%) translateY(4px);
+      background: var(--bg-elevated);
+      color: var(--text-primary);
+      padding: 6px 10px;
+      border-radius: var(--radius-sm);
+      font-size: 11px;
+      white-space: nowrap;
+      box-shadow: var(--shadow-lg);
+      border: 1px solid var(--border-subtle);
+      opacity: 0;
+      visibility: hidden;
+      transition: opacity 0.15s ease, transform 0.15s ease, visibility 0.15s;
+      z-index: 1000;
+      pointer-events: none;
+    }
+    .tooltip-trigger:hover .tooltip {
+      opacity: 1;
+      visibility: visible;
+      transform: translateX(-50%) translateY(0);
+    }
+
+    /* 9. Focus-Visible Rings for Keyboard Navigation */
+    .btn:focus-visible,
+    .header-btn:focus-visible,
+    .popup-btn:focus-visible,
+    .filter-btn:focus-visible,
+    .floor-btn:focus-visible,
+    .quick-filter-btn:focus-visible,
+    .device-item:focus-visible,
+    .room-item:focus-visible,
+    .analytics-close:focus-visible,
+    button:focus-visible,
+    a:focus-visible,
+    [tabindex]:focus-visible {
+      outline: none;
+      box-shadow: 0 0 0 2px var(--bg-primary), 0 0 0 4px var(--accent-primary) !important;
+    }
+
+    /* 10. Reduced Motion Support */
+    @media (prefers-reduced-motion: reduce) {
+      *,
+      *::before,
+      *::after {
+        animation-duration: 0.01ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: 0.01ms !important;
+        scroll-behavior: auto !important;
+      }
+      .status-dot,
+      .device-marker,
+      .penguin,
+      .hammer {
+        animation: none !important;
+      }
+    }
+
+    /* 11. ARIA - visually hidden but accessible */
+    .sr-only {
+      position: absolute;
+      width: 1px;
+      height: 1px;
+      padding: 0;
+      margin: -1px;
+      overflow: hidden;
+      clip: rect(0, 0, 0, 0);
+      white-space: nowrap;
+      border: 0;
+    }
+
+    /* 12. Custom Selection Color */
+    ::selection {
+      background: rgba(59, 130, 246, 0.4);
+      color: white;
+    }
+    ::-moz-selection {
+      background: rgba(59, 130, 246, 0.4);
+      color: white;
+    }
+
+    /* 13. Smooth Scroll Behavior */
+    html {
+      scroll-behavior: smooth;
+    }
+    .device-list,
+    .analytics-content,
+    .category-devices,
+    .admin-content {
+      scroll-behavior: smooth;
+    }
+
+    /* 14. Staggered Device Animations */
+    @keyframes deviceFadeIn {
+      from {
+        opacity: 0;
+        transform: translateY(8px);
+      }
+      to {
+        opacity: 1;
+        transform: translateY(0);
+      }
+    }
+    .device-item.animate-in {
+      animation: deviceFadeIn 0.25s ease-out forwards;
+    }
+    .device-item.animate-in:nth-child(1) { animation-delay: 0ms; }
+    .device-item.animate-in:nth-child(2) { animation-delay: 30ms; }
+    .device-item.animate-in:nth-child(3) { animation-delay: 60ms; }
+    .device-item.animate-in:nth-child(4) { animation-delay: 90ms; }
+    .device-item.animate-in:nth-child(5) { animation-delay: 120ms; }
+    .device-item.animate-in:nth-child(6) { animation-delay: 150ms; }
+    .device-item.animate-in:nth-child(7) { animation-delay: 180ms; }
+    .device-item.animate-in:nth-child(8) { animation-delay: 210ms; }
+    .device-item.animate-in:nth-child(9) { animation-delay: 240ms; }
+    .device-item.animate-in:nth-child(10) { animation-delay: 270ms; }
+
+    /* 15. Online Status Pulse Animation */
+    @keyframes onlinePulse {
+      0%, 100% {
+        box-shadow: 0 0 0 0 rgba(34, 197, 94, 0.4);
+      }
+      50% {
+        box-shadow: 0 0 0 4px rgba(34, 197, 94, 0);
+      }
+    }
+    .status-dot.online {
+      animation: onlinePulse 3s ease-in-out infinite;
+    }
+    .status-dot.offline {
+      animation: pulse 1.5s ease-in-out infinite;
+    }
+    .status-dot.warning {
+      animation: pulse 2s ease-in-out infinite;
+    }
   </style>
 
   <script>
@@ -8335,7 +10701,7 @@
 
       // Only store position if we actually dragged (moved beyond threshold)
       if (deviceId && dragHasMovedBeyondThreshold) {
-        const isRoom = deviceId.startsWith('room-');
+        const isRoom = deviceId.startsWith('room-') || deviceId.startsWith('zoom-');
         pendingPositions[deviceId] = { x: newX, y: newY, isRoom, floor: activeFloor };
         console.log(`Position queued for ${isRoom ? 'room' : 'device'} ${deviceId}: ${newX}%, ${newY}%`);
         // Update the save button count
@@ -8394,16 +10760,56 @@
 
     // Highlight device on map when clicked from sidebar
     function highlightDevice(deviceId) {
-      // Find the device to get its floor
-      const device = Object.values(uptimeKumaData).flat().find(d => d.id == deviceId);
-      const polyRoom = currentPolyData.find(p => p.room === deviceId || p.id === deviceId);
+      // Find the device to get its floor - search through all data sources
+      let deviceFloor = null;
+      let foundDevice = null;
 
-      // Get the floor and switch to it if needed
-      let deviceFloor = device?.floor || polyRoom?.floor;
+      // Search in uptimeKumaData
+      Object.entries(uptimeKumaData).forEach(([floor, data]) => {
+        if (data.accessPoints) {
+          const found = data.accessPoints.find(d => d.id == deviceId);
+          if (found) { foundDevice = found; deviceFloor = floor; }
+        }
+        if (data.printers) {
+          const found = data.printers.find(d => d.id == deviceId);
+          if (found) { foundDevice = found; deviceFloor = floor; }
+        }
+      });
+
+      // Search in polyLensData for rooms
+      if (!foundDevice) {
+        Object.entries(polyLensData).forEach(([floor, devices]) => {
+          // Group by room and check if deviceId matches room-RoomName format
+          const rooms = {};
+          devices.forEach(d => {
+            const roomName = d.room || 'Unknown';
+            if (!rooms[roomName]) rooms[roomName] = [];
+            rooms[roomName].push(d);
+          });
+          Object.keys(rooms).forEach(roomName => {
+            const roomId = `room-${roomName.replace(/\s+/g, '-')}`;
+            if (roomId === deviceId || roomName === deviceId) {
+              foundDevice = { id: roomId, room: roomName };
+              deviceFloor = floor;
+            }
+          });
+        });
+      }
+
+      // Also check currentPolyData
+      if (!foundDevice && currentPolyData) {
+        const polyRoom = currentPolyData.find(p => p.room === deviceId || p.id === deviceId);
+        if (polyRoom) {
+          foundDevice = polyRoom;
+          deviceFloor = polyRoom.floor;
+        }
+      }
+
+      // Switch floor if needed, then highlight
       if (deviceFloor && deviceFloor !== currentFloor) {
         setFloor(deviceFloor);
         // Wait for floor to render, then highlight
-        setTimeout(() => highlightDeviceOnMap(deviceId), 100);
+        setTimeout(() => highlightDeviceOnMap(deviceId), 300);
       } else {
         highlightDeviceOnMap(deviceId);
       }
@@ -8416,8 +10822,30 @@
         el.querySelector('.device-popup')?.classList.remove('force-show');
       });
 
-      // Find and highlight the marker
-      const marker = document.querySelector(`.device-marker[data-id="${deviceId}"]`);
+      // Find and highlight the marker - try exact match first
+      let marker = document.querySelector(`.device-marker[data-id="${deviceId}"]`);
+
+      // If not found, try with CSS escape for special characters
+      if (!marker) {
+        try {
+          marker = document.querySelector(`.device-marker[data-id="${CSS.escape(deviceId)}"]`);
+        } catch (e) {
+          // CSS.escape not supported, try manual approach
+        }
+      }
+
+      // If still not found, search all markers for a partial match
+      if (!marker) {
+        const allMarkers = document.querySelectorAll('.device-marker[data-id]');
+        for (const m of allMarkers) {
+          const markerId = m.getAttribute('data-id');
+          if (markerId && (markerId.includes(deviceId) || deviceId.includes(markerId))) {
+            marker = m;
+            break;
+          }
+        }
+      }
+
       if (marker) {
         marker.classList.add('highlighted');
 
@@ -8805,7 +11233,34 @@
               }
               if (!Array.isArray(points) || points.length < 3) return '';
               const pointsStr = points.map(p => `${p.x},${p.y}`).join(' ');
-              return `<polygon points="${pointsStr}" fill="rgba(59, 130, 246, 0.08)" stroke="rgba(59, 130, 246, 0.4)" stroke-width="0.2" />`;
+              // Calculate center for label (same as wall editor)
+              const centerX = points.reduce((s, p) => s + p.x, 0) / points.length;
+              const centerY = points.reduce((s, p) => s + p.y, 0) / points.length;
+              const displayName = zone.name.length > 15 ? zone.name.substring(0, 15) + '...' : zone.name;
+
+              // Get saved settings or use defaults
+              const settings = roomLabelSettings[zone.id] || {};
+              const labelX = settings.x ?? centerX;
+              const labelY = settings.y ?? centerY;
+              const fontSize = settings.fontSize ?? 10;
+              const svgFontSize = fontSize / 10; // Convert px to SVG units
+
+              const textWidth = displayName.length * svgFontSize * 0.6;
+              const textHeight = svgFontSize * 1.6;
+
+              return `
+                <polygon points="${pointsStr}" fill="rgba(59, 130, 246, 0.08)" stroke="rgba(59, 130, 246, 0.4)" stroke-width="0.2" />
+                <g class="room-label-group" data-zone-id="${zone.id}" data-default-x="${centerX}" data-default-y="${centerY}"
+                   style="cursor: pointer;" onclick="openRoomLabelEditor(${zone.id}, '${zone.name.replace(/'/g, "\\'")}', ${labelX}, ${labelY}, ${fontSize})">
+                  <rect x="${labelX - textWidth/2 - 0.4}" y="${labelY - textHeight/2}"
+                        width="${textWidth + 0.8}" height="${textHeight}" rx="0.3" ry="0.3"
+                        fill="rgba(0, 0, 0, 0.7)" class="room-label-bg" />
+                  <text x="${labelX}" y="${labelY}" text-anchor="middle" dominant-baseline="central"
+                        fill="white" font-size="${svgFontSize}" font-weight="bold" class="room-label-text">
+                    ${displayName}
+                  </text>
+                </g>
+              `;
             }).join('')}
           </svg>
         `;
@@ -8852,38 +11307,6 @@
       return `
         ${roomBordersOverlay}
         ${excludedOverlay}
-        <div class="zone-labels-container">
-          ${zones.map(zone => {
-            let points = zone.points || '[]';
-            if (typeof points === 'string') {
-              try {
-                points = JSON.parse(points);
-                if (typeof points === 'string') points = JSON.parse(points);
-              } catch (e) { points = []; }
-            }
-            if (!Array.isArray(points) || points.length < 3) return '';
-
-            // Calculate center
-            const defaultX = points.reduce((s, p) => s + p.x, 0) / points.length;
-            const defaultY = points.reduce((s, p) => s + p.y, 0) / points.length;
-
-            // Get custom settings or use defaults
-            const settings = roomLabelSettings[zone.id] || {};
-            const labelX = settings.x ?? defaultX;
-            const labelY = settings.y ?? defaultY;
-            const fontSize = settings.fontSize ?? 10;
-
-            return `
-              <div class="room-label"
-                   data-zone-id="${zone.id}"
-                   data-default-x="${defaultX}"
-                   data-default-y="${defaultY}"
-                   style="left: ${labelX}%; top: ${labelY}%; font-size: ${fontSize}px;"
-                   onclick="openRoomLabelEditor(${zone.id}, '${zone.name.replace(/'/g, "\\'")}', ${labelX}, ${labelY}, ${fontSize})"
-                   title="Click to edit">${zone.name}</div>
-            `;
-          }).join('')}
-        </div>
       `;
     }
 
@@ -8919,21 +11342,51 @@
     }
 
     function previewLabelSize(zoneId, size) {
-      const label = document.querySelector(`.room-label[data-zone-id="${zoneId}"]`);
-      if (label) label.style.fontSize = size + 'px';
+      const group = document.querySelector(`.room-label-group[data-zone-id="${zoneId}"]`);
+      if (group) {
+        const text = group.querySelector('.room-label-text');
+        const bg = group.querySelector('.room-label-bg');
+        if (text) {
+          // Convert px to SVG units (roughly 1px = 0.1 SVG units)
+          const svgSize = size / 10;
+          text.setAttribute('font-size', svgSize);
+          // Adjust background size
+          if (bg) {
+            const textContent = text.textContent.trim();
+            const textWidth = textContent.length * svgSize * 0.6;
+            const textHeight = svgSize * 1.6;
+            const x = parseFloat(text.getAttribute('x'));
+            const y = parseFloat(text.getAttribute('y'));
+            bg.setAttribute('width', textWidth + 0.8);
+            bg.setAttribute('height', textHeight);
+            bg.setAttribute('x', x - textWidth/2 - 0.4);
+            bg.setAttribute('y', y - textHeight/2);
+          }
+        }
+      }
       document.getElementById('label-size-value').textContent = size + 'px';
     }
 
     function previewLabelPosition(zoneId) {
-      const x = document.getElementById('label-x-slider').value;
-      const y = document.getElementById('label-y-slider').value;
-      const label = document.querySelector(`.room-label[data-zone-id="${zoneId}"]`);
-      if (label) {
-        label.style.left = x + '%';
-        label.style.top = y + '%';
+      const x = parseFloat(document.getElementById('label-x-slider').value);
+      const y = parseFloat(document.getElementById('label-y-slider').value);
+      const group = document.querySelector(`.room-label-group[data-zone-id="${zoneId}"]`);
+      if (group) {
+        const text = group.querySelector('.room-label-text');
+        const bg = group.querySelector('.room-label-bg');
+        if (text) {
+          text.setAttribute('x', x);
+          text.setAttribute('y', y);
+        }
+        if (bg) {
+          const width = parseFloat(bg.getAttribute('width'));
+          const height = parseFloat(bg.getAttribute('height'));
+          bg.setAttribute('x', x - width/2);
+          bg.setAttribute('y', y - height/2);
+        }
       }
-      document.getElementById('label-x-value').textContent = parseFloat(x).toFixed(1) + '%';
-      document.getElementById('label-y-value').textContent = parseFloat(y).toFixed(1) + '%';
+      document.getElementById('label-x-value').textContent = x.toFixed(1) + '%';
+      document.getElementById('label-y-value').textContent = y.toFixed(1) + '%';
     }
 
     function saveRoomLabel(zoneId) {
@@ -8947,13 +11400,14 @@
       };
       saveRoomLabelSettings();
       closeRoomLabelEditor();
+      render(); // Re-render to apply saved position
     }
 
     function resetRoomLabel(zoneId) {
-      const label = document.querySelector(`.room-label[data-zone-id="${zoneId}"]`);
-      if (label) {
-        const defaultX = label.dataset.defaultX;
-        const defaultY = label.dataset.defaultY;
+      const group = document.querySelector(`.room-label-group[data-zone-id="${zoneId}"]`);
+      if (group) {
+        const defaultX = group.dataset.defaultX;
+        const defaultY = group.dataset.defaultY;
         document.getElementById('label-x-slider').value = defaultX;
         document.getElementById('label-y-slider').value = defaultY;
         document.getElementById('label-size-slider').value = 10;
@@ -9651,9 +12105,16 @@
       await Promise.all([
         fetchDeviceTemplates(),
         fetchSavedFilters(),
-        fetchFloorZones()
+        fetchFloorZones(),
+        fetchFloorHealth(),
+        fetchAllTags()
       ]);
       connectWebSocket();
+
+      // Request push permission if previously enabled
+      if (pushNotificationsEnabled && Notification.permission === 'default') {
+        requestPushPermission();
+      }
     }
 
     // ==================== WEBSOCKET ====================
@@ -9662,6 +12123,9 @@
         ws.close();
       }
 
+      wsReconnecting = wsReconnectAttempts > 0;
+      updateConnectionStatus();
+
       const wsUrl = API_URL.replace('http', 'ws');
       try {
         ws = new WebSocket(wsUrl);
@@ -9669,6 +12133,9 @@
         ws.onopen = () => {
           console.log('WebSocket connected');
           wsConnected = true;
+          wsReconnecting = false;
+          wsReconnectAttempts = 0;
+          updateConnectionStatus();
           render();
         };
 
@@ -9684,10 +12151,15 @@
         ws.onclose = () => {
           console.log('WebSocket disconnected');
           wsConnected = false;
+          wsReconnecting = true;
+          wsReconnectAttempts++;
+          updateConnectionStatus();
           render();
-          // Reconnect after 5 seconds
+          // Reconnect with exponential backoff (max 30s)
+          const delay = Math.min(5000 * Math.pow(1.5, wsReconnectAttempts - 1), 30000);
+          console.log(`Reconnecting in ${delay/1000}s (attempt ${wsReconnectAttempts})`);
           if (wsReconnectTimer) clearTimeout(wsReconnectTimer);
-          wsReconnectTimer = setTimeout(connectWebSocket, 5000);
+          wsReconnectTimer = setTimeout(connectWebSocket, delay);
         };
 
         ws.onerror = (error) => {
@@ -9695,6 +12167,22 @@
         };
       } catch (e) {
         console.error('WebSocket connection failed:', e);
+      }
+    }
+
+    function updateConnectionStatus() {
+      const statusEl = document.getElementById('connection-status');
+      if (!statusEl) return;
+
+      if (wsConnected) {
+        statusEl.className = 'connection-status connected';
+        statusEl.innerHTML = '<span class="status-icon">●</span> Live';
+      } else if (wsReconnecting) {
+        statusEl.className = 'connection-status reconnecting';
+        statusEl.innerHTML = '<span class="status-icon">↻</span> Reconnecting...';
+      } else {
+        statusEl.className = 'connection-status disconnected';
+        statusEl.innerHTML = '<span class="status-icon">●</span> Disconnected';
       }
     }
 
@@ -9746,6 +12234,165 @@
         ws = null;
       }
     });
+
+    // ==================== QUICK FILTERS ====================
+    function toggleFilter(filterName) {
+      activeFilters[filterName] = !activeFilters[filterName];
+      render();
+    }
+
+    function clearAllFilters() {
+      activeFilters.offlineOnly = false;
+      activeFilters.lowToner = false;
+      activeFilters.inMeeting = false;
+      render();
+    }
+
+    function getFilterCounts() {
+      let offlineCount = 0;
+      let lowTonerCount = 0;
+      let inMeetingCount = 0;
+
+      // Count from monitors
+      Object.values(uptimeKumaData).forEach(floor => {
+        ['accessPoints', 'printers'].forEach(type => {
+          const devices = floor[type] || [];
+          devices.forEach(d => {
+            if (d.status === 'down' && !d.disabled) offlineCount++;
+            if (type === 'printers' && printerStatusData[d.id]) {
+              const toner = printerStatusData[d.id].toner || {};
+              if (Object.values(toner).some(level => level !== null && level < 20)) {
+                lowTonerCount++;
+              }
+            }
+          });
+        });
+      });
+
+      // Count rooms in meeting
+      Object.values(polyLensData).forEach(devices => {
+        devices.forEach(d => {
+          if (d.zoom_in_meeting) inMeetingCount++;
+        });
+      });
+
+      return { offlineCount, lowTonerCount, inMeetingCount };
+    }
+
+    function applyFilters(devices, deviceType) {
+      if (!activeFilters.offlineOnly && !activeFilters.lowToner && !activeFilters.inMeeting) {
+        return devices;
+      }
+
+      return devices.filter(d => {
+        if (activeFilters.offlineOnly && d.status !== 'down') return false;
+        if (activeFilters.lowToner && deviceType === 'printers') {
+          const toner = printerStatusData[d.id]?.toner || {};
+          if (!Object.values(toner).some(level => level !== null && level < 20)) return false;
+        }
+        if (activeFilters.inMeeting && deviceType === 'polyLens') {
+          if (!d.zoom_in_meeting) return false;
+        }
+        return true;
+      });
+    }
+
+    // ==================== LAST UPDATED ====================
+    function updateLastUpdated() {
+      lastDataUpdate = new Date();
+      const el = document.getElementById('last-updated-time');
+      if (el) {
+        el.textContent = formatLastUpdated();
+      }
+    }
+
+    function formatLastUpdated() {
+      if (!lastDataUpdate) return 'Never';
+      const now = new Date();
+      const diff = Math.floor((now - lastDataUpdate) / 1000);
+      if (diff < 5) return 'Just now';
+      if (diff < 60) return `${diff}s ago`;
+      if (diff < 3600) return `${Math.floor(diff / 60)}m ago`;
+      return lastDataUpdate.toLocaleTimeString();
+    }
+
+    async function manualRefresh() {
+      if (isRefreshing) return;
+      isRefreshing = true;
+      const icon = document.querySelector('.refresh-icon');
+      if (icon) icon.classList.add('spinning');
+
+      try {
+        await fetchAllData();
+        updateLastUpdated();
+        render();
+      } finally {
+        isRefreshing = false;
+        if (icon) icon.classList.remove('spinning');
+      }
+    }
+
+    // Update "last updated" display every 10 seconds
+    setInterval(() => {
+      const el = document.getElementById('last-updated-time');
+      if (el && lastDataUpdate) {
+        el.textContent = formatLastUpdated();
+      }
+    }, 10000);
+
+    // ==================== FLOOR TRANSITIONS ====================
+    function setFloorWithTransition(floor) {
+      if (isFloorTransitioning || floor === activeFloor) return;
+
+      isFloorTransitioning = true;
+      const content = document.querySelector('.floor-map-wrapper');
+
+      if (content) {
+        content.classList.add('transitioning');
+
+        setTimeout(() => {
+          activeFloor = floor;
+          render();
+
+          requestAnimationFrame(() => {
+            const newContent = document.querySelector('.floor-map-wrapper');
+            if (newContent) {
+              newContent.classList.remove('transitioning');
+              newContent.classList.add('entering');
+              setTimeout(() => {
+                newContent.classList.remove('entering');
+                isFloorTransitioning = false;
+              }, 400);
+            } else {
+              isFloorTransitioning = false;
+            }
+          });
+        }, 300);
+      } else {
+        activeFloor = floor;
+        render();
+        isFloorTransitioning = false;
+      }
+    }
+
+    // ==================== PENGUIN LOADER ====================
+    function renderPenguinLoader(message = 'Building your dashboard...') {
+      return `
+        <div class="penguin-loader">
+          <div class="penguin-scene">
+            <div class="penguin">🐧</div>
+            <div class="hammer">🔨</div>
+            <div class="nails">
+              <span class="nail">📍</span>
+              <span class="nail">📍</span>
+              <span class="nail">📍</span>
+            </div>
+          </div>
+          <div class="penguin-text">${message}</div>
+          <div class="penguin-subtext">This won't take long...</div>
+        </div>
+      `;
+    }
 
     // ==================== WIDGETS ====================
     function renderWidgets() {

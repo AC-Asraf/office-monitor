@@ -35,3 +35,4 @@ build/
 # Temp files
 tmp/
 temp/
+device_inventory.csv

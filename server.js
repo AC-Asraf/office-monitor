@@ -826,9 +826,9 @@ function deleteSession(token) {
   db.prepare('DELETE FROM sessions WHERE token = ?').run(token);
 }
 
-// Auth middleware
+// Auth middleware - only accepts tokens in Authorization header (not URL for security)
 function authMiddleware(req, res, next) {
-  const token = req.headers.authorization?.replace('Bearer ', '') || req.query.token;
+  const token = req.headers.authorization?.replace('Bearer ', '');
 
   if (!token) {
     return res.status(401).json({ success: false, error: 'Authentication required' });
@@ -857,7 +857,7 @@ function adminMiddleware(req, res, next) {
 
 // Optional auth (for public endpoints that behave differently when authenticated)
 function optionalAuth(req, res, next) {
-  const token = req.headers.authorization?.replace('Bearer ', '') || req.query.token;
+  const token = req.headers.authorization?.replace('Bearer ', '');
   if (token) {
     const session = getSession(token);
     if (session) {

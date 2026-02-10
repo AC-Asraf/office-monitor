@@ -4414,6 +4414,14 @@
       return parseUTCDate(date).toLocaleDateString();
     }
 
+    // XSS sanitization - escapes HTML to prevent injection attacks
+    function sanitizeHTML(str) {
+      if (str === null || str === undefined) return '';
+      const div = document.createElement('div');
+      div.textContent = String(str);
+      return div.innerHTML;
+    }
+
     // Auth state
     let authToken = localStorage.getItem('authToken');
     let currentUser = JSON.parse(localStorage.getItem('currentUser') || 'null');
@@ -5929,12 +5937,12 @@
                   <div class="device-info">
                     <div class="device-name">
                       <span style="color: ${m.status === 'up' ? '#22C55E' : m.status === 'down' ? '#EF4444' : '#6B7280'};">●</span>
-                      ${m.name}
+                      ${sanitizeHTML(m.name)}
                       ${m.health_score !== null && m.health_score !== undefined ? renderHealthBadge(m.health_score) : ''}
                     </div>
                     <div class="device-meta">
-                      ${m.hostname || m.url || ''} · ${m.floor || 'No floor'} · ${m.device_type || m.type}
-                      ${m.notes ? `· <span title="${m.notes.replace(/"/g, '&quot;')}">📝</span>` : ''}
+                      ${sanitizeHTML(m.hostname || m.url || '')} · ${sanitizeHTML(m.floor || 'No floor')} · ${sanitizeHTML(m.device_type || m.type)}
+                      ${m.notes ? `· <span title="${sanitizeHTML(m.notes)}">📝</span>` : ''}
                     </div>
                   </div>
                   <div class="device-actions">
@@ -7113,7 +7121,7 @@
           <div class="analytics-header">
             <div class="analytics-header-top">
               <div>
-                <h2 class="analytics-title">${device.name}</h2>
+                <h2 class="analytics-title">${sanitizeHTML(device.name)}</h2>
                 <p class="analytics-subtitle">${device.type === 'accessPoints' ? 'Access Point' : device.type === 'printers' ? 'Printer' : device.type === 'polyLensDevice' ? 'Poly Lens Device' : 'Zoom Room'}</p>
               </div>
               <button class="analytics-close" onclick="closeAnalytics()">&times;</button>
@@ -7742,7 +7750,7 @@
               <div class="device-popup">
                 <div class="popup-header">
                   <span class="popup-icon">🚪</span>
-                  <span class="popup-name">${device.name}</span>
+                  <span class="popup-name">${sanitizeHTML(device.name)}</span>
                   ${zoomInMeeting ? '<span style="background: #F59E0B; color: #000; font-size: 9px; padding: 1px 4px; border-radius: 3px; margin-left: 4px;">Meeting</span>' : ''}
                 </div>
                 <div class="popup-details" style="padding: 4px 0;">
@@ -7797,7 +7805,7 @@
               <div class="device-popup">
                 <div class="popup-header">
                   <span class="popup-icon">🎥</span>
-                  <span class="popup-name">${device.name}</span>
+                  <span class="popup-name">${sanitizeHTML(device.name)}</span>
                   <span class="status-badge" style="background: ${zoomStatusColor}; margin-left: 6px; font-size: 9px;">${zoomStatusText}</span>
                 </div>
                 ${device.zoom_devices && device.zoom_devices.length > 0 ? `
@@ -7834,7 +7842,7 @@
               <div class="device-popup">
                 <div class="popup-header">
                   <span class="popup-icon">${typeInfo.icon}</span>
-                  <span class="popup-name">${device.name}</span>
+                  <span class="popup-name">${sanitizeHTML(device.name)}</span>
                   <span class="status-badge" style="background: ${status.bg}; margin-left: 6px; font-size: 9px;">${status.label}</span>
                   ${device.health_score !== null && device.health_score !== undefined ? `
                     <span class="health-badge ${getHealthClass(device.health_score)}" style="margin-left: 4px; font-size: 9px;">❤️${device.health_score}%</span>
@@ -7927,12 +7935,12 @@
                 <div class="device-item clickable ${device.status === 'down' ? 'down' : ''}" onclick="highlightDevice('${device.id}'); openAnalytics('${device.id}', '${device.name.replace(/'/g, "\\'")}', 'accessPoints')">
                   <div class="device-status-dot ${device.status}"></div>
                   <div class="device-info">
-                    <div class="device-name">${device.name}</div>
+                    <div class="device-name">${sanitizeHTML(device.name)}</div>
                     <div class="device-meta">
-                      <span>${device.ip}</span>
+                      <span>${sanitizeHTML(device.ip)}</span>
                       ${device.ping ? `<span>${device.ping}ms</span>` : ''}
                     </div>
-                    ${device.serial_number ? `<div class="device-meta" style="font-size: 10px; opacity: 0.7;">SN: ${device.serial_number}</div>` : ''}
+                    ${device.serial_number ? `<div class="device-meta" style="font-size: 10px; opacity: 0.7;">SN: ${sanitizeHTML(device.serial_number)}</div>` : ''}
                   </div>
                 </div>
               `).join('')}
@@ -7979,9 +7987,9 @@
                 <div class="device-item ${device.status === 'down' ? 'down' : ''}">
                   <div class="device-status-dot ${device.status}" onclick="highlightDevice('${device.id}'); openAnalytics('${device.id}', '${device.name.replace(/'/g, "\\'")}', 'printers')"></div>
                   <div class="device-info" style="flex: 1;">
-                    <div class="device-name clickable" onclick="highlightDevice('${device.id}'); openAnalytics('${device.id}', '${device.name.replace(/'/g, "\\'")}', 'printers')">${device.name} ${hasLowToner ? '<span style="color: var(--status-warning);" title="Low toner">⚠️</span>' : ''}</div>
+                    <div class="device-name clickable" onclick="highlightDevice('${device.id}'); openAnalytics('${device.id}', '${device.name.replace(/'/g, "\\'")}', 'printers')">${sanitizeHTML(device.name)} ${hasLowToner ? '<span style="color: var(--status-warning);" title="Low toner">⚠️</span>' : ''}</div>
                     <div class="device-meta">
-                      <span>${device.ip}</span>
+                      <span>${sanitizeHTML(device.ip)}</span>
                       ${ps ? `<span style="margin-left: 8px;">📄 ${ps.paper?.level || 0}%</span>` : ''}
                     </div>
                     <div class="device-meta" style="margin-top: 4px; display: flex; gap: 8px; align-items: center;">
@@ -8093,7 +8101,7 @@
                         <div class="device-item clickable ${!device.connected ? 'down' : ''}" onclick="event.stopPropagation(); highlightDevice('${roomId}'); openAnalytics('${roomId}', '${roomName.replace(/'/g, "\\'")}', 'polyLens', true)">
                           <div class="device-status-dot ${device.connected ? 'up' : 'down'}"></div>
                           <div class="device-info">
-                            <div class="device-name">${device.name}</div>
+                            <div class="device-name">${sanitizeHTML(device.name)}</div>
                             <div class="device-meta">
                               <span class="device-model">${device.hardwareModel || 'Unknown'}</span>
                             </div>
@@ -9407,7 +9415,7 @@
           <div class="search-result-item" onclick="goToDevice('${d.id}', '${d.floor}', '${d.type}')">
             <div class="search-result-status ${d.status}"></div>
             <div class="search-result-info">
-              <div class="search-result-name">${d.name}</div>
+              <div class="search-result-name">${sanitizeHTML(d.name)}</div>
               <div class="search-result-meta">${d.type} · ${d.floor} · ${d.ip || 'No IP'}</div>
             </div>
           </div>
@@ -11040,10 +11048,10 @@
                   <tbody>
                     ${bulkImportData.map(d => `
                       <tr>
-                        <td>${d.name}</td>
-                        <td>${d.hostname || d.url || '-'}</td>
-                        <td>${d.floor}</td>
-                        <td>${d.device_type || d.type}</td>
+                        <td>${sanitizeHTML(d.name)}</td>
+                        <td>${sanitizeHTML(d.hostname || d.url || '-')}</td>
+                        <td>${sanitizeHTML(d.floor)}</td>
+                        <td>${sanitizeHTML(d.device_type || d.type)}</td>
                       </tr>
                     `).join('')}
                   </tbody>
@@ -11774,8 +11782,8 @@
                         ${d.selected ? 'checked' : ''} ${d.existing ? 'disabled' : ''}
                         onchange="toggleDiscoveryDevice(${i})">
                       <div class="discovery-info">
-                        <div class="discovery-ip">${d.ip}</div>
-                        <div class="discovery-hostname">${d.hostname || 'Unknown hostname'} ${d.existing ? '(Already monitored)' : ''}</div>
+                        <div class="discovery-ip">${sanitizeHTML(d.ip)}</div>
+                        <div class="discovery-hostname">${sanitizeHTML(d.hostname || 'Unknown hostname')} ${d.existing ? '(Already monitored)' : ''}</div>
                       </div>
                       <div class="discovery-ping">${d.ping}ms</div>
                     </div>

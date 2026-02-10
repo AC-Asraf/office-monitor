@@ -5784,6 +5784,41 @@
       }, 3000);
     }
 
+    // Button loading state helpers
+    function setButtonLoading(button, loading, loadingText = 'Loading...') {
+      if (!button) return;
+      if (loading) {
+        button.dataset.originalText = button.textContent;
+        button.textContent = loadingText;
+        button.disabled = true;
+        button.style.opacity = '0.7';
+        button.style.cursor = 'wait';
+      } else {
+        button.textContent = button.dataset.originalText || button.textContent;
+        button.disabled = false;
+        button.style.opacity = '';
+        button.style.cursor = '';
+      }
+    }
+
+    // Async action wrapper with loading state and error handling
+    async function withLoading(button, action, { loadingText = 'Saving...', successText = 'Saved!', errorText = 'Failed' } = {}) {
+      setButtonLoading(button, true, loadingText);
+      try {
+        const result = await action();
+        if (result?.success !== false) {
+          showToast(successText, 'success');
+        }
+        return result;
+      } catch (err) {
+        console.error('Action failed:', err);
+        showToast(err.message || errorText, 'error');
+        throw err;
+      } finally {
+        setButtonLoading(button, false);
+      }
+    }
+
     function handleFloorPlanUpload(floor, input) {
       const file = input.files[0];
       if (file) {
@@ -5868,8 +5903,8 @@
                   <button class="btn btn-sm btn-secondary" onclick="bulkAction('move_floor')">Move</button>
                   <button class="btn btn-sm btn-danger" onclick="bulkAction('delete')">Delete</button>
                 </div>
-                <button class="btn btn-sm btn-secondary" onclick="selectAllDevices()">All</button>
-                <button class="btn btn-sm btn-secondary" onclick="deselectAllDevices()">None</button>
+                <button class="btn btn-sm btn-secondary" onclick="selectAllAdminDevices()">All</button>
+                <button class="btn btn-sm btn-secondary" onclick="deselectAllAdminDevices()">None</button>
               </div>
             ` : ''}
             <div class="filter-bar">
@@ -5889,7 +5924,7 @@
                   ${bulkSelectMode ? `
                     <input type="checkbox" class="bulk-checkbox device-checkbox"
                       ${selectedDevices.has(m.id) ? 'checked' : ''}
-                      onclick="event.stopPropagation(); toggleDeviceSelection(${m.id})">
+                      onclick="event.stopPropagation(); toggleAdminDeviceSelection(${m.id})">
                   ` : ''}
                   <div class="device-info">
                     <div class="device-name">
@@ -9036,10 +9071,20 @@
       showToast('Settings reset to defaults', 'success');
     }
 
-    // Close modal on escape key or outside click
+    // Close all modals on escape key
     document.addEventListener('keydown', (e) => {
       if (e.key === 'Escape') {
+        // Close customize modal
         closeCustomizeModal();
+        // Close edit monitor modal
+        if (typeof closeModal === 'function') closeModal();
+        // Close room label editor if open
+        const roomLabelModal = document.querySelector('.room-label-editor-modal');
+        if (roomLabelModal) roomLabelModal.remove();
+        // Close any other open modal overlays
+        document.querySelectorAll('.modal-overlay.open, .modal.open').forEach(modal => {
+          modal.classList.remove('open');
+        });
       }
     });
 
@@ -10611,6 +10656,74 @@
     .status-dot.warning {
       animation: pulse 2s ease-in-out infinite;
     }
+
+    /* 16. Form Validation Styles */
+    .form-input.invalid,
+    input.invalid,
+    select.invalid {
+      border-color: var(--status-offline) !important;
+      box-shadow: 0 0 0 3px rgba(239, 68, 68, 0.2) !important;
+    }
+    .form-input.valid,
+    input.valid {
+      border-color: var(--status-online) !important;
+    }
+    .validation-message {
+      font-size: 12px;
+      margin-top: 4px;
+      padding: 4px 8px;
+      border-radius: 4px;
+    }
+    .validation-message.error {
+      color: var(--status-offline);
+      background: rgba(239, 68, 68, 0.1);
+    }
+    .validation-message.success {
+      color: var(--status-online);
+      background: rgba(34, 197, 94, 0.1);
+    }
+
+    /* 17. Button Loading State */
+    .btn.loading,
+    button.loading {
+      position: relative;
+      color: transparent !important;
+      pointer-events: none;
+    }
+    .btn.loading::after,
+    button.loading::after {
+      content: '';
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      width: 16px;
+      height: 16px;
+      margin: -8px 0 0 -8px;
+      border: 2px solid rgba(255, 255, 255, 0.3);
+      border-top-color: white;
+      border-radius: 50%;
+      animation: buttonSpin 0.8s linear infinite;
+    }
+    @keyframes buttonSpin {
+      to { transform: rotate(360deg); }
+    }
+
+    /* 18. Better Touch Targets for Mobile */
+    @media (pointer: coarse) {
+      .btn,
+      button,
+      .floor-btn,
+      .quick-filter-btn,
+      .device-item,
+      .room-item {
+        min-height: 44px;
+        min-width: 44px;
+      }
+      .popup-btn {
+        min-height: 36px;
+        padding: 8px 14px;
+      }
+    }
   </style>
 
   <script>
@@ -11108,7 +11221,7 @@
       renderAdmin();
     }
 
-    function toggleDeviceSelection(id) {
+    function toggleAdminDeviceSelection(id) {
       if (selectedDevices.has(id)) {
         selectedDevices.delete(id);
       } else {
@@ -11117,7 +11230,7 @@
       renderAdmin();
     }
 
-    function selectAllDevices() {
+    function selectAllAdminDevices() {
       const filteredMonitors = allMonitors.filter(m =>
         !deviceFilter || m.name.toLowerCase().includes(deviceFilter.toLowerCase()) ||
         (m.hostname && m.hostname.includes(deviceFilter))
@@ -11126,7 +11239,7 @@
       renderAdmin();
     }
 
-    function deselectAllDevices() {
+    function deselectAllAdminDevices() {
       selectedDevices.clear();
       renderAdmin();
     }

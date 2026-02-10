@@ -16,25 +16,98 @@ const httpsAgent = new https.Agent({ rejectUnauthorized: false });
 
 const app = express();
 
+// Disable X-Powered-By header for security
+app.disable('x-powered-by');
+
 // CORS configuration - restrict to specific origins
 const allowedOrigins = process.env.ALLOWED_ORIGINS?.split(',') || [
   'http://localhost:3002',
-  'http://127.0.0.1:3002'
+  'http://127.0.0.1:3002',
+  'http://192.168.31.236:3002' // Local network access
 ];
 app.use(cors({
   origin: function(origin, callback) {
-    // Allow requests with no origin (like mobile apps or curl requests)
+    // Allow requests with no origin (like mobile apps, curl, or same-origin)
     if (!origin) return callback(null, true);
-    if (allowedOrigins.includes(origin)) {
+    if (allowedOrigins.some(allowed => origin.startsWith(allowed.replace(':3002', '')))) {
       return callback(null, true);
     }
-    return callback(null, true); // Allow all for now, but log unknown origins
+    console.warn(`CORS blocked origin: ${origin}`);
+    return callback(new Error('Not allowed by CORS'), false);
   },
   credentials: true
 }));
 
-app.use(express.json({ limit: '50mb' }));
-app.use(express.urlencoded({ limit: '50mb', extended: true }));
+// Security headers middleware
+app.use((req, res, next) => {
+  res.setHeader('X-Content-Type-Options', 'nosniff');
+  res.setHeader('X-Frame-Options', 'SAMEORIGIN');
+  res.setHeader('X-XSS-Protection', '1; mode=block');
+  res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
+  next();
+});
+
+// Rate limiting storage (in-memory)
+const rateLimitStore = new Map();
+const RATE_LIMIT_WINDOW = 15 * 60 * 1000; // 15 minutes
+const RATE_LIMIT_MAX_ATTEMPTS = 10; // Max login attempts per window
+
+function checkRateLimit(key, maxAttempts = RATE_LIMIT_MAX_ATTEMPTS) {
+  const now = Date.now();
+  const record = rateLimitStore.get(key);
+
+  if (!record || now - record.firstAttempt > RATE_LIMIT_WINDOW) {
+    rateLimitStore.set(key, { firstAttempt: now, attempts: 1 });
+    return { allowed: true, remaining: maxAttempts - 1 };
+  }
+
+  record.attempts++;
+  if (record.attempts > maxAttempts) {
+    const retryAfter = Math.ceil((RATE_LIMIT_WINDOW - (now - record.firstAttempt)) / 1000);
+    return { allowed: false, remaining: 0, retryAfter };
+  }
+
+  return { allowed: true, remaining: maxAttempts - record.attempts };
+}
+
+// Clean up rate limit store periodically
+setInterval(() => {
+  const now = Date.now();
+  for (const [key, record] of rateLimitStore.entries()) {
+    if (now - record.firstAttempt > RATE_LIMIT_WINDOW) {
+      rateLimitStore.delete(key);
+    }
+  }
+}, 5 * 60 * 1000); // Clean every 5 minutes
+
+// Simple in-memory cache for static data
+const dataCache = {
+  deviceTypes: { data: null, timestamp: 0 },
+  deviceTemplates: { data: null, timestamp: 0 },
+  tags: { data: null, timestamp: 0 }
+};
+const CACHE_TTL = 5 * 60 * 1000; // 5 minutes
+
+function getCached(key, fetchFn) {
+  const cache = dataCache[key];
+  const now = Date.now();
+  if (cache.data && now - cache.timestamp < CACHE_TTL) {
+    return cache.data;
+  }
+  cache.data = fetchFn();
+  cache.timestamp = now;
+  return cache.data;
+}
+
+function invalidateCache(key) {
+  if (dataCache[key]) {
+    dataCache[key].data = null;
+    dataCache[key].timestamp = 0;
+  }
+}
+
+app.use(express.json({ limit: '10mb' }));
+app.use(express.urlencoded({ limit: '10mb', extended: true }));
 app.use(express.static(__dirname));
 
 // Configuration
@@ -154,6 +227,9 @@ db.exec(`
     expires_at DATETIME NOT NULL,
     FOREIGN KEY (user_id) REFERENCES users(id)
   );
+  CREATE INDEX IF NOT EXISTS idx_sessions_user_id ON sessions(user_id);
+  CREATE INDEX IF NOT EXISTS idx_sessions_token ON sessions(token);
+  CREATE INDEX IF NOT EXISTS idx_sessions_expires ON sessions(expires_at);
 
   CREATE TABLE IF NOT EXISTS device_types (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -2050,6 +2126,17 @@ function getZoomOnlyRooms() {
 // Login
 app.post('/api/auth/login', async (req, res) => {
   const { username, password, totp_code } = req.body;
+  const clientIp = req.ip || req.connection?.remoteAddress || 'unknown';
+
+  // Rate limiting check
+  const rateLimit = checkRateLimit(`login:${clientIp}`);
+  if (!rateLimit.allowed) {
+    res.setHeader('Retry-After', rateLimit.retryAfter);
+    return res.status(429).json({
+      success: false,
+      error: `Too many login attempts. Please try again in ${Math.ceil(rateLimit.retryAfter / 60)} minutes.`
+    });
+  }
 
   // Input validation
   if (!username || !password) {
@@ -2880,9 +2967,11 @@ app.delete('/api/integrations/:id', authMiddleware, adminMiddleware, (req, res) 
 
 // ==================== DEVICE TYPES ROUTES ====================
 
-// Get all device types
+// Get all device types (cached)
 app.get('/api/device-types', (req, res) => {
-  const types = db.prepare('SELECT * FROM device_types').all();
+  const types = getCached('deviceTypes', () =>
+    db.prepare('SELECT * FROM device_types').all()
+  );
   res.json({ success: true, types });
 });
 
@@ -2894,6 +2983,7 @@ app.post('/api/device-types', authMiddleware, (req, res) => {
     const result = db.prepare(`
       INSERT INTO device_types (name, icon, color) VALUES (?, ?, ?)
     `).run(name, icon || '📟', color || '#6B7280');
+    invalidateCache('deviceTypes'); // Clear cache on change
     res.json({ success: true, id: result.lastInsertRowid });
   } catch (e) {
     res.status(400).json({ success: false, error: 'Device type already exists' });
@@ -3302,15 +3392,17 @@ app.get('/api/zoom-rooms/unmatched', async (req, res) => {
 // Get Zoom room status history
 app.get('/api/zoom-rooms/:roomId/history', (req, res) => {
   const roomId = req.params.roomId;
-  const hours = parseInt(req.query.hours) || 24;
+  // Validate and constrain hours to prevent SQL injection (1-168 hours = 1 week max)
+  const hours = Math.max(1, Math.min(168, parseInt(req.query.hours) || 24));
 
-  // Get history records for this room
+  // Get history records for this room (using parameterized datetime calculation)
+  const cutoffTime = new Date(Date.now() - hours * 60 * 60 * 1000).toISOString();
   const history = db.prepare(`
     SELECT status, health, device_count, devices_online, time
     FROM zoom_room_history
-    WHERE room_id = ? AND time > datetime('now', '-${hours} hours')
+    WHERE room_id = ? AND time > ?
     ORDER BY time ASC
-  `).all(roomId);
+  `).all(roomId, cutoffTime);
 
   // Calculate uptime percentage
   const totalRecords = history.length;
@@ -3345,15 +3437,17 @@ app.get('/api/zoom-rooms/:roomId/history', (req, res) => {
 // Get Zoom room meeting utilization stats
 app.get('/api/zoom-rooms/:roomId/utilization', (req, res) => {
   const roomId = req.params.roomId;
-  const days = parseInt(req.query.days) || 7;
+  // Validate and constrain days to prevent SQL injection (1-90 days max)
+  const days = Math.max(1, Math.min(90, parseInt(req.query.days) || 7));
 
-  // Get utilization stats for the last N days
+  // Get utilization stats for the last N days (using parameterized date)
+  const cutoffDate = new Date(Date.now() - days * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
   const stats = db.prepare(`
     SELECT date, total_minutes, meeting_minutes, meeting_count
     FROM zoom_meeting_stats
-    WHERE room_id = ? AND date >= date('now', '-${days} days')
+    WHERE room_id = ? AND date >= ?
     ORDER BY date ASC
-  `).all(roomId);
+  `).all(roomId, cutoffDate);
 
   // Calculate overall utilization
   const totalMinutes = stats.reduce((sum, s) => sum + (s.total_minutes || 0), 0);
@@ -3386,18 +3480,21 @@ app.get('/api/zoom-rooms/:roomId/utilization', (req, res) => {
 
 // Get all rooms meeting utilization summary
 app.get('/api/zoom-rooms/utilization/summary', (req, res) => {
-  const days = parseInt(req.query.days) || 7;
+  // Validate and constrain days to prevent SQL injection (1-90 days max)
+  const days = Math.max(1, Math.min(90, parseInt(req.query.days) || 7));
 
+  // Using parameterized date calculation
+  const cutoffDate = new Date(Date.now() - days * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
   const stats = db.prepare(`
     SELECT room_id, room_name,
            SUM(total_minutes) as total_minutes,
            SUM(meeting_minutes) as meeting_minutes,
            SUM(meeting_count) as meeting_count
     FROM zoom_meeting_stats
-    WHERE date >= date('now', '-${days} days')
+    WHERE date >= ?
     GROUP BY room_id
     ORDER BY meeting_minutes DESC
-  `).all();
+  `).all(cutoffDate);
 
   const roomStats = stats.map(s => ({
     room_id: s.room_id,
@@ -6075,6 +6172,43 @@ function broadcastAlert(alert) {
 setInterval(() => {
   broadcast('heartbeat', { time: new Date().toISOString() });
 }, 30000);
+
+// Database cleanup job - runs every 6 hours to prevent unbounded growth
+function runDatabaseCleanup() {
+  try {
+    const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
+    const ninetyDaysAgo = new Date(Date.now() - 90 * 24 * 60 * 60 * 1000).toISOString();
+
+    // Clean old heartbeats (keep 30 days)
+    const heartbeatsDeleted = db.prepare('DELETE FROM heartbeats WHERE time < ?').run(thirtyDaysAgo);
+
+    // Clean old poly heartbeats (keep 30 days)
+    const polyHeartbeatsDeleted = db.prepare('DELETE FROM poly_heartbeats WHERE time < ?').run(thirtyDaysAgo);
+
+    // Clean old printer status (keep 30 days)
+    const printerStatusDeleted = db.prepare('DELETE FROM printer_status WHERE time < ?').run(thirtyDaysAgo);
+
+    // Clean old activity log (keep 90 days)
+    const activityDeleted = db.prepare('DELETE FROM activity_log WHERE created_at < ?').run(ninetyDaysAgo);
+
+    // Clean expired sessions
+    const sessionsDeleted = db.prepare('DELETE FROM sessions WHERE expires_at < ?').run(new Date().toISOString());
+
+    const totalDeleted = (heartbeatsDeleted.changes || 0) + (polyHeartbeatsDeleted.changes || 0) +
+                         (printerStatusDeleted.changes || 0) + (activityDeleted.changes || 0) +
+                         (sessionsDeleted.changes || 0);
+
+    if (totalDeleted > 0) {
+      console.log(`🧹 Database cleanup: Removed ${totalDeleted} old records`);
+    }
+  } catch (err) {
+    console.error('Database cleanup error:', err.message);
+  }
+}
+
+// Run cleanup on startup and every 6 hours
+runDatabaseCleanup();
+setInterval(runDatabaseCleanup, 6 * 60 * 60 * 1000);
 
 // Start server
 server.listen(PORT, () => {

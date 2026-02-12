@@ -4444,6 +4444,7 @@
     let compactMode = localStorage.getItem('compactMode') === 'true';
     let alertSoundsEnabled = localStorage.getItem('alertSoundsEnabled') === 'true';
     let previousDeviceStatuses = {}; // Track previous statuses for change detection
+    let activeThresholdAlerts = {}; // Server-side toner alert state: { monitorId: [alert_types] }
 
     // Admin state
     let adminOpen = false;
@@ -4954,6 +4955,9 @@
         // Fetch printer status for all printers
         await fetchPrinterStatus();
 
+        // Fetch active threshold alerts (toner alerts etc.)
+        await fetchActiveThresholdAlerts();
+
         lastFetchError = null;
         lastDataUpdate = new Date();
       } catch (error) {
@@ -5137,6 +5141,21 @@
         await Promise.all(statusPromises);
       } catch (e) {
         console.error('Failed to fetch printer status:', e);
+      }
+    }
+
+    // Fetch active threshold alerts from server (for once-per-incident toner alerts)
+    async function fetchActiveThresholdAlerts() {
+      try {
+        const response = await fetch(`${API_URL}/api/threshold-alerts/active-map`);
+        if (response.ok) {
+          const data = await response.json();
+          if (data.success) {
+            activeThresholdAlerts = data.alertMap || {};
+          }
+        }
+      } catch (e) {
+        console.error('Failed to fetch threshold alerts:', e);
       }
     }
 
@@ -9196,15 +9215,29 @@
                 newOnlineDevices.push(device.name);
               }
 
-              // Check for low toner on printers
+              // Check for low toner on printers (using server-side alert state)
               if (type === 'printers' && printerStatusData[device.id]) {
                 const toner = printerStatusData[device.id].toner || {};
-                const hasLowToner = Object.values(toner).some(level => level !== null && level < 10);
-                const prevLowToner = previousDeviceStatuses[`${device.id}_lowToner`];
-                if (hasLowToner && !prevLowToner) {
+                const activeAlerts = activeThresholdAlerts[device.id] || [];
+
+                // Check each toner color - only alert if critically low AND no active server alert
+                const tonerColors = ['black', 'cyan', 'magenta', 'yellow'];
+                let hasNewLowToner = false;
+
+                for (const color of tonerColors) {
+                  const level = toner[color];
+                  const alertType = `toner_${color}`;
+                  // Alert at <10% for critical browser notification
+                  // Server alerts at <20%, so we only show browser alert if server hasn't alerted yet
+                  if (level !== null && level < 10 && !activeAlerts.includes(alertType)) {
+                    hasNewLowToner = true;
+                    break;
+                  }
+                }
+
+                if (hasNewLowToner) {
                   lowTonerPrinters.push(device.name);
                 }
-                previousDeviceStatuses[`${device.id}_lowToner`] = hasLowToner;
               }
 
               // Update stored status
@@ -12416,6 +12449,18 @@
           break;
         case 'connected':
           console.log('WebSocket:', message.message);
+          break;
+        case 'threshold_alert':
+          // Server sent a new threshold alert - update local cache
+          if (message.data) {
+            const { monitorId, alertType } = message.data;
+            if (!activeThresholdAlerts[monitorId]) {
+              activeThresholdAlerts[monitorId] = [];
+            }
+            if (!activeThresholdAlerts[monitorId].includes(alertType)) {
+              activeThresholdAlerts[monitorId].push(alertType);
+            }
+          }
           break;
       }
     }

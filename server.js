@@ -1395,7 +1395,7 @@ async function checkMonitor(monitor) {
     if (monitor.type === 'ping') {
       const result = await ping.promise.probe(monitor.hostname, {
         timeout: PING_TIMEOUT / 1000,
-        extra: ['-c', '1']
+        extra: ['-c', '1', '-W', String(PING_TIMEOUT)]  // -W sets timeout in ms on macOS
       });
       status = result.alive ? 1 : 0;
       pingTime = result.time === 'unknown' ? null : parseFloat(result.time);
@@ -4503,6 +4503,26 @@ async function sendThresholdAlert(monitor, alertType, currentValue, threshold) {
   } catch (e) {
     console.error('Threshold alert error:', e.message);
   }
+
+  // Also create in-app notification
+  createNotification(
+    'low_toner',
+    `Low ${alertTypeDisplay} - ${monitor.name}`,
+    `${alertTypeDisplay} is at ${currentValue}% (threshold: ${threshold}%)`,
+    currentValue <= 10 ? 'error' : 'warning',
+    'monitor',
+    monitor.id
+  );
+
+  // Broadcast the threshold alert via WebSocket for real-time UI updates
+  broadcast('threshold_alert', {
+    monitorId: monitor.id,
+    monitorName: monitor.name,
+    alertType,
+    currentValue,
+    threshold,
+    floor: monitor.floor
+  });
 }
 
 // Resolve threshold alert when level is back to normal
@@ -4525,6 +4545,27 @@ app.get('/api/threshold-alerts', (req, res) => {
   `).all();
 
   res.json({ success: true, alerts });
+});
+
+// Get active threshold alerts as a map (monitor_id -> array of alert_types)
+// Used by dashboard to check if alerts are already active before showing browser notifications
+app.get('/api/threshold-alerts/active-map', (req, res) => {
+  const alerts = db.prepare(`
+    SELECT monitor_id, alert_type
+    FROM threshold_alerts
+    WHERE resolved_at IS NULL AND dismissed_at IS NULL
+  `).all();
+
+  // Build a map: { monitorId: [alert_type1, alert_type2, ...] }
+  const alertMap = {};
+  for (const alert of alerts) {
+    if (!alertMap[alert.monitor_id]) {
+      alertMap[alert.monitor_id] = [];
+    }
+    alertMap[alert.monitor_id].push(alert.alert_type);
+  }
+
+  res.json({ success: true, alertMap });
 });
 
 // Dismiss a threshold alert

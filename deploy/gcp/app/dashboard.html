@@ -3398,11 +3398,11 @@
     let loginError = '';
 
     // Data stores
-    let uptimeKumaData = {};
+    let monitorData = {};
     let polyLensData = {};
     let printerStatusData = {}; // Store printer toner/paper status by monitor ID
     let apiStatus = {
-      uptimeKuma: { connected: false, monitorCount: 0 },
+      monitors: { connected: false, monitorCount: 0 },
       polyLens: { configured: false, deviceCount: 0 }
     };
     let lastFetchError = null;
@@ -3538,13 +3538,13 @@
     // Fetch data from both APIs
     async function fetchAllData() {
       try {
-        // Fetch Uptime Kuma data
-        const ukResponse = await fetch(`${API_URL}/api/monitors/by-floor`);
-        if (ukResponse.ok) {
-          const ukData = await ukResponse.json();
-          if (ukData.success) {
-            uptimeKumaData = ukData.floors;
-            apiStatus.uptimeKuma.connected = ukData.connected;
+        // Fetch monitor data
+        const monitorsResponse = await fetch(`${API_URL}/api/monitors/by-floor`);
+        if (monitorsResponse.ok) {
+          const monitorsResult = await monitorsResponse.json();
+          if (monitorsResult.success) {
+            monitorData = monitorsResult.floors;
+            apiStatus.monitors.connected = monitorsResult.connected;
           }
         }
 
@@ -3563,7 +3563,7 @@
         const healthResponse = await fetch(`${API_URL}/api/health`);
         if (healthResponse.ok) {
           const health = await healthResponse.json();
-          apiStatus.uptimeKuma.monitorCount = health.uptimeKuma?.monitorCount || 0;
+          apiStatus.monitors.monitorCount = health.monitors?.monitorCount || 0;
           apiStatus.polyLens.deviceCount = health.polyLens?.deviceCount || 0;
         }
 
@@ -3608,7 +3608,7 @@
     function getStatusCounts(floorData, polyData) {
       let up = 0, down = 0;
 
-      // Count from Uptime Kuma
+      // Count from monitors
       if (floorData) {
         Object.values(floorData).forEach(category => {
           if (Array.isArray(category)) {
@@ -3730,7 +3730,7 @@
       try {
         // Get all printer IDs from the current data
         const printerIds = [];
-        Object.values(uptimeKumaData).forEach(floor => {
+        Object.values(monitorData).forEach(floor => {
           if (floor.printers) {
             floor.printers.forEach(p => printerIds.push(p.id));
           }
@@ -4447,7 +4447,7 @@
               <div style="text-align: center; padding: 24px; color: #64748B; background: var(--bg-base); border-radius: 8px;">
                 <div style="font-size: 24px; margin-bottom: 8px;">🔌</div>
                 <p style="margin: 0 0 4px 0;">No integrations configured</p>
-                <small>Add connections to Uptime Kuma, Poly Lens, LibreNMS, Zabbix, or any custom API</small>
+                <small>Add connections to Poly Lens, LibreNMS, Zabbix, or any custom API</small>
               </div>
             ` : ''}
           </div>
@@ -4595,7 +4595,6 @@
 
       const isNew = !editingApi.id;
       const apiTypes = [
-        { value: 'uptime_kuma', label: 'Uptime Kuma' },
         { value: 'poly_lens', label: 'Poly Lens / Poly API' },
         { value: 'librenms', label: 'LibreNMS' },
         { value: 'zabbix', label: 'Zabbix' },
@@ -4605,7 +4604,7 @@
       ];
 
       const showCredentials = ['poly_lens', 'librenms', 'zabbix', 'prtg', 'custom'].includes(editingApi.type);
-      const showWebhook = ['webhook', 'custom', 'uptime_kuma'].includes(editingApi.type);
+      const showWebhook = ['webhook', 'custom'].includes(editingApi.type);
 
       document.getElementById('modal-container').innerHTML = `
         <div class="modal open" onclick="if(event.target === this) closeApiModal()">
@@ -4666,7 +4665,7 @@
     function updateApiModalFields() {
       const type = document.getElementById('edit-api-type').value;
       const showCredentials = ['poly_lens', 'librenms', 'zabbix', 'prtg', 'custom'].includes(type);
-      const showWebhook = ['webhook', 'custom', 'uptime_kuma'].includes(type);
+      const showWebhook = ['webhook', 'custom'].includes(type);
 
       document.getElementById('api-client-id-group').style.display = showCredentials ? 'block' : 'none';
       document.getElementById('api-client-secret-group').style.display = showCredentials ? 'block' : 'none';
@@ -5309,11 +5308,11 @@
     }
 
     function render() {
-      const floors = Object.keys(uptimeKumaData).length > 0
-        ? Object.keys(uptimeKumaData)
+      const floors = Object.keys(monitorData).length > 0
+        ? Object.keys(monitorData)
         : ['1st Floor', '2nd Floor', '3rd Floor', '5th Floor'];
 
-      const currentFloorData = uptimeKumaData[activeFloor] || { accessPoints: [], printers: [], polyLens: [] };
+      const currentFloorData = monitorData[activeFloor] || { accessPoints: [], printers: [], polyLens: [] };
       const currentPolyData = polyLensData[activeFloor] || [];
       const currentCounts = getStatusCounts(currentFloorData, currentPolyData);
       const now = new Date().toLocaleTimeString();
@@ -5662,7 +5661,7 @@
       // Calculate total stats across all floors
       const totalStats = { online: 0, offline: 0, polyOnline: 0, polyTotal: 0 };
       floors.forEach(floor => {
-        const fd = uptimeKumaData[floor] || { accessPoints: [], printers: [] };
+        const fd = monitorData[floor] || { accessPoints: [], printers: [] };
         const pf = polyLensData[floor] || [];
         Object.values(fd).forEach(cat => {
           if (Array.isArray(cat)) {
@@ -5796,7 +5795,7 @@
               </div>
               <nav class="floor-nav">
                 ${floors.map(floor => {
-                  const floorData = uptimeKumaData[floor] || { accessPoints: [], printers: [] };
+                  const floorData = monitorData[floor] || { accessPoints: [], printers: [] };
                   const polyFloor = polyLensData[floor] || [];
                   const counts = getStatusCounts(floorData, polyFloor);
                   const deviceCount = counts.total + polyFloor.length;
@@ -5937,8 +5936,8 @@
 
             <div class="footer-right">
               <div class="data-source" onclick="showDataSourceInfo('monitors')">
-                <span style="color: ${apiStatus.uptimeKuma.connected ? 'var(--status-online)' : 'var(--status-offline)'};">●</span>
-                Monitors (${apiStatus.uptimeKuma.monitorCount})
+                <span style="color: ${apiStatus.monitors.connected ? 'var(--status-online)' : 'var(--status-offline)'};">●</span>
+                Monitors (${apiStatus.monitors.monitorCount})
               </div>
               <div class="data-source" onclick="showDataSourceInfo('polylens')">
                 <span style="color: ${apiStatus.polyLens.configured ? 'var(--status-online)' : 'var(--status-offline)'};">●</span>
@@ -6035,7 +6034,7 @@
       let newOfflineDevices = [];
 
       // Check all floors for status changes
-      Object.values(uptimeKumaData).forEach(floor => {
+      Object.values(monitorData).forEach(floor => {
         ['accessPoints', 'printers'].forEach(type => {
           if (floor[type]) {
             floor[type].forEach(device => {
@@ -6074,8 +6073,8 @@
       // Ignore if in TV mode
       if (tvModeActive) return;
 
-      const floors = Object.keys(uptimeKumaData).length > 0
-        ? Object.keys(uptimeKumaData)
+      const floors = Object.keys(monitorData).length > 0
+        ? Object.keys(monitorData)
         : ['1st Floor', '2nd Floor', '3rd Floor', '5th Floor'];
 
       switch(e.key) {
@@ -6129,7 +6128,7 @@
           if (low.length > 0) {
             // Find printer name
             let name = 'Printer ' + id;
-            Object.values(uptimeKumaData).forEach(floor => {
+            Object.values(monitorData).forEach(floor => {
               if (floor.printers) {
                 const p = floor.printers.find(pr => pr.id == id);
                 if (p) name = p.name;
@@ -6157,7 +6156,7 @@
 
     function buildSearchIndex() {
       allSearchableDevices = [];
-      Object.entries(uptimeKumaData).forEach(([floor, data]) => {
+      Object.entries(monitorData).forEach(([floor, data]) => {
         if (data.accessPoints) {
           data.accessPoints.forEach(d => allSearchableDevices.push({ ...d, floor, type: 'Access Point' }));
         }
@@ -6585,13 +6584,13 @@
     }
 
     function updateTVStats() {
-      const floors = Object.keys(uptimeKumaData).length > 0
-        ? Object.keys(uptimeKumaData)
+      const floors = Object.keys(monitorData).length > 0
+        ? Object.keys(monitorData)
         : ['1st Floor', '2nd Floor', '3rd Floor', '5th Floor'];
 
       let online = 0, offline = 0, zoom = 0;
       floors.forEach(floor => {
-        const fd = uptimeKumaData[floor] || {};
+        const fd = monitorData[floor] || {};
         const pf = polyLensData[floor] || [];
         Object.values(fd).forEach(cat => {
           if (Array.isArray(cat)) {
@@ -6673,8 +6672,8 @@
 
     // Status detail modal
     function showStatusDetail(type) {
-      const floors = Object.keys(uptimeKumaData).length > 0
-        ? Object.keys(uptimeKumaData)
+      const floors = Object.keys(monitorData).length > 0
+        ? Object.keys(monitorData)
         : ['1st Floor', '2nd Floor', '3rd Floor', '5th Floor'];
 
       let devices = [];
@@ -6682,7 +6681,7 @@
       if (type === 'online' || type === 'offline') {
         const targetStatus = type === 'online' ? 'up' : 'down';
         floors.forEach(floor => {
-          const fd = uptimeKumaData[floor] || {};
+          const fd = monitorData[floor] || {};
           Object.entries(fd).forEach(([catType, cat]) => {
             if (Array.isArray(cat)) {
               cat.forEach(d => {
@@ -6732,12 +6731,12 @@
     function showDataSourceInfo(source) {
       const info = source === 'monitors' ? {
         title: '📊 Monitor Data Source',
-        status: apiStatus.uptimeKuma.connected ? 'Connected' : 'Disconnected',
-        statusColor: apiStatus.uptimeKuma.connected ? 'var(--status-online)' : 'var(--status-offline)',
+        status: apiStatus.monitors.connected ? 'Connected' : 'Disconnected',
+        statusColor: apiStatus.monitors.connected ? 'var(--status-online)' : 'var(--status-offline)',
         details: [
-          { label: 'Source', value: 'Uptime Kuma' },
+          { label: 'Source', value: 'Office Monitor' },
           { label: 'Endpoint', value: '/api/monitors/by-floor' },
-          { label: 'Monitor Count', value: apiStatus.uptimeKuma.monitorCount },
+          { label: 'Monitor Count', value: apiStatus.monitors.monitorCount },
           { label: 'Refresh Rate', value: '30 seconds' }
         ]
       } : {
@@ -8021,9 +8020,9 @@
           const data = message.data;
           if (data && data.deviceId) {
             // Find and update the device in our data
-            Object.keys(uptimeKumaData).forEach(floor => {
+            Object.keys(monitorData).forEach(floor => {
               ['accessPoints', 'printers'].forEach(type => {
-                const devices = uptimeKumaData[floor]?.[type] || [];
+                const devices = monitorData[floor]?.[type] || [];
                 const device = devices.find(d => d.id == data.deviceId);
                 if (device) {
                   device.status = data.status;
@@ -8058,7 +8057,7 @@
       let onlineDevices = 0;
       let offlineDevices = 0;
 
-      Object.values(uptimeKumaData).forEach(floor => {
+      Object.values(monitorData).forEach(floor => {
         ['accessPoints', 'printers'].forEach(type => {
           const devices = floor[type] || [];
           devices.forEach(d => {
@@ -8083,8 +8082,8 @@
       });
 
       // Count floors with issues
-      const floorsWithIssues = Object.keys(uptimeKumaData).filter(floor => {
-        const floorData = uptimeKumaData[floor];
+      const floorsWithIssues = Object.keys(monitorData).filter(floor => {
+        const floorData = monitorData[floor];
         return ['accessPoints', 'printers'].some(type =>
           (floorData[type] || []).some(d => d.status === 'down')
         );
@@ -8126,7 +8125,7 @@
             <div class="widget-content" style="flex-direction: column; gap: 8px;">
               <div class="widget-stat-row">
                 <span class="widget-stat-label">Floors Monitored</span>
-                <span class="widget-stat-value">${Object.keys(uptimeKumaData).length}</span>
+                <span class="widget-stat-value">${Object.keys(monitorData).length}</span>
               </div>
               <div class="widget-stat-row">
                 <span class="widget-stat-label">Floors with Issues</span>
@@ -8155,7 +8154,7 @@
               </div>
               <div class="widget-stat-row">
                 <span class="widget-stat-label">API Status</span>
-                <span class="widget-stat-value ${apiStatus.uptimeKuma.connected ? 'green' : 'red'}">${apiStatus.uptimeKuma.connected ? 'Online' : 'Offline'}</span>
+                <span class="widget-stat-value ${apiStatus.monitors.connected ? 'green' : 'red'}">${apiStatus.monitors.connected ? 'Online' : 'Offline'}</span>
               </div>
               <div class="widget-stat-row">
                 <span class="widget-stat-label">Poly Lens</span>

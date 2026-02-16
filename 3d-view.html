@@ -4,8 +4,8 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>3D Floor View - Office Monitor</title>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+  <script src="/lib/three.min.js"></script>
+  <script src="/lib/OrbitControls.js"></script>
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
 
@@ -958,11 +958,15 @@
       renderer.render(scene, camera);
     }
 
-    // Check auth and init
+    // Check auth and init - wait for THREE.js to load
     if (!authToken) {
       window.location.href = 'dashboard.html';
-    } else {
+    } else if (typeof THREE !== 'undefined') {
       init();
+    } else {
+      window.addEventListener('load', () => {
+        if (authToken) init();
+      });
     }
   </script>
 </body>

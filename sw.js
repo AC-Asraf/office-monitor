@@ -1,5 +1,5 @@
 // Service Worker for Office Monitor PWA
-const CACHE_NAME = 'office-monitor-v2';
+const CACHE_NAME = 'office-monitor-v5';
 const STATIC_ASSETS = [
   '/',
   '/dashboard.html',
@@ -7,14 +7,29 @@ const STATIC_ASSETS = [
   '/reports.html',
   '/topology.html',
   '/3d-view.html',
+  '/3d-floor-view.html',
   '/manifest.json'
 ];
 
-// Install event - cache static assets
+// Install event - cache static assets individually to handle failures gracefully
 self.addEventListener('install', (event) => {
   event.waitUntil(
     caches.open(CACHE_NAME).then((cache) => {
-      return cache.addAll(STATIC_ASSETS);
+      // Cache each asset individually - don't fail entire install if one fails
+      return Promise.allSettled(
+        STATIC_ASSETS.map(async (url) => {
+          try {
+            const response = await fetch(url, { credentials: 'omit' });
+            // Only cache successful responses (2xx)
+            if (response.ok) {
+              await cache.put(url, response);
+            }
+          } catch (e) {
+            // Silently ignore fetch failures during install
+            console.log(`SW: Could not cache ${url}:`, e.message);
+          }
+        })
+      );
     })
   );
   self.skipWaiting();
@@ -42,14 +57,19 @@ self.addEventListener('fetch', (event) => {
   // Skip API requests (always fetch fresh)
   if (event.request.url.includes('/api/')) return;
 
+  // Skip WebSocket requests
+  if (event.request.url.startsWith('ws://') || event.request.url.startsWith('wss://')) return;
+
   event.respondWith(
     fetch(event.request)
       .then((response) => {
-        // Clone response and cache it
-        const responseClone = response.clone();
-        caches.open(CACHE_NAME).then((cache) => {
-          cache.put(event.request, responseClone);
-        });
+        // Only cache successful responses (2xx) - don't cache 401s or errors
+        if (response.ok) {
+          const responseClone = response.clone();
+          caches.open(CACHE_NAME).then((cache) => {
+            cache.put(event.request, responseClone);
+          });
+        }
         return response;
       })
       .catch(() => {

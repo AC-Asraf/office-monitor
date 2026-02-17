@@ -4424,7 +4424,15 @@
 
     // Auth state
     let authToken = localStorage.getItem('authToken');
-    let currentUser = JSON.parse(localStorage.getItem('currentUser') || 'null');
+    let currentUser = null;
+    try {
+      currentUser = JSON.parse(localStorage.getItem('currentUser') || 'null');
+    } catch (e) {
+      console.error('Failed to parse currentUser from localStorage:', e);
+      localStorage.removeItem('currentUser');
+      localStorage.removeItem('authToken');
+      authToken = null;
+    }
     let loginError = '';
 
     // Data stores
@@ -4502,24 +4510,50 @@
     // Notifications state
     let unreadNotifications = 0;
 
+    // Token rotation state management - prevents race conditions with concurrent requests
+    let tokenRotationPending = false;
+    let lastTokenRotationTime = 0;
+    const TOKEN_ROTATION_DEBOUNCE = 2000; // 2 seconds debounce for WebSocket reconnection
+
     // Auth helper for fetch with automatic token rotation handling
     async function authFetch(url, options = {}) {
       const headers = { ...options.headers };
-      if (authToken) {
-        headers['Authorization'] = `Bearer ${authToken}`;
+      // Capture the token we're sending WITH this request
+      const requestToken = authToken;
+      if (requestToken) {
+        headers['Authorization'] = `Bearer ${requestToken}`;
       }
       const response = await fetch(url, { ...options, headers });
 
-      // Check for token rotation
-      const newToken = response.headers.get('X-New-Token');
-      if (newToken) {
-        console.log('Token rotated, updating stored token');
-        authToken = newToken;
-        localStorage.setItem('authToken', newToken);
-        // Also reconnect WebSocket with new token
-        if (ws && ws.readyState === WebSocket.OPEN) {
-          ws.close();
-          connectWebSocket();
+      // Only check for token rotation on SUCCESSFUL responses (2xx)
+      // Never trust X-New-Token from failed/cached error responses
+      if (response.ok) {
+        const newToken = response.headers.get('X-New-Token');
+        if (newToken && newToken !== authToken && requestToken === authToken) {
+          // Only accept if: response is successful, token is new, and request used current token
+          console.log('Token rotated, updating stored token');
+          console.log('  Old token:', authToken ? authToken.substring(0, 20) + '...' : 'NULL');
+          console.log('  New token:', newToken.substring(0, 20) + '...');
+
+          authToken = newToken;
+          localStorage.setItem('authToken', newToken);
+
+          // Debounce WebSocket reconnection to avoid multiple reconnects from concurrent requests
+          const now = Date.now();
+          if (!tokenRotationPending && (now - lastTokenRotationTime) > TOKEN_ROTATION_DEBOUNCE) {
+            tokenRotationPending = true;
+            lastTokenRotationTime = now;
+
+            // Small delay to let other concurrent responses arrive with same token
+            setTimeout(() => {
+              tokenRotationPending = false;
+              // Only reconnect if WebSocket is open and using an old token
+              if (ws && (ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CONNECTING)) {
+                wsTokenRotationInProgress = true;
+                connectWebSocket();
+              }
+            }, 100); // 100ms delay to batch concurrent token rotations
+          }
         }
       }
 
@@ -4545,6 +4579,7 @@
           currentUser = data.user;
           localStorage.setItem('authToken', authToken);
           localStorage.setItem('currentUser', JSON.stringify(currentUser));
+          localStorage.setItem('lastSessionValidated', Date.now().toString());
           loginError = '';
           renderApp();
 
@@ -4633,6 +4668,7 @@
             currentUser = data.user;
             localStorage.setItem('authToken', authToken);
             localStorage.setItem('currentUser', JSON.stringify(currentUser));
+            localStorage.setItem('lastSessionValidated', Date.now().toString());
             loginError = '';
 
             // Update status before redirecting
@@ -4698,9 +4734,11 @@
         wsReconnectTimer = null;
       }
       if (ws) {
+        ws.isClosedIntentionally = true;
         ws.close();
         ws = null;
       }
+      wsTokenRotationInProgress = false;
 
       // Clean up analytics interval
       if (analyticsRefreshInterval) {
@@ -4713,6 +4751,7 @@
       localStorage.removeItem('authToken');
       localStorage.removeItem('currentUser');
       localStorage.removeItem('notifications');
+      localStorage.removeItem('lastSessionValidated');
       renderLogin();
     }
 
@@ -4897,8 +4936,8 @@
     // Fetch data from both APIs
     async function fetchAllData() {
       try {
-        // Fetch monitor data
-        const monitorsResponse = await fetch(`${API_URL}/api/monitors/by-floor`);
+        // Fetch monitor data (requires auth)
+        const monitorsResponse = await authFetch(`${API_URL}/api/monitors/by-floor`);
         if (monitorsResponse.ok) {
           const monitorsResult = await monitorsResponse.json();
           if (monitorsResult.success) {
@@ -4907,8 +4946,8 @@
           }
         }
 
-        // Fetch Poly Lens data
-        const plResponse = await fetch(`${API_URL}/api/poly-lens/by-floor`);
+        // Fetch Poly Lens data (requires auth)
+        const plResponse = await authFetch(`${API_URL}/api/poly-lens/by-floor`);
         if (plResponse.ok) {
           const plData = await plResponse.json();
           if (plData.success) {
@@ -4918,8 +4957,8 @@
           }
         }
 
-        // Fetch Zoom-only rooms (rooms without Poly devices)
-        const zoomResponse = await fetch(`${API_URL}/api/zoom-rooms/unmatched`);
+        // Fetch Zoom-only rooms (rooms without Poly devices) (requires auth)
+        const zoomResponse = await authFetch(`${API_URL}/api/zoom-rooms/unmatched`);
         if (zoomResponse.ok) {
           const zoomData = await zoomResponse.json();
           if (zoomData.success) {
@@ -4942,7 +4981,7 @@
         }
 
         // Fetch health for counts
-        const healthResponse = await fetch(`${API_URL}/api/health`);
+        const healthResponse = await authFetch(`${API_URL}/api/health`);
         if (healthResponse.ok) {
           const health = await healthResponse.json();
           apiStatus.monitors.monitorCount = health.monitors?.monitorCount || 0;
@@ -10210,7 +10249,7 @@
         try {
           const response = await authFetch(`${API_URL}/api/auth/me`);
           if (!response.ok) {
-            // Token expired
+            // Token expired or invalid
             authToken = null;
             currentUser = null;
             localStorage.removeItem('authToken');
@@ -10218,6 +10257,7 @@
           }
         } catch (e) {
           // Server unavailable, keep trying with stored credentials
+          console.log('Server check failed:', e.message);
         }
       }
 
@@ -12389,33 +12429,62 @@
     }
 
     // ==================== WEBSOCKET ====================
+    let wsTokenRotationInProgress = false; // Flag to track token rotation state
+    let wsConnectedWithToken = null; // Track which token the WebSocket was connected with
+
     function connectWebSocket() {
+      // Clear any pending reconnect timer first
+      if (wsReconnectTimer) {
+        clearTimeout(wsReconnectTimer);
+        wsReconnectTimer = null;
+      }
+
+      // Close existing WebSocket if any, marking it to prevent reconnect triggering
       if (ws) {
+        ws.isClosedIntentionally = true;
         ws.close();
+        ws = null;
       }
 
       if (!authToken) {
         console.log('WebSocket: No auth token, skipping connection');
+        wsConnectedWithToken = null;
         return;
       }
 
+      // Capture the token we're connecting with
+      const connectingToken = authToken;
       wsReconnecting = wsReconnectAttempts > 0;
       updateConnectionStatus();
 
-      const wsUrl = `${API_URL.replace('http', 'ws')}?token=${encodeURIComponent(authToken)}`;
+      const wsUrl = `${API_URL.replace('http', 'ws')}?token=${encodeURIComponent(connectingToken)}`;
+      console.log('WebSocket connecting with token:', connectingToken ? connectingToken.substring(0, 20) + '...' : 'NULL');
+      console.log('localStorage token:', localStorage.getItem('authToken')?.substring(0, 20) + '...');
       try {
-        ws = new WebSocket(wsUrl);
+        const newWs = new WebSocket(wsUrl);
 
-        ws.onopen = () => {
+        newWs.onopen = () => {
+          // Check if token changed while we were connecting
+          if (authToken !== connectingToken) {
+            console.log('WebSocket connected but token changed during connection, reconnecting with new token');
+            newWs.isClosedIntentionally = true;
+            newWs.close();
+            // Schedule reconnect with new token
+            setTimeout(connectWebSocket, 100);
+            return;
+          }
+
           console.log('WebSocket connected');
           wsConnected = true;
           wsReconnecting = false;
           wsReconnectAttempts = 0;
+          wsTokenRotationInProgress = false;
+          wsConnectedWithToken = connectingToken;
           updateConnectionStatus();
-          render();
+          // Don't full render - just update connection status indicator
         };
 
-        ws.onmessage = (event) => {
+        newWs.onmessage = (event) => {
           try {
             const message = JSON.parse(event.data);
             handleWebSocketMessage(message);
@@ -12424,13 +12493,40 @@
           }
         };
 
-        ws.onclose = () => {
-          console.log('WebSocket disconnected');
-          wsConnected = false;
+        // Capture reference to this specific WebSocket instance in closure
+        newWs.onclose = function(event) {
+          const closedWs = this; // Reference to the WebSocket that actually closed
+          console.log('WebSocket disconnected, code:', event.code, 'reason:', event.reason);
+
+          // Only update state if this is the current active WebSocket
+          if (closedWs === ws) {
+            wsConnected = false;
+            wsConnectedWithToken = null;
+            updateConnectionStatus();
+          }
+
+          // Don't auto-reconnect if:
+          // 1. This WebSocket was closed intentionally (replaced by new one)
+          // 2. Token rotation is in progress (reconnect handled by authFetch)
+          // 3. This is not the current active WebSocket
+          // 4. We received 4002 (invalid token) - token may have rotated, try immediate reconnect
+          if (closedWs.isClosedIntentionally || wsTokenRotationInProgress || closedWs !== ws) {
+            console.log('WebSocket closed intentionally or during token rotation, skipping auto-reconnect');
+            return;
+          }
+
+          // If closed due to invalid token (4002), try immediate reconnect with current token
+          // This handles the case where token rotated and we need to reconnect
+          if (event.code === 4002) {
+            console.log('WebSocket closed due to invalid token, attempting immediate reconnect with current token');
+            wsReconnectAttempts = 0; // Reset attempts since this is a token issue, not connection issue
+            if (wsReconnectTimer) clearTimeout(wsReconnectTimer);
+            wsReconnectTimer = setTimeout(connectWebSocket, 500); // Quick retry
+            return;
+          }
+
           wsReconnecting = true;
           wsReconnectAttempts++;
-          updateConnectionStatus();
-          render();
           // Reconnect with exponential backoff (max 30s)
           const delay = Math.min(5000 * Math.pow(1.5, wsReconnectAttempts - 1), 30000);
           console.log(`Reconnecting in ${delay/1000}s (attempt ${wsReconnectAttempts})`);
@@ -12438,9 +12534,12 @@
           wsReconnectTimer = setTimeout(connectWebSocket, delay);
         };
 
-        ws.onerror = (error) => {
+        newWs.onerror = (error) => {
           console.error('WebSocket error:', error);
         };
+
+        // Assign to global only after handlers are set up
+        ws = newWs;
       } catch (e) {
         console.error('WebSocket connection failed:', e);
       }
@@ -12518,6 +12617,7 @@
         wsReconnectTimer = null;
       }
       if (ws) {
+        ws.isClosedIntentionally = true;
         ws.close();
         ws = null;
       }

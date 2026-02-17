@@ -12,6 +12,38 @@ const WebSocket = require('ws');
 const bcrypt = require('bcrypt');
 const fs = require('fs');
 
+// ==================== GLOBAL ERROR HANDLERS ====================
+// Catch uncaught exceptions to prevent silent crashes
+process.on('uncaughtException', (error) => {
+  console.error('[FATAL] Uncaught exception:', error.message);
+  console.error(error.stack);
+  // Log to audit file if available
+  try {
+    const logEntry = JSON.stringify({
+      timestamp: new Date().toISOString(),
+      type: 'UNCAUGHT_EXCEPTION',
+      error: error.message,
+      stack: error.stack
+    }) + '\n';
+    fs.appendFileSync(path.join(__dirname, 'logs', 'audit.log'), logEntry);
+  } catch (e) { /* ignore logging errors during crash */ }
+  // Give time for logging, then exit
+  setTimeout(() => process.exit(1), 1000);
+});
+
+process.on('unhandledRejection', (reason, promise) => {
+  console.error('[ERROR] Unhandled promise rejection:', reason);
+  // Log to audit file if available
+  try {
+    const logEntry = JSON.stringify({
+      timestamp: new Date().toISOString(),
+      type: 'UNHANDLED_REJECTION',
+      reason: String(reason)
+    }) + '\n';
+    fs.appendFileSync(path.join(__dirname, 'logs', 'audit.log'), logEntry);
+  } catch (e) { /* ignore logging errors */ }
+});
+
 // ==================== ENVIRONMENT VALIDATION ====================
 // Validate required and optional environment variables on startup
 const ENV_CONFIG = {
@@ -185,7 +217,15 @@ const inputValidation = {
     // Allow hostnames, IPs, and simple domains
     const hostnameRegex = /^[a-zA-Z0-9]([a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?(\.[a-zA-Z0-9]([a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)*$/;
     const ipRegex = /^(\d{1,3}\.){3}\d{1,3}$/;
-    return hostnameRegex.test(hostname) || ipRegex.test(hostname);
+
+    if (hostnameRegex.test(hostname)) return true;
+
+    // For IPs, also validate octets are 0-255
+    if (ipRegex.test(hostname)) {
+      const octets = hostname.split('.').map(Number);
+      return octets.every(octet => octet >= 0 && octet <= 255);
+    }
+    return false;
   },
 
   // Validate URL
@@ -304,6 +344,16 @@ const ZOOM_CLIENT_ID = process.env.ZOOM_CLIENT_ID;
 const ZOOM_CLIENT_SECRET = process.env.ZOOM_CLIENT_SECRET;
 const ZOOM_AUTH_URL = 'https://zoom.us/oauth/token';
 const ZOOM_API_URL = 'https://api.zoom.us/v2';
+
+// Brivo Access Control Configuration
+const BRIVO_CLIENT_ID = process.env.BRIVO_CLIENT_ID;
+const BRIVO_CLIENT_SECRET = process.env.BRIVO_CLIENT_SECRET;
+const BRIVO_USERNAME = process.env.BRIVO_USERNAME;
+const BRIVO_PASSWORD = process.env.BRIVO_PASSWORD;
+const BRIVO_API_KEY = process.env.BRIVO_API_KEY;
+const BRIVO_AUTH_URL = 'https://auth.brivo.com/oauth/token';
+const BRIVO_API_URL = 'https://api.brivo.com/v1/api';
+const BRIVO_SITE_FILTER = process.env.BRIVO_SITE_FILTER || 'Outbrain Israel';
 
 // ==================== DATABASE SETUP ====================
 
@@ -544,6 +594,19 @@ db.exec(`
   );
 
   CREATE INDEX IF NOT EXISTS idx_zoom_history_room_time ON zoom_room_history(room_id, time DESC);
+
+  CREATE TABLE IF NOT EXISTS password_reset_tokens (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id INTEGER NOT NULL,
+    token TEXT NOT NULL UNIQUE,
+    expires_at DATETIME NOT NULL,
+    used INTEGER DEFAULT 0,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (user_id) REFERENCES users(id)
+  );
+
+  CREATE INDEX IF NOT EXISTS idx_reset_tokens_token ON password_reset_tokens(token);
+  CREATE INDEX IF NOT EXISTS idx_reset_tokens_expires ON password_reset_tokens(expires_at);
 `);
 
 // Run migrations for new columns (safe to run multiple times)
@@ -891,7 +954,19 @@ Object.entries(defaultSettings).forEach(([key, value]) => {
 
 // Initialize default admin user from environment variables
 const defaultAdminUsername = process.env.DEFAULT_ADMIN_USERNAME || 'admin';
-const defaultAdminPassword = process.env.DEFAULT_ADMIN_PASSWORD || 'changeme123';
+
+// Generate cryptographically strong password if not provided in environment
+function generateSecurePassword(length = 16) {
+  const charset = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789!@#$%^&*';
+  const randomBytes = crypto.randomBytes(length);
+  let password = '';
+  for (let i = 0; i < length; i++) {
+    password += charset[randomBytes[i] % charset.length];
+  }
+  return password;
+}
+
+const defaultAdminPassword = process.env.DEFAULT_ADMIN_PASSWORD || generateSecurePassword(20);
 
 // Check if admin user exists, if not create with hashed password
 const existingAdmin = db.prepare('SELECT id, password FROM users WHERE username = ?').get(defaultAdminUsername);
@@ -899,6 +974,10 @@ if (!existingAdmin) {
   const hashedPassword = bcrypt.hashSync(defaultAdminPassword, 10);
   db.prepare('INSERT INTO users (username, password, role, password_reset_required) VALUES (?, ?, ?, 1)').run(defaultAdminUsername, hashedPassword, 'admin');
   console.log('Created default admin user (password change required on first login)');
+  if (!process.env.DEFAULT_ADMIN_PASSWORD) {
+    console.log(`⚠️  IMPORTANT: Generated temporary admin password: ${defaultAdminPassword}`);
+    console.log('   Please change this immediately after first login!');
+  }
 } else if (!existingAdmin.password.startsWith('$2')) {
   // Migrate existing plain text password to hashed
   const hashedPassword = bcrypt.hashSync(existingAdmin.password, 10);
@@ -1086,6 +1165,16 @@ function deleteSession(token) {
 
 // Rotate session token (returns new token)
 const TOKEN_ROTATION_INTERVAL = 60 * 60 * 1000; // 1 hour
+const TOKEN_GRACE_PERIOD = 30 * 1000; // 30 seconds grace period for old tokens
+
+// Track old tokens during grace period: { oldToken: { newToken, expiresAt } }
+const tokenGracePeriod = new Map();
+
+// Track sessions currently being rotated to prevent race conditions
+// { sessionId: { newToken, timestamp } }
+const rotationInProgress = new Map();
+const ROTATION_LOCK_TIMEOUT = 5000; // 5 seconds max lock time
+
 function rotateSessionIfNeeded(session) {
   if (!session || !session.last_rotated_at) return null;
 
@@ -1097,37 +1186,141 @@ function rotateSessionIfNeeded(session) {
     return null; // No rotation needed
   }
 
+  const sessionId = session.id;
+  const oldToken = session.token;
+
+  // Check if this session is already being rotated (race condition prevention)
+  const existingRotation = rotationInProgress.get(sessionId);
+  if (existingRotation && (now - existingRotation.timestamp) < ROTATION_LOCK_TIMEOUT) {
+    // Another request already rotated this session, return the new token from that rotation
+    // Also ensure the old token is in grace period
+    if (!tokenGracePeriod.has(oldToken)) {
+      tokenGracePeriod.set(oldToken, {
+        sessionId: sessionId,
+        userId: session.user_id,
+        username: session.username,
+        role: session.role,
+        newToken: existingRotation.newToken,
+        expiresAt: now + TOKEN_GRACE_PERIOD
+      });
+    }
+    return existingRotation.newToken;
+  }
+
+  // Check if this old token is already in grace period (another request already rotated)
+  const existingGrace = tokenGracePeriod.get(oldToken);
+  if (existingGrace && existingGrace.expiresAt > now) {
+    // Token was already rotated, return the new token
+    return existingGrace.newToken;
+  }
+
   // Generate new token
   const newToken = generateToken();
   const newExpiresAt = new Date(now + 24 * 60 * 60 * 1000).toISOString();
+
+  // Mark rotation in progress BEFORE database update
+  rotationInProgress.set(sessionId, { newToken, timestamp: now });
+
+  console.log('TOKEN ROTATION:');
+  console.log('  Old token:', oldToken.substring(0, 25) + '...');
+  console.log('  New token:', newToken.substring(0, 25) + '...');
+  console.log('  Session ID:', sessionId);
 
   // Update session with new token
   db.prepare(`
     UPDATE sessions SET token = ?, expires_at = ?, last_rotated_at = ?
     WHERE id = ?
-  `).run(newToken, newExpiresAt, new Date(now).toISOString(), session.id);
+  `).run(newToken, newExpiresAt, new Date(now).toISOString(), sessionId);
+
+  // Keep old token valid during grace period for in-flight requests
+  tokenGracePeriod.set(oldToken, {
+    sessionId: sessionId,
+    userId: session.user_id,
+    username: session.username,
+    role: session.role,
+    newToken: newToken,
+    expiresAt: now + TOKEN_GRACE_PERIOD
+  });
+
+  // Clean up expired grace period tokens and rotation locks
+  for (const [token, data] of tokenGracePeriod.entries()) {
+    if (data.expiresAt < now) {
+      tokenGracePeriod.delete(token);
+    }
+  }
+  for (const [sessId, data] of rotationInProgress.entries()) {
+    if ((now - data.timestamp) > ROTATION_LOCK_TIMEOUT) {
+      rotationInProgress.delete(sessId);
+    }
+  }
 
   return newToken;
+}
+
+// Enhanced getSession that checks grace period tokens too
+function getSessionWithGrace(token) {
+  // First check normal session
+  const session = getSession(token);
+  if (session) return { session, isGracePeriod: false };
+
+  // Check if this is an old token in grace period
+  const graceData = tokenGracePeriod.get(token);
+  if (graceData && graceData.expiresAt > Date.now()) {
+    // Return a session-like object for the grace period
+    return {
+      session: {
+        id: graceData.sessionId,
+        user_id: graceData.userId,
+        username: graceData.username,
+        role: graceData.role,
+        token: token
+      },
+      isGracePeriod: true,
+      newToken: graceData.newToken
+    };
+  }
+
+  return { session: null, isGracePeriod: false };
 }
 
 // Auth middleware - only accepts tokens in Authorization header (not URL for security)
 function authMiddleware(req, res, next) {
   const token = req.headers.authorization?.replace('Bearer ', '');
 
+  console.log('AUTH MIDDLEWARE:', req.path);
+  console.log('  Token received:', token ? token.substring(0, 25) + '...' : 'NULL');
+
   if (!token) {
     return res.status(401).json({ success: false, error: 'Authentication required' });
   }
 
-  const session = getSession(token);
+  const { session, isGracePeriod, newToken: gracePeriodNewToken } = getSessionWithGrace(token);
+  console.log('  Session found:', !!session, 'isGracePeriod:', isGracePeriod);
+
   if (!session) {
+    console.log('  REJECTED: No session found');
     return res.status(401).json({ success: false, error: 'Invalid or expired session' });
   }
 
-  // Check if token should be rotated
-  const newToken = rotateSessionIfNeeded(session);
-  if (newToken) {
-    // Set header to inform client of new token
-    res.setHeader('X-New-Token', newToken);
+  // Prevent caching of authenticated responses to avoid stale X-New-Token headers
+  res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, private');
+  res.setHeader('Pragma', 'no-cache');
+  res.setHeader('Expires', '0');
+
+  // If using grace period token, tell client about the new token
+  if (isGracePeriod && gracePeriodNewToken) {
+    console.log('  Grace period token, sending X-New-Token:', gracePeriodNewToken.substring(0, 25) + '...');
+    res.setHeader('X-New-Token', gracePeriodNewToken);
+  } else {
+    // Check if token should be rotated (only for non-grace-period requests)
+    const newToken = rotateSessionIfNeeded(session);
+    if (newToken) {
+      console.log('  Token rotated, sending X-New-Token:', newToken.substring(0, 25) + '...');
+      // Set header to inform client of new token
+      res.setHeader('X-New-Token', newToken);
+    } else {
+      console.log('  No rotation needed');
+    }
   }
 
   req.user = {
@@ -1150,7 +1343,7 @@ function adminMiddleware(req, res, next) {
 function optionalAuth(req, res, next) {
   const token = req.headers.authorization?.replace('Bearer ', '');
   if (token) {
-    const session = getSession(token);
+    const { session } = getSessionWithGrace(token);
     if (session) {
       req.user = {
         id: session.user_id,
@@ -1302,16 +1495,45 @@ function rejectPendingChange(changeId, adminId) {
   return { success: true };
 }
 
-// ==================== SLACK NOTIFICATIONS ====================
+// ==================== WEBHOOK NOTIFICATIONS ====================
 
 async function sendSlackAlert(monitor, status, message, alertType = 'status') {
   const webhookUrl = getSetting('slack_webhook_url');
-  const slackEnabled = getSetting('slack_enabled');
-  const slackChannel = getSetting('slack_channel');
+  const webhookEnabled = getSetting('slack_enabled');
+  const webhookType = getSetting('webhook_type') || 'slack';
+  const channel = getSetting('slack_channel');
 
-  if (!webhookUrl || slackEnabled !== '1') {
-    console.log('Slack notifications disabled or not configured');
+  if (!webhookUrl || webhookEnabled !== '1') {
+    console.log('Webhook notifications disabled or not configured');
     return;
+  }
+
+  // Check quiet hours - suppress non-critical alerts during quiet period
+  const quietEnabled = getSetting('slack_quiet_enabled') === '1';
+  if (quietEnabled && alertType !== 'critical') {
+    const quietStart = getSetting('slack_quiet_start') || '22:00';
+    const quietEnd = getSetting('slack_quiet_end') || '07:00';
+
+    const now = new Date();
+    const currentTime = now.getHours() * 60 + now.getMinutes();
+    const [startHour, startMin] = quietStart.split(':').map(Number);
+    const [endHour, endMin] = quietEnd.split(':').map(Number);
+    const startMinutes = startHour * 60 + startMin;
+    const endMinutes = endHour * 60 + endMin;
+
+    let isQuietTime = false;
+    if (startMinutes > endMinutes) {
+      // Overnight quiet hours (e.g., 22:00 - 07:00)
+      isQuietTime = currentTime >= startMinutes || currentTime < endMinutes;
+    } else {
+      // Same-day quiet hours (e.g., 13:00 - 14:00)
+      isQuietTime = currentTime >= startMinutes && currentTime < endMinutes;
+    }
+
+    if (isQuietTime) {
+      console.log(`Quiet hours active (${quietStart}-${quietEnd}), suppressing alert for ${monitor.name}`);
+      return;
+    }
   }
 
   // Check if device is in maintenance mode (skip status alerts only)
@@ -1329,58 +1551,110 @@ async function sendSlackAlert(monitor, status, message, alertType = 'status') {
     }
   }
 
-  const emoji = status === 1 ? ':white_check_mark:' : ':red_circle:';
   const statusText = status === 1 ? 'UP' : 'DOWN';
+  const statusEmoji = status === 1 ? '✅' : '🔴';
   const color = status === 1 ? '#22C55E' : '#EF4444';
+  const timestamp = new Date().toLocaleString();
+  const deviceInfo = `Type: ${monitor.device_type || monitor.type} | IP: ${monitor.hostname || monitor.url} | Floor: ${monitor.floor || 'N/A'}`;
 
-  const payload = {
-    channel: slackChannel,
-    attachments: [{
-      color: color,
-      blocks: [
-        {
-          type: 'section',
-          text: {
-            type: 'mrkdwn',
-            text: `${emoji} *${monitor.name}* is *${statusText}*`
-          }
-        },
-        {
-          type: 'context',
-          elements: [
+  let payload;
+  let fetchUrl = webhookUrl;
+
+  switch (webhookType) {
+    case 'telegram':
+      // Telegram Bot API format
+      const chatId = channel;
+      const telegramText = `${statusEmoji} *${monitor.name}* is *${statusText}*\n\n${deviceInfo}\n\n_${message || timestamp}_`;
+      payload = {
+        chat_id: chatId,
+        text: telegramText,
+        parse_mode: 'Markdown'
+      };
+      break;
+
+    case 'discord':
+      // Discord webhook format
+      payload = {
+        embeds: [{
+          title: `${statusEmoji} ${monitor.name} is ${statusText}`,
+          color: status === 1 ? 0x22C55E : 0xEF4444,
+          fields: [
+            { name: 'Type', value: monitor.device_type || monitor.type, inline: true },
+            { name: 'IP', value: monitor.hostname || monitor.url || 'N/A', inline: true },
+            { name: 'Floor', value: monitor.floor || 'N/A', inline: true }
+          ],
+          footer: { text: message || timestamp }
+        }]
+      };
+      break;
+
+    case 'teams':
+      // Microsoft Teams webhook format
+      payload = {
+        '@type': 'MessageCard',
+        '@context': 'http://schema.org/extensions',
+        themeColor: color.replace('#', ''),
+        summary: `${monitor.name} is ${statusText}`,
+        sections: [{
+          activityTitle: `${statusEmoji} ${monitor.name} is ${statusText}`,
+          facts: [
+            { name: 'Type', value: monitor.device_type || monitor.type },
+            { name: 'IP', value: monitor.hostname || monitor.url || 'N/A' },
+            { name: 'Floor', value: monitor.floor || 'N/A' }
+          ],
+          text: message || timestamp
+        }]
+      };
+      break;
+
+    case 'slack':
+    default:
+      // Slack webhook format (default)
+      payload = {
+        channel: channel,
+        attachments: [{
+          color: color,
+          blocks: [
             {
-              type: 'mrkdwn',
-              text: `*Type:* ${monitor.device_type || monitor.type} | *IP:* ${monitor.hostname || monitor.url} | *Floor:* ${monitor.floor || 'N/A'}`
+              type: 'section',
+              text: {
+                type: 'mrkdwn',
+                text: `${status === 1 ? ':white_check_mark:' : ':red_circle:'} *${monitor.name}* is *${statusText}*`
+              }
+            },
+            {
+              type: 'context',
+              elements: [
+                { type: 'mrkdwn', text: `*Type:* ${monitor.device_type || monitor.type} | *IP:* ${monitor.hostname || monitor.url} | *Floor:* ${monitor.floor || 'N/A'}` }
+              ]
+            },
+            {
+              type: 'context',
+              elements: [
+                { type: 'mrkdwn', text: message ? `_${message}_` : `_${timestamp}_` }
+              ]
             }
           ]
-        },
-        {
-          type: 'context',
-          elements: [
-            {
-              type: 'mrkdwn',
-              text: message ? `_${message}_` : `_${new Date().toLocaleString()}_`
-            }
-          ]
-        }
-      ]
-    }]
-  };
+        }]
+      };
+      break;
+  }
 
   try {
-    const response = await fetch(webhookUrl, {
+    const response = await fetch(fetchUrl, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload)
     });
 
     if (!response.ok) {
-      console.error('Slack alert failed:', response.status);
+      const errorText = await response.text().catch(() => 'Unknown error');
+      console.error(`${webhookType} alert failed:`, response.status, errorText);
     } else {
-      console.log(`Slack alert sent: ${monitor.name} is ${statusText}`);
+      console.log(`${webhookType} alert sent: ${monitor.name} is ${statusText}`);
     }
   } catch (error) {
-    console.error('Slack alert error:', error.message);
+    console.error(`${webhookType} alert error:`, error.message);
   }
 }
 
@@ -1417,13 +1691,15 @@ async function checkMonitor(monitor) {
         // For HTTPS URLs, use node's https module
         if (isHttps) {
           const url = new URL(monitor.url);
+          // Only skip TLS verification for internal/private IP addresses
+          const isInternalIP = /^(10\.|192\.168\.|172\.(1[6-9]|2[0-9]|3[0-1])\.)/.test(url.hostname);
           const result = await new Promise((resolve, reject) => {
             const req = https.request({
               hostname: url.hostname,
               port: url.port || 443,
               path: url.pathname || '/',
               method: 'GET',
-              rejectUnauthorized: process.env.NODE_TLS_REJECT_UNAUTHORIZED !== '0',
+              rejectUnauthorized: !isInternalIP, // Only allow insecure for internal IPs
               timeout: PING_TIMEOUT
             }, (res) => {
               resolve({ ok: res.statusCode >= 200 && res.statusCode < 400, status: res.statusCode, statusText: res.statusMessage });
@@ -2412,6 +2688,238 @@ function getZoomOnlyRooms() {
   });
 }
 
+// ==================== BRIVO ACCESS CONTROL INTEGRATION ====================
+
+let brivoToken = null;
+let brivoTokenExpiry = null;
+let brivoRefreshToken = null;
+
+async function getBrivoToken() {
+  // Return cached token if still valid (with 30 second buffer)
+  if (brivoToken && brivoTokenExpiry && Date.now() < brivoTokenExpiry - 30000) {
+    return brivoToken;
+  }
+
+  if (!BRIVO_CLIENT_ID || !BRIVO_CLIENT_SECRET || !BRIVO_USERNAME || !BRIVO_PASSWORD || !BRIVO_API_KEY) {
+    console.warn('[Brivo] Missing credentials (need CLIENT_ID, CLIENT_SECRET, USERNAME, PASSWORD, and API_KEY) - integration disabled');
+    return null;
+  }
+
+  try {
+    // Create Basic auth header from client credentials
+    const clientCredentials = Buffer.from(`${BRIVO_CLIENT_ID}:${BRIVO_CLIENT_SECRET}`).toString('base64');
+
+    const params = new URLSearchParams();
+    params.append('grant_type', 'password');
+    params.append('username', BRIVO_USERNAME);
+    params.append('password', BRIVO_PASSWORD);
+
+    const response = await fetch(BRIVO_AUTH_URL, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Basic ${clientCredentials}`,
+        'Content-Type': 'application/x-www-form-urlencoded',
+        'api-key': BRIVO_API_KEY
+      },
+      body: params.toString()
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error('[Brivo] Auth failed:', response.status, errorText);
+      return null;
+    }
+
+    const data = await response.json();
+    brivoToken = data.access_token;
+    brivoRefreshToken = data.refresh_token;
+    // Token expires in 60 seconds according to docs
+    brivoTokenExpiry = Date.now() + (data.expires_in || 60) * 1000;
+
+    console.log('[Brivo] Token refreshed successfully');
+    return brivoToken;
+  } catch (error) {
+    console.error('[Brivo] Auth error:', error.message);
+    return null;
+  }
+}
+
+async function refreshBrivoToken() {
+  if (!brivoRefreshToken) {
+    return getBrivoToken();
+  }
+
+  try {
+    const clientCredentials = Buffer.from(`${BRIVO_CLIENT_ID}:${BRIVO_CLIENT_SECRET}`).toString('base64');
+
+    const params = new URLSearchParams();
+    params.append('grant_type', 'refresh_token');
+    params.append('refresh_token', brivoRefreshToken);
+
+    const response = await fetch(BRIVO_AUTH_URL, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Basic ${clientCredentials}`,
+        'Content-Type': 'application/x-www-form-urlencoded',
+        'api-key': BRIVO_API_KEY
+      },
+      body: params.toString()
+    });
+
+    if (!response.ok) {
+      console.warn('[Brivo] Refresh token failed, getting new token');
+      return getBrivoToken();
+    }
+
+    const data = await response.json();
+    brivoToken = data.access_token;
+    brivoRefreshToken = data.refresh_token || brivoRefreshToken;
+    brivoTokenExpiry = Date.now() + (data.expires_in || 60) * 1000;
+
+    return brivoToken;
+  } catch (error) {
+    console.error('[Brivo] Refresh error:', error.message);
+    return getBrivoToken();
+  }
+}
+
+async function brivoApiRequest(endpoint, options = {}) {
+  const token = await getBrivoToken();
+  if (!token) {
+    throw new Error('Brivo authentication failed');
+  }
+
+  const url = `${BRIVO_API_URL}${endpoint}`;
+  const response = await fetch(url, {
+    ...options,
+    headers: {
+      'Authorization': `Bearer ${token}`,
+      'Content-Type': 'application/json',
+      'api-key': BRIVO_API_KEY,
+      ...options.headers
+    }
+  });
+
+  if (response.status === 401) {
+    // Token expired, try refresh
+    const newToken = await refreshBrivoToken();
+    if (!newToken) {
+      throw new Error('Brivo re-authentication failed');
+    }
+
+    return fetch(url, {
+      ...options,
+      headers: {
+        'Authorization': `Bearer ${newToken}`,
+        'Content-Type': 'application/json',
+        'api-key': BRIVO_API_KEY,
+        ...options.headers
+      }
+    });
+  }
+
+  return response;
+}
+
+// Cached door data
+let brivoDoors = [];
+let brivoDoorsLastFetch = 0;
+const BRIVO_CACHE_TTL = 60000; // 1 minute cache
+
+async function fetchBrivoDoors() {
+  // Return cached data if fresh
+  if (brivoDoors.length > 0 && Date.now() - brivoDoorsLastFetch < BRIVO_CACHE_TTL) {
+    return brivoDoors;
+  }
+
+  try {
+    const response = await brivoApiRequest('/access-points?pageSize=200');
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error('[Brivo] Failed to fetch doors:', response.status, errorText);
+      return brivoDoors; // Return cached data on error
+    }
+
+    const data = await response.json();
+    let allDoors = data.data || [];
+
+    // Filter doors by site name (Outbrain Israel)
+    if (BRIVO_SITE_FILTER) {
+      allDoors = allDoors.filter(door => {
+        // Check site name in various possible fields
+        const siteName = door.siteName || door.site?.name || door.location || '';
+        return siteName.toLowerCase().includes(BRIVO_SITE_FILTER.toLowerCase());
+      });
+    }
+
+    // Parse floor number from door name (format: <number>FL <name>)
+    brivoDoors = allDoors.map(door => {
+      const name = door.name || '';
+      const floorMatch = name.match(/^(\d+)FL\s+(.+)$/i);
+      return {
+        ...door,
+        floor: floorMatch ? parseInt(floorMatch[1]) : 0,
+        displayName: floorMatch ? floorMatch[2] : name,
+        floorLabel: floorMatch ? `${floorMatch[1]}FL` : ''
+      };
+    }).sort((a, b) => {
+      // Sort by floor number, then by name
+      if (a.floor !== b.floor) return a.floor - b.floor;
+      return a.displayName.localeCompare(b.displayName);
+    });
+
+    brivoDoorsLastFetch = Date.now();
+
+    console.log(`[Brivo] Fetched ${brivoDoors.length} access points for ${BRIVO_SITE_FILTER}`);
+    return brivoDoors;
+  } catch (error) {
+    console.error('[Brivo] Fetch doors error:', error.message);
+    return brivoDoors;
+  }
+}
+
+async function getBrivoDoorStatus(accessPointId) {
+  try {
+    const response = await brivoApiRequest(`/device-status/${accessPointId}`);
+
+    if (!response.ok) {
+      console.error('[Brivo] Failed to get door status:', response.status);
+      return null;
+    }
+
+    return await response.json();
+  } catch (error) {
+    console.error('[Brivo] Door status error:', error.message);
+    return null;
+  }
+}
+
+async function unlockBrivoDoor(accessPointId) {
+  try {
+    const response = await brivoApiRequest(`/access-points/${accessPointId}/unlock`, {
+      method: 'POST',
+      body: JSON.stringify({})
+    });
+
+    // 204 No Content is success
+    if (response.status === 204 || response.ok) {
+      console.log(`[Brivo] Door ${accessPointId} unlocked successfully`);
+      auditLog('BRIVO_DOOR_UNLOCK', { accessPointId, success: true });
+      return { success: true };
+    }
+
+    const errorText = await response.text();
+    console.error('[Brivo] Unlock failed:', response.status, errorText);
+    auditLog('BRIVO_DOOR_UNLOCK', { accessPointId, success: false, error: errorText });
+    return { success: false, error: errorText };
+  } catch (error) {
+    console.error('[Brivo] Unlock error:', error.message);
+    auditLog('BRIVO_DOOR_UNLOCK', { accessPointId, success: false, error: error.message });
+    return { success: false, error: error.message };
+  }
+}
+
 // ==================== AUTH ROUTES ====================
 
 // Login
@@ -2895,7 +3403,7 @@ app.post('/api/auth/change-password', authMiddleware, async (req, res) => {
   }
 });
 
-// Forgot password - sends Slack notification and resets to random password
+// Forgot password - sends Slack notification with secure reset link
 app.post('/api/auth/forgot-password', async (req, res) => {
   const { username } = req.body;
   const clientIp = req.ip || req.connection?.remoteAddress || 'unknown';
@@ -2928,12 +3436,21 @@ app.post('/api/auth/forgot-password', async (req, res) => {
   }
 
   try {
-    // Generate secure random temporary password
-    const tempPassword = generateSecurePassword(12);
-    const hashedPassword = await bcrypt.hash(tempPassword, 10);
-    db.prepare('UPDATE users SET password = ?, password_reset_required = 1 WHERE id = ?').run(hashedPassword, user.id);
+    // Invalidate any existing reset tokens for this user
+    db.prepare('UPDATE password_reset_tokens SET used = 1 WHERE user_id = ? AND used = 0').run(user.id);
 
-    // Send Slack notification to BOTH channels
+    // Generate secure reset token (32 bytes = 64 hex chars)
+    const resetToken = crypto.randomBytes(32).toString('hex');
+    const expiresAt = new Date(Date.now() + 15 * 60 * 1000).toISOString(); // 15 minutes
+
+    db.prepare('INSERT INTO password_reset_tokens (user_id, token, expires_at) VALUES (?, ?, ?)').run(user.id, resetToken, expiresAt);
+
+    // Build reset URL - use request host for flexibility
+    const protocol = req.secure || req.headers['x-forwarded-proto'] === 'https' ? 'https' : 'http';
+    const host = req.headers.host || `localhost:${PORT}`;
+    const resetUrl = `${protocol}://${host}/reset-password.html?token=${resetToken}`;
+
+    // Send Slack notification with reset link (NOT the password)
     const message = {
       text: `🔐 *Password Reset Request*`,
       blocks: [
@@ -2962,8 +3479,17 @@ app.post('/api/auth/forgot-password', async (req, res) => {
           type: 'section',
           text: {
             type: 'mrkdwn',
-            text: `Password has been reset. Temporary password: \`${tempPassword}\`\n\n_User will be required to change it on next login._`
+            text: `A password reset was requested.\n\n<${resetUrl}|Click here to reset password>\n\n_This link expires in 15 minutes._`
           }
+        },
+        {
+          type: 'context',
+          elements: [
+            {
+              type: 'mrkdwn',
+              text: `🔒 If you didn't request this, the link will expire and no action is needed.`
+            }
+          ]
         }
       ]
     };
@@ -2978,10 +3504,71 @@ app.post('/api/auth/forgot-password', async (req, res) => {
       }).catch(err => console.error('Failed to send Slack notification:', err))
     ));
 
+    auditLog('PASSWORD_RESET_REQUESTED', { userId: user.id, username: user.username, ip: clientIp });
+
     res.json({ success: true, message: 'If the username exists, a password reset has been initiated' });
   } catch (e) {
     logger.error('Failed to reset password', e);
     res.status(500).json({ success: false, error: 'Failed to process request' });
+  }
+});
+
+// Validate password reset token
+app.get('/api/auth/validate-reset-token/:token', (req, res) => {
+  const { token } = req.params;
+
+  const resetToken = db.prepare(`
+    SELECT prt.*, u.username
+    FROM password_reset_tokens prt
+    JOIN users u ON prt.user_id = u.id
+    WHERE prt.token = ? AND prt.used = 0 AND prt.expires_at > datetime('now')
+  `).get(token);
+
+  if (!resetToken) {
+    return res.json({ success: false, error: 'Invalid or expired reset token' });
+  }
+
+  res.json({ success: true, username: resetToken.username });
+});
+
+// Complete password reset with token
+app.post('/api/auth/reset-password', async (req, res) => {
+  const { token, newPassword } = req.body;
+  const clientIp = req.ip || req.connection?.remoteAddress || 'unknown';
+
+  if (!token || !newPassword) {
+    return res.status(400).json({ success: false, error: 'Token and new password are required' });
+  }
+
+  // Password strength validation
+  if (newPassword.length < 8) {
+    return res.status(400).json({ success: false, error: 'Password must be at least 8 characters' });
+  }
+
+  const resetToken = db.prepare(`
+    SELECT prt.*, u.username
+    FROM password_reset_tokens prt
+    JOIN users u ON prt.user_id = u.id
+    WHERE prt.token = ? AND prt.used = 0 AND prt.expires_at > datetime('now')
+  `).get(token);
+
+  if (!resetToken) {
+    return res.status(400).json({ success: false, error: 'Invalid or expired reset token' });
+  }
+
+  try {
+    const hashedPassword = await bcrypt.hash(newPassword, 10);
+
+    // Update password and mark token as used
+    db.prepare('UPDATE users SET password = ?, password_reset_required = 0 WHERE id = ?').run(hashedPassword, resetToken.user_id);
+    db.prepare('UPDATE password_reset_tokens SET used = 1 WHERE id = ?').run(resetToken.id);
+
+    auditLog('PASSWORD_RESET_COMPLETED', { userId: resetToken.user_id, username: resetToken.username, ip: clientIp });
+
+    res.json({ success: true, message: 'Password has been reset successfully' });
+  } catch (e) {
+    logger.error('Failed to complete password reset', e);
+    res.status(500).json({ success: false, error: 'Failed to reset password' });
   }
 });
 
@@ -3325,40 +3912,95 @@ app.delete('/api/zones/:id', authMiddleware, (req, res) => {
 
 // ==================== API INTEGRATIONS ROUTES ====================
 
+// Helper to parse integration config and add computed fields
+function parseIntegration(row) {
+  if (!row) return null;
+  const integration = { ...row };
+
+  // Parse config JSON
+  let config = {};
+  try {
+    config = row.config ? JSON.parse(row.config) : {};
+  } catch (e) {
+    config = {};
+  }
+
+  // Map fields from config for backwards compatibility and new generic format
+  integration.auth_type = config.auth_type || (row.client_id ? 'oauth2' : 'none');
+  integration.base_url = config.base_url || row.webhook_url || '';
+  integration.description = config.description || '';
+
+  // Indicate if secrets exist (don't expose actual values)
+  integration.has_api_key = !!config.api_key;
+  integration.has_bearer_token = !!config.bearer_token;
+  integration.has_password = !!config.password;
+  integration.has_client_secret = !!(row.client_secret || config.client_secret);
+
+  // Include non-sensitive config fields
+  integration.api_key_header = config.api_key_header;
+  integration.username = config.username;
+  integration.token_url = config.token_url;
+  integration.client_id = row.client_id || config.client_id;
+
+  return integration;
+}
+
 // Get all API integrations
 app.get('/api/integrations', authMiddleware, (req, res) => {
-  const integrations = db.prepare('SELECT id, name, type, client_id, active, created_at FROM api_integrations').all();
+  const rows = db.prepare('SELECT * FROM api_integrations ORDER BY created_at DESC').all();
+  const integrations = rows.map(parseIntegration);
   res.json({ success: true, integrations });
 });
 
 // Get single API integration
 app.get('/api/integrations/:id', authMiddleware, (req, res) => {
-  const integration = db.prepare('SELECT * FROM api_integrations WHERE id = ?').get(req.params.id);
-  if (!integration) {
+  const row = db.prepare('SELECT * FROM api_integrations WHERE id = ?').get(req.params.id);
+  if (!row) {
     return res.status(404).json({ success: false, error: 'Integration not found' });
   }
-  // Mask secret
-  if (integration.client_secret) {
-    integration.client_secret_masked = '********';
-  }
-  res.json({ success: true, integration });
+  res.json({ success: true, integration: parseIntegration(row) });
 });
 
 // Add new API integration
 app.post('/api/integrations', authMiddleware, (req, res) => {
-  const { name, type, client_id, client_secret, webhook_url, config } = req.body;
+  const { name, auth_type, base_url, description, active,
+    api_key_header, api_key, bearer_token, username, password,
+    client_id, client_secret, token_url } = req.body;
+
+  // Build config JSON with all auth details
+  const config = JSON.stringify({
+    auth_type: auth_type || 'none',
+    base_url: base_url || '',
+    description: description || '',
+    api_key_header,
+    api_key,
+    bearer_token,
+    username,
+    password,
+    token_url
+  });
 
   const result = db.prepare(`
-    INSERT INTO api_integrations (name, type, client_id, client_secret, webhook_url, config)
-    VALUES (?, ?, ?, ?, ?, ?)
-  `).run(name, type, client_id, client_secret, webhook_url, config);
+    INSERT INTO api_integrations (name, type, client_id, client_secret, webhook_url, config, active)
+    VALUES (?, ?, ?, ?, ?, ?, ?)
+  `).run(
+    name,
+    auth_type || 'custom',  // type field for legacy compatibility
+    client_id || null,
+    client_secret || null,
+    base_url || null,       // webhook_url stores base_url for legacy
+    config,
+    active ?? 1
+  );
 
   res.json({ success: true, id: result.lastInsertRowid });
 });
 
 // Update API integration (admin only, or requires approval)
 app.put('/api/integrations/:id', authMiddleware, (req, res) => {
-  const { name, client_id, client_secret, webhook_url, config, active } = req.body;
+  const { name, auth_type, base_url, description, active,
+    api_key_header, api_key, bearer_token, username, password,
+    client_id, client_secret, token_url } = req.body;
 
   if (req.user.role !== 'admin') {
     // Create pending change for approval
@@ -3366,17 +4008,44 @@ app.put('/api/integrations/:id', authMiddleware, (req, res) => {
     return res.json({ success: true, pending: true, message: 'Change submitted for admin approval' });
   }
 
-  db.prepare(`
-    UPDATE api_integrations SET name = ?, client_id = ?, client_secret = ?, webhook_url = ?, config = ?, active = ?
-    WHERE id = ?
-  `).run(name, client_id, client_secret, webhook_url, config, active ?? 1, req.params.id);
-
-  // Clear Poly Lens token if it's a poly_lens integration
-  const integration = db.prepare('SELECT type FROM api_integrations WHERE id = ?').get(req.params.id);
-  if (integration?.type === 'poly_lens') {
-    polyLensToken = null;
-    polyLensTokenExpiry = null;
+  // Get existing config to preserve secrets if not updated
+  const existing = db.prepare('SELECT config, client_secret FROM api_integrations WHERE id = ?').get(req.params.id);
+  let existingConfig = {};
+  try {
+    existingConfig = existing?.config ? JSON.parse(existing.config) : {};
+  } catch (e) {
+    existingConfig = {};
   }
+
+  // Build updated config, preserving secrets if not provided
+  const config = JSON.stringify({
+    auth_type: auth_type || existingConfig.auth_type || 'none',
+    base_url: base_url || existingConfig.base_url || '',
+    description: description ?? existingConfig.description ?? '',
+    api_key_header: api_key_header ?? existingConfig.api_key_header,
+    api_key: api_key || existingConfig.api_key,
+    bearer_token: bearer_token || existingConfig.bearer_token,
+    username: username ?? existingConfig.username,
+    password: password || existingConfig.password,
+    token_url: token_url ?? existingConfig.token_url
+  });
+
+  // Use provided client_secret or keep existing
+  const finalClientSecret = client_secret || existing?.client_secret;
+
+  db.prepare(`
+    UPDATE api_integrations SET name = ?, type = ?, client_id = ?, client_secret = ?, webhook_url = ?, config = ?, active = ?
+    WHERE id = ?
+  `).run(
+    name,
+    auth_type || 'custom',
+    client_id || null,
+    finalClientSecret,
+    base_url || null,
+    config,
+    active ?? 1,
+    req.params.id
+  );
 
   res.json({ success: true });
 });
@@ -3390,7 +4059,7 @@ app.delete('/api/integrations/:id', authMiddleware, adminMiddleware, (req, res) 
 // ==================== DEVICE TYPES ROUTES ====================
 
 // Get all device types (cached)
-app.get('/api/device-types', (req, res) => {
+app.get('/api/device-types', authMiddleware, (req, res) => {
   const types = getCached('deviceTypes', () =>
     db.prepare('SELECT * FROM device_types').all()
   );
@@ -3459,7 +4128,7 @@ app.get('/api/health', (req, res) => {
 });
 
 // Get all monitors with current status
-app.get('/api/monitors', (req, res) => {
+app.get('/api/monitors', authMiddleware, (req, res) => {
   const monitors = db.prepare('SELECT * FROM monitors WHERE active = 1').all();
 
   const result = monitors.map(m => {
@@ -3483,7 +4152,7 @@ app.get('/api/monitors', (req, res) => {
 });
 
 // Get monitors grouped by floor
-app.get('/api/monitors/by-floor', (req, res) => {
+app.get('/api/monitors/by-floor', authMiddleware, (req, res) => {
   const monitors = db.prepare('SELECT * FROM monitors WHERE active = 1').all();
 
   const floors = {
@@ -3669,7 +4338,7 @@ app.post('/api/printers/:id/refresh', authMiddleware, async (req, res) => {
 });
 
 // Poly Lens endpoints
-app.get('/api/poly-lens/devices', async (req, res) => {
+app.get('/api/poly-lens/devices', authMiddleware, async (req, res) => {
   if (req.query.refresh || !polyLensLastFetch || Date.now() - polyLensLastFetch > 60000) {
     await fetchPolyLensDevices();
   }
@@ -3691,7 +4360,7 @@ app.get('/api/poly-lens/devices', async (req, res) => {
   });
 });
 
-app.get('/api/poly-lens/by-floor', async (req, res) => {
+app.get('/api/poly-lens/by-floor', authMiddleware, async (req, res) => {
   if (req.query.refresh || !polyLensLastFetch || Date.now() - polyLensLastFetch > 60000) {
     await fetchPolyLensDevices();
   }
@@ -3753,10 +4422,175 @@ app.get('/api/poly-lens/by-floor', async (req, res) => {
   });
 });
 
+// ==================== BRIVO ACCESS CONTROL ENDPOINTS ====================
+
+// Get all Brivo access points (doors)
+app.get('/api/brivo/doors', authMiddleware, async (req, res) => {
+  try {
+    const doors = await fetchBrivoDoors();
+
+    if (!doors || doors.length === 0) {
+      return res.json({
+        success: true,
+        configured: !!(BRIVO_CLIENT_ID && BRIVO_USERNAME),
+        message: BRIVO_CLIENT_ID ? 'No doors found or authentication failed' : 'Brivo not configured',
+        doors: []
+      });
+    }
+
+    res.json({
+      success: true,
+      configured: true,
+      doorCount: doors.length,
+      lastFetch: brivoDoorsLastFetch,
+      doors: doors.map(d => ({
+        id: d.id,
+        name: d.name,
+        siteId: d.siteId,
+        siteName: d.siteName,
+        controlPanelId: d.controlPanelId,
+        activationEnabled: d.activationEnabled,
+        twoFactorEnabled: d.twoFactorEnabled
+      }))
+    });
+  } catch (error) {
+    console.error('[Brivo] Doors endpoint error:', error.message);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// Get status of a specific door
+app.get('/api/brivo/doors/:id/status', authMiddleware, async (req, res) => {
+  try {
+    const doorId = parseInt(req.params.id);
+    if (isNaN(doorId)) {
+      return res.status(400).json({ success: false, error: 'Invalid door ID' });
+    }
+
+    const status = await getBrivoDoorStatus(doorId);
+
+    if (!status) {
+      return res.status(404).json({ success: false, error: 'Door not found or status unavailable' });
+    }
+
+    res.json({
+      success: true,
+      door: {
+        id: doorId,
+        name: status.accessPointName,
+        state: status.accessPointState,
+        scheduledState: status.accessPointScheduledState,
+        inputState: status.accessPointInputState,
+        statusUpdated: status.statusUpdated,
+        siteName: status.siteName,
+        panelName: status.panelName
+      }
+    });
+  } catch (error) {
+    console.error('[Brivo] Door status error:', error.message);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// Unlock a door (requires admin role)
+app.post('/api/brivo/doors/:id/unlock', authMiddleware, async (req, res) => {
+  try {
+    // Check if user has admin role
+    const user = db.prepare('SELECT role FROM users WHERE id = ?').get(req.userId);
+    if (!user || user.role !== 'admin') {
+      auditLog('BRIVO_UNLOCK_DENIED', {
+        userId: req.userId,
+        doorId: req.params.id,
+        reason: 'Insufficient permissions'
+      });
+      return res.status(403).json({ success: false, error: 'Admin access required to unlock doors' });
+    }
+
+    const doorId = parseInt(req.params.id);
+    if (isNaN(doorId)) {
+      return res.status(400).json({ success: false, error: 'Invalid door ID' });
+    }
+
+    // Get door name for audit log
+    const doors = await fetchBrivoDoors();
+    const door = doors.find(d => d.id === doorId);
+    const doorName = door?.name || `Door ${doorId}`;
+
+    const result = await unlockBrivoDoor(doorId);
+
+    if (result.success) {
+      // Get username for audit
+      const userInfo = db.prepare('SELECT username FROM users WHERE id = ?').get(req.userId);
+      auditLog('BRIVO_DOOR_UNLOCKED', {
+        userId: req.userId,
+        username: userInfo?.username,
+        doorId,
+        doorName
+      });
+
+      res.json({
+        success: true,
+        message: `Door "${doorName}" unlocked successfully`,
+        doorId,
+        doorName
+      });
+    } else {
+      res.status(400).json({
+        success: false,
+        error: result.error || 'Failed to unlock door'
+      });
+    }
+  } catch (error) {
+    console.error('[Brivo] Unlock endpoint error:', error.message);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// Get Brivo integration status
+app.get('/api/brivo/status', authMiddleware, async (req, res) => {
+  const hasOAuth = !!(BRIVO_CLIENT_ID && BRIVO_CLIENT_SECRET && BRIVO_USERNAME && BRIVO_PASSWORD);
+  const hasApiKey = !!BRIVO_API_KEY;
+  const configured = hasOAuth && hasApiKey;
+
+  if (!configured) {
+    return res.json({
+      success: true,
+      configured: false,
+      hasOAuth,
+      hasApiKey,
+      message: !hasApiKey
+        ? 'Brivo API Key required - request from brivoapi@brivo.com or find in developer portal at brivo.com/apps/mykeys'
+        : 'Brivo OAuth credentials not configured'
+    });
+  }
+
+  try {
+    // Test authentication
+    const token = await getBrivoToken();
+    const authenticated = !!token;
+
+    res.json({
+      success: true,
+      configured: true,
+      authenticated,
+      siteFilter: BRIVO_SITE_FILTER,
+      doorsCount: brivoDoors.length,
+      lastFetch: brivoDoorsLastFetch
+    });
+  } catch (error) {
+    res.json({
+      success: true,
+      configured: true,
+      authenticated: false,
+      error: error.message
+    });
+  }
+});
+
 // ==================== ZOOM ROOMS ENDPOINTS ====================
 
 // Get all IL Zoom Rooms
-app.get('/api/zoom-rooms', async (req, res) => {
+app.get('/api/zoom-rooms', authMiddleware, async (req, res) => {
   if (req.query.refresh || !zoomRoomsLastFetch || Date.now() - zoomRoomsLastFetch > 60000) {
     await fetchZoomRooms();
   }
@@ -3770,7 +4604,7 @@ app.get('/api/zoom-rooms', async (req, res) => {
 });
 
 // Get Zoom Rooms by floor
-app.get('/api/zoom-rooms/by-floor', async (req, res) => {
+app.get('/api/zoom-rooms/by-floor', authMiddleware, async (req, res) => {
   if (req.query.refresh || !zoomRoomsLastFetch || Date.now() - zoomRoomsLastFetch > 60000) {
     await fetchZoomRooms();
   }
@@ -3794,7 +4628,7 @@ app.get('/api/zoom-rooms/by-floor', async (req, res) => {
 });
 
 // Get Zoom rooms that don't have Poly Lens devices (for adding to map)
-app.get('/api/zoom-rooms/unmatched', async (req, res) => {
+app.get('/api/zoom-rooms/unmatched', authMiddleware, async (req, res) => {
   if (req.query.refresh || !zoomRoomsLastFetch || Date.now() - zoomRoomsLastFetch > 60000) {
     await fetchZoomRooms();
   }
@@ -3812,7 +4646,7 @@ app.get('/api/zoom-rooms/unmatched', async (req, res) => {
 });
 
 // Get Zoom room status history
-app.get('/api/zoom-rooms/:roomId/history', (req, res) => {
+app.get('/api/zoom-rooms/:roomId/history', authMiddleware, (req, res) => {
   const roomId = req.params.roomId;
   // Validate and constrain hours to prevent SQL injection (1-168 hours = 1 week max)
   const hours = Math.max(1, Math.min(168, parseInt(req.query.hours) || 24));
@@ -3857,7 +4691,7 @@ app.get('/api/zoom-rooms/:roomId/history', (req, res) => {
 });
 
 // Get Zoom room meeting utilization stats
-app.get('/api/zoom-rooms/:roomId/utilization', (req, res) => {
+app.get('/api/zoom-rooms/:roomId/utilization', authMiddleware, (req, res) => {
   const roomId = req.params.roomId;
   // Validate and constrain days to prevent SQL injection (1-90 days max)
   const days = Math.max(1, Math.min(90, parseInt(req.query.days) || 7));
@@ -3901,7 +4735,7 @@ app.get('/api/zoom-rooms/:roomId/utilization', (req, res) => {
 });
 
 // Get all rooms meeting utilization summary
-app.get('/api/zoom-rooms/utilization/summary', (req, res) => {
+app.get('/api/zoom-rooms/utilization/summary', authMiddleware, (req, res) => {
   // Validate and constrain days to prevent SQL injection (1-90 days max)
   const days = Math.max(1, Math.min(90, parseInt(req.query.days) || 7));
 
@@ -4000,7 +4834,7 @@ app.patch('/api/monitors/:id/tags', authMiddleware, (req, res) => {
 });
 
 // Get all unique tags
-app.get('/api/tags', (req, res) => {
+app.get('/api/tags', authMiddleware, (req, res) => {
   const monitors = db.prepare('SELECT tags FROM monitors WHERE tags IS NOT NULL').all();
   const allTags = new Set();
 
@@ -4976,7 +5810,7 @@ app.patch('/api/incidents/:id/resolve', authMiddleware, (req, res) => {
 // ==================== DEVICE TAGS ====================
 
 // Get all tags
-app.get('/api/tags', (req, res) => {
+app.get('/api/tags', authMiddleware, (req, res) => {
   const tags = db.prepare('SELECT * FROM device_tags ORDER BY priority DESC, name').all();
   res.json({ success: true, tags });
 });
@@ -5103,10 +5937,15 @@ app.get('/api/network/ping', authMiddleware, async (req, res) => {
     return res.status(400).json({ success: false, error: 'IP address required' });
   }
 
-  // Validate IP format
+  // Validate IP format with proper octet range checking (0-255)
   const ipRegex = /^(\d{1,3}\.){3}\d{1,3}$/;
   if (!ipRegex.test(ip)) {
     return res.status(400).json({ success: false, error: 'Invalid IP address format' });
+  }
+  // Verify each octet is 0-255 to prevent command injection and invalid IPs
+  const octets = ip.split('.').map(Number);
+  if (octets.some(octet => octet < 0 || octet > 255)) {
+    return res.status(400).json({ success: false, error: 'Invalid IP address: octets must be 0-255' });
   }
 
   try {
@@ -5176,6 +6015,18 @@ app.post('/api/network/scan', authMiddleware, async (req, res) => {
 
   if (ips.length > 50) {
     return res.status(400).json({ success: false, error: 'Maximum 50 IPs per batch' });
+  }
+
+  // Validate all IPs before processing to prevent command injection
+  const ipRegex = /^(\d{1,3}\.){3}\d{1,3}$/;
+  for (const ip of ips) {
+    if (!ipRegex.test(ip)) {
+      return res.status(400).json({ success: false, error: `Invalid IP address format: ${ip}` });
+    }
+    const octets = ip.split('.').map(Number);
+    if (octets.some(octet => octet < 0 || octet > 255)) {
+      return res.status(400).json({ success: false, error: `Invalid IP address octets: ${ip}` });
+    }
   }
 
   const results = await Promise.all(
@@ -6640,11 +7491,17 @@ wss.on('connection', (ws, req) => {
     return;
   }
 
-  const session = getSession(token);
+  // Check both regular session and grace period tokens
+  const { session, isGracePeriod } = getSessionWithGrace(token);
   if (!session) {
     ws.close(4002, 'Invalid or expired token');
     console.log('WebSocket connection rejected: invalid token');
+    console.log('  Token received:', token ? token.substring(0, 25) + '...' : 'NULL');
+    console.log('  Grace period tokens:', Array.from(tokenGracePeriod.keys()).map(t => t.substring(0, 20) + '...'));
     return;
+  }
+  if (isGracePeriod) {
+    console.log('WebSocket using grace period token:', token.substring(0, 20) + '...');
   }
 
   // Store user info on the WebSocket for potential future use

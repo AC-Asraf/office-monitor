@@ -4723,6 +4723,272 @@
       color: var(--text-muted);
       margin-top: 2px;
     }
+
+    /* ==================== BREADCRUMB TRAIL ==================== */
+    .breadcrumb-container {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 8px 16px;
+      background: var(--bg-surface);
+      border-bottom: 1px solid var(--border-subtle);
+      font-size: 12px;
+      min-height: 36px;
+    }
+
+    .breadcrumb-item {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      color: var(--text-secondary);
+      cursor: pointer;
+      transition: color 0.2s;
+    }
+
+    .breadcrumb-item:hover {
+      color: var(--text-primary);
+    }
+
+    .breadcrumb-item.active {
+      color: var(--text-primary);
+      font-weight: 500;
+      cursor: default;
+    }
+
+    .breadcrumb-separator {
+      color: var(--text-muted);
+      font-size: 10px;
+    }
+
+    .breadcrumb-icon {
+      font-size: 14px;
+    }
+
+    /* ==================== LATENCY SPARKLINE ==================== */
+    .latency-sparkline {
+      display: inline-flex;
+      align-items: flex-end;
+      gap: 1px;
+      height: 16px;
+      padding: 2px 4px;
+      background: var(--bg-elevated);
+      border-radius: 4px;
+      vertical-align: middle;
+    }
+
+    .latency-sparkline-bar {
+      width: 3px;
+      min-height: 2px;
+      border-radius: 1px;
+      transition: height 0.2s;
+    }
+
+    .latency-sparkline-bar.excellent { background: var(--status-online); }
+    .latency-sparkline-bar.good { background: #84CC16; }
+    .latency-sparkline-bar.fair { background: var(--status-warning); }
+    .latency-sparkline-bar.poor { background: #F97316; }
+    .latency-sparkline-bar.bad { background: var(--status-offline); }
+
+    .latency-value {
+      font-size: 10px;
+      color: var(--text-muted);
+      margin-left: 6px;
+    }
+
+    .latency-inline {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+    }
+
+    /* ==================== ONBOARDING TOUR ==================== */
+    .tour-overlay {
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: rgba(0, 0, 0, 0.75);
+      z-index: 9998;
+      opacity: 0;
+      transition: opacity 0.3s;
+      pointer-events: none;
+    }
+
+    .tour-overlay.active {
+      opacity: 1;
+      pointer-events: auto;
+    }
+
+    .tour-spotlight {
+      position: absolute;
+      box-shadow: 0 0 0 9999px rgba(0, 0, 0, 0.75);
+      border-radius: 8px;
+      transition: all 0.4s ease;
+      z-index: 9999;
+    }
+
+    .tour-tooltip {
+      position: absolute;
+      background: var(--bg-surface);
+      border: 1px solid var(--border-default);
+      border-radius: var(--radius-lg);
+      padding: 20px;
+      max-width: 360px;
+      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+      z-index: 10000;
+      animation: tourFadeIn 0.3s ease;
+    }
+
+    @keyframes tourFadeIn {
+      from { opacity: 0; transform: translateY(10px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    .tour-tooltip-arrow {
+      position: absolute;
+      width: 12px;
+      height: 12px;
+      background: var(--bg-surface);
+      border: 1px solid var(--border-default);
+      transform: rotate(45deg);
+    }
+
+    .tour-tooltip-arrow.top { top: -7px; left: 50%; margin-left: -6px; border-right: none; border-bottom: none; }
+    .tour-tooltip-arrow.bottom { bottom: -7px; left: 50%; margin-left: -6px; border-left: none; border-top: none; }
+    .tour-tooltip-arrow.left { left: -7px; top: 50%; margin-top: -6px; border-right: none; border-top: none; }
+    .tour-tooltip-arrow.right { right: -7px; top: 50%; margin-top: -6px; border-left: none; border-bottom: none; }
+
+    .tour-title {
+      font-size: 16px;
+      font-weight: 600;
+      color: var(--text-primary);
+      margin-bottom: 8px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .tour-content {
+      font-size: 13px;
+      color: var(--text-secondary);
+      line-height: 1.5;
+      margin-bottom: 16px;
+    }
+
+    .tour-footer {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .tour-progress {
+      display: flex;
+      gap: 6px;
+    }
+
+    .tour-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: var(--bg-overlay);
+      transition: all 0.2s;
+    }
+
+    .tour-dot.active {
+      background: var(--accent-blue);
+      transform: scale(1.2);
+    }
+
+    .tour-dot.completed {
+      background: var(--status-online);
+    }
+
+    .tour-buttons {
+      display: flex;
+      gap: 8px;
+    }
+
+    .tour-btn {
+      padding: 8px 16px;
+      border-radius: var(--radius-md);
+      font-size: 13px;
+      font-weight: 500;
+      cursor: pointer;
+      transition: all 0.2s;
+      border: none;
+    }
+
+    .tour-btn.secondary {
+      background: var(--bg-elevated);
+      color: var(--text-secondary);
+    }
+
+    .tour-btn.secondary:hover {
+      background: var(--bg-overlay);
+      color: var(--text-primary);
+    }
+
+    .tour-btn.primary {
+      background: var(--accent-blue);
+      color: white;
+    }
+
+    .tour-btn.primary:hover {
+      background: #2563eb;
+    }
+
+    .tour-skip {
+      font-size: 12px;
+      color: var(--text-muted);
+      cursor: pointer;
+      transition: color 0.2s;
+    }
+
+    .tour-skip:hover {
+      color: var(--text-secondary);
+    }
+
+    .tour-welcome {
+      position: fixed;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      background: var(--bg-surface);
+      border: 1px solid var(--border-default);
+      border-radius: var(--radius-xl);
+      padding: 40px;
+      max-width: 480px;
+      text-align: center;
+      box-shadow: 0 16px 64px rgba(0, 0, 0, 0.5);
+      z-index: 10000;
+      animation: tourFadeIn 0.4s ease;
+    }
+
+    .tour-welcome-icon {
+      font-size: 48px;
+      margin-bottom: 16px;
+    }
+
+    .tour-welcome-title {
+      font-size: 24px;
+      font-weight: 600;
+      color: var(--text-primary);
+      margin-bottom: 12px;
+    }
+
+    .tour-welcome-text {
+      font-size: 14px;
+      color: var(--text-secondary);
+      line-height: 1.6;
+      margin-bottom: 24px;
+    }
+
+    .tour-welcome-buttons {
+      display: flex;
+      gap: 12px;
+      justify-content: center;
+    }
   </style>
   <!-- Shared Modules -->
   <script src="js/auth.js"></script>
@@ -7498,6 +7764,10 @@
       analyticsDevice = { id: deviceId, name: deviceName, type: deviceType, isRoom, isPolyDevice, polyDeviceData };
       analyticsOpen = true;
 
+      // Add to breadcrumb navigation
+      const deviceIcon = isRoom ? '🚪' : deviceType === 'accessPoints' ? '📶' : deviceType === 'printers' ? '🖨️' : '📹';
+      pushBreadcrumb('device', deviceName, deviceIcon, { deviceId, deviceType });
+
       // Mark device as selected in sidebar
       markDeviceSelected(deviceId);
 
@@ -7520,6 +7790,9 @@
         analyticsRefreshInterval = null;
         console.log('Analytics auto-refresh disabled');
       }
+
+      // Reset breadcrumbs
+      resetBreadcrumbs();
 
       // Clear selected state from sidebar
       document.querySelectorAll('.device-item.selected, .room-item.selected').forEach(el => {
@@ -8349,9 +8622,9 @@
                   ` : ''}
                 </div>
                 <div class="popup-details" style="padding: 4px 0;">
-                  <div style="font-size: 10px; display: flex; flex-wrap: wrap; gap: 8px;">
+                  <div style="font-size: 10px; display: flex; flex-wrap: wrap; gap: 8px; align-items: center;">
                     <span style="color: #60A5FA;">${device.ip || device.hostname || 'No IP'}</span>
-                    ${device.ping ? `<span style="color: #94A3B8;">${device.ping}ms</span>` : ''}
+                    ${device.ping ? renderLatencySparkline(device.id, device.ping) : ''}
                   </div>
                   ${device.lastCheck ? `
                   <div style="font-size: 9px; color: #64748B; margin-top: 2px;">
@@ -8841,6 +9114,9 @@
               </div>
             </div>
           </header>
+
+          <!-- BREADCRUMB NAVIGATION -->
+          <div class="breadcrumb-container" id="breadcrumb-nav" style="display: none;"></div>
 
           <!-- NOTIFICATION PANEL -->
           <div class="notification-panel" id="notification-panel">
@@ -9844,15 +10120,35 @@
     // ==================== ACTIVITY FEED ====================
     let activityFeed = JSON.parse(localStorage.getItem('activityFeed') || '[]');
     const MAX_ACTIVITY_ITEMS = 50;
+    const ACTIVITY_COOLDOWN_MS = 5 * 60 * 1000; // 5 minutes cooldown per device/type
 
     function addActivityItem(type, deviceName, message, floor = '') {
+      const now = Date.now();
+
+      // Check for duplicate: same device + same type within cooldown period
+      const recentDuplicate = activityFeed.find(item =>
+        item.deviceName === deviceName &&
+        item.type === type &&
+        (now - new Date(item.time).getTime()) < ACTIVITY_COOLDOWN_MS
+      );
+
+      if (recentDuplicate) {
+        // Update the existing entry's timestamp instead of adding duplicate
+        recentDuplicate.time = new Date().toISOString();
+        recentDuplicate.count = (recentDuplicate.count || 1) + 1;
+        recentDuplicate.message = `${deviceName} ${type === 'online' ? 'is back online' : type === 'offline' ? 'went offline' : 'has low toner'} (×${recentDuplicate.count})`;
+        localStorage.setItem('activityFeed', JSON.stringify(activityFeed));
+        return;
+      }
+
       const item = {
-        id: Date.now(),
+        id: now,
         type, // 'online', 'offline', 'warning'
         deviceName,
         message,
         floor,
-        time: new Date().toISOString()
+        time: new Date().toISOString(),
+        count: 1
       };
       activityFeed.unshift(item);
       if (activityFeed.length > MAX_ACTIVITY_ITEMS) {
@@ -10067,6 +10363,327 @@
         return originalTriggerCheck(hostname);
       }
     };
+
+    // ==================== BREADCRUMB NAVIGATION ====================
+    let breadcrumbHistory = [{ type: 'home', label: 'Dashboard', icon: '🏠' }];
+
+    function pushBreadcrumb(type, label, icon, data = {}) {
+      // Remove any items after current position if navigating from middle
+      const homeIndex = breadcrumbHistory.findIndex(b => b.type === 'home');
+      if (homeIndex === 0 && breadcrumbHistory.length > 1) {
+        // Keep home and add new item
+        breadcrumbHistory = [breadcrumbHistory[0]];
+      }
+      breadcrumbHistory.push({ type, label, icon, data });
+      renderBreadcrumbs();
+    }
+
+    function navigateBreadcrumb(index) {
+      if (index === 0) {
+        // Go home
+        breadcrumbHistory = [breadcrumbHistory[0]];
+        closeAnalyticsPanel();
+        renderPage();
+      } else {
+        const item = breadcrumbHistory[index];
+        breadcrumbHistory = breadcrumbHistory.slice(0, index + 1);
+        if (item.data?.deviceId) {
+          openAnalytics(item.data.deviceId, item.label, item.data.deviceType);
+        }
+      }
+      renderBreadcrumbs();
+    }
+
+    function renderBreadcrumbs() {
+      const container = document.getElementById('breadcrumb-nav');
+      if (!container) return;
+
+      if (breadcrumbHistory.length <= 1) {
+        container.style.display = 'none';
+        return;
+      }
+
+      container.style.display = 'flex';
+      container.innerHTML = breadcrumbHistory.map((item, index) => {
+        const isLast = index === breadcrumbHistory.length - 1;
+        return `
+          ${index > 0 ? '<span class="breadcrumb-separator">›</span>' : ''}
+          <span class="breadcrumb-item ${isLast ? 'active' : ''}" ${!isLast ? `onclick="navigateBreadcrumb(${index})"` : ''}>
+            <span class="breadcrumb-icon">${item.icon}</span>
+            <span>${sanitizeHTML(item.label)}</span>
+          </span>
+        `;
+      }).join('');
+    }
+
+    function resetBreadcrumbs() {
+      breadcrumbHistory = [{ type: 'home', label: 'Dashboard', icon: '🏠' }];
+      renderBreadcrumbs();
+    }
+
+    // ==================== LATENCY SPARKLINES ====================
+    let latencyHistory = {}; // deviceId -> array of {time, ping}
+
+    function recordLatency(deviceId, ping) {
+      if (!latencyHistory[deviceId]) {
+        latencyHistory[deviceId] = [];
+      }
+      latencyHistory[deviceId].push({ time: Date.now(), ping });
+      // Keep last 20 readings
+      if (latencyHistory[deviceId].length > 20) {
+        latencyHistory[deviceId] = latencyHistory[deviceId].slice(-20);
+      }
+    }
+
+    function getLatencyClass(ping) {
+      if (ping === null || ping === undefined) return 'unknown';
+      if (ping < 20) return 'excellent';
+      if (ping < 50) return 'good';
+      if (ping < 100) return 'fair';
+      if (ping < 200) return 'poor';
+      return 'bad';
+    }
+
+    function renderLatencySparkline(deviceId, currentPing) {
+      const history = latencyHistory[deviceId] || [];
+      const maxPing = Math.max(...history.map(h => h.ping || 0), currentPing || 50, 100);
+
+      // Use history if available, otherwise just show current
+      let bars = [];
+      if (history.length > 0) {
+        bars = history.slice(-12).map(h => {
+          const height = Math.max(((h.ping || 0) / maxPing) * 100, 10);
+          const latencyClass = getLatencyClass(h.ping);
+          return `<div class="latency-sparkline-bar ${latencyClass}" style="height: ${height}%;" title="${h.ping}ms"></div>`;
+        });
+      } else if (currentPing) {
+        // Show single bar for current ping
+        const height = Math.max((currentPing / maxPing) * 100, 10);
+        const latencyClass = getLatencyClass(currentPing);
+        bars = [`<div class="latency-sparkline-bar ${latencyClass}" style="height: ${height}%;" title="${currentPing}ms"></div>`];
+      }
+
+      if (bars.length === 0) return '';
+
+      return `
+        <span class="latency-inline">
+          <span class="latency-sparkline">${bars.join('')}</span>
+          ${currentPing ? `<span class="latency-value">${currentPing}ms</span>` : ''}
+        </span>
+      `;
+    }
+
+    // ==================== ONBOARDING TOUR ====================
+    const TOUR_COMPLETED_KEY = 'onboardingTourCompleted';
+    const TOUR_VERSION = '1'; // Increment to show tour again after updates
+
+    const tourSteps = [
+      {
+        target: '.floor-nav',
+        title: '🏢 Floor Navigation',
+        content: 'Switch between floors to view devices on each level. The health bar shows overall floor status.',
+        position: 'right'
+      },
+      {
+        target: '.floor-map',
+        title: '🗺️ Interactive Floor Map',
+        content: 'Device markers show real-time status. Hover to see details, click to open analytics. Use Edit mode to reposition devices.',
+        position: 'top'
+      },
+      {
+        target: '.status-bar',
+        title: '📊 Status Overview',
+        content: 'Quick stats showing online/offline devices and system health. Click any stat for details.',
+        position: 'bottom'
+      },
+      {
+        target: '.global-search',
+        title: '🔍 Quick Search',
+        content: 'Search for any device by name, IP address, or location. Results appear as you type.',
+        position: 'bottom'
+      },
+      {
+        target: '.favorites-panel',
+        title: '⭐ Favorites',
+        content: 'Star important devices for quick access. Click the star icon on any device marker.',
+        position: 'right'
+      },
+      {
+        target: '.activity-feed-panel',
+        title: '📋 Activity Feed',
+        content: 'Real-time log of device status changes - see when devices go online, offline, or have issues.',
+        position: 'right'
+      }
+    ];
+
+    let currentTourStep = 0;
+    let tourActive = false;
+
+    function shouldShowTour() {
+      const completed = localStorage.getItem(TOUR_COMPLETED_KEY);
+      return !completed || completed !== TOUR_VERSION;
+    }
+
+    function startTour(skipWelcome = false) {
+      if (!skipWelcome) {
+        showTourWelcome();
+      } else {
+        tourActive = true;
+        currentTourStep = 0;
+        showTourStep(currentTourStep);
+      }
+    }
+
+    function showTourWelcome() {
+      const overlay = document.createElement('div');
+      overlay.className = 'tour-overlay active';
+      overlay.id = 'tour-overlay';
+
+      const welcome = document.createElement('div');
+      welcome.className = 'tour-welcome';
+      welcome.innerHTML = `
+        <div class="tour-welcome-icon">👋</div>
+        <div class="tour-welcome-title">Welcome to Office Monitor!</div>
+        <div class="tour-welcome-text">
+          Let's take a quick tour to help you get the most out of your monitoring dashboard.
+          You'll learn how to navigate floors, track devices, and stay on top of your infrastructure.
+        </div>
+        <div class="tour-welcome-buttons">
+          <button class="tour-btn secondary" onclick="skipTour()">Skip Tour</button>
+          <button class="tour-btn primary" onclick="beginTourSteps()">Start Tour</button>
+        </div>
+      `;
+
+      document.body.appendChild(overlay);
+      document.body.appendChild(welcome);
+    }
+
+    function beginTourSteps() {
+      document.querySelector('.tour-welcome')?.remove();
+      tourActive = true;
+      currentTourStep = 0;
+      showTourStep(currentTourStep);
+    }
+
+    function showTourStep(stepIndex) {
+      const step = tourSteps[stepIndex];
+      if (!step) {
+        endTour();
+        return;
+      }
+
+      // Remove previous tooltip
+      document.querySelector('.tour-tooltip')?.remove();
+      document.querySelector('.tour-spotlight')?.remove();
+
+      const target = document.querySelector(step.target);
+      if (!target) {
+        // Skip to next step if target not found
+        nextTourStep();
+        return;
+      }
+
+      const rect = target.getBoundingClientRect();
+
+      // Create spotlight
+      const spotlight = document.createElement('div');
+      spotlight.className = 'tour-spotlight';
+      spotlight.style.cssText = `
+        top: ${rect.top - 8}px;
+        left: ${rect.left - 8}px;
+        width: ${rect.width + 16}px;
+        height: ${rect.height + 16}px;
+      `;
+      document.body.appendChild(spotlight);
+
+      // Create tooltip
+      const tooltip = document.createElement('div');
+      tooltip.className = 'tour-tooltip';
+      tooltip.innerHTML = `
+        <div class="tour-tooltip-arrow ${step.position === 'bottom' ? 'top' : step.position === 'top' ? 'bottom' : step.position === 'right' ? 'left' : 'right'}"></div>
+        <div class="tour-title">${step.title}</div>
+        <div class="tour-content">${step.content}</div>
+        <div class="tour-footer">
+          <div class="tour-progress">
+            ${tourSteps.map((_, i) => `<div class="tour-dot ${i < stepIndex ? 'completed' : ''} ${i === stepIndex ? 'active' : ''}"></div>`).join('')}
+          </div>
+          <div class="tour-buttons">
+            ${stepIndex > 0 ? '<button class="tour-btn secondary" onclick="prevTourStep()">Back</button>' : ''}
+            <button class="tour-btn primary" onclick="nextTourStep()">${stepIndex === tourSteps.length - 1 ? 'Finish' : 'Next'}</button>
+          </div>
+        </div>
+        <div class="tour-skip" onclick="skipTour()">Skip tour</div>
+      `;
+
+      // Position tooltip
+      let top, left;
+      const tooltipWidth = 360;
+      const tooltipHeight = 200;
+      const padding = 16;
+
+      switch (step.position) {
+        case 'bottom':
+          top = rect.bottom + padding;
+          left = rect.left + rect.width / 2 - tooltipWidth / 2;
+          break;
+        case 'top':
+          top = rect.top - tooltipHeight - padding;
+          left = rect.left + rect.width / 2 - tooltipWidth / 2;
+          break;
+        case 'right':
+          top = rect.top + rect.height / 2 - tooltipHeight / 2;
+          left = rect.right + padding;
+          break;
+        case 'left':
+          top = rect.top + rect.height / 2 - tooltipHeight / 2;
+          left = rect.left - tooltipWidth - padding;
+          break;
+      }
+
+      // Keep tooltip in viewport
+      left = Math.max(16, Math.min(left, window.innerWidth - tooltipWidth - 16));
+      top = Math.max(16, Math.min(top, window.innerHeight - tooltipHeight - 16));
+
+      tooltip.style.cssText = `top: ${top}px; left: ${left}px;`;
+      document.body.appendChild(tooltip);
+    }
+
+    function nextTourStep() {
+      currentTourStep++;
+      if (currentTourStep >= tourSteps.length) {
+        endTour();
+      } else {
+        showTourStep(currentTourStep);
+      }
+    }
+
+    function prevTourStep() {
+      if (currentTourStep > 0) {
+        currentTourStep--;
+        showTourStep(currentTourStep);
+      }
+    }
+
+    function skipTour() {
+      endTour();
+    }
+
+    function endTour() {
+      tourActive = false;
+      localStorage.setItem(TOUR_COMPLETED_KEY, TOUR_VERSION);
+      document.getElementById('tour-overlay')?.remove();
+      document.querySelector('.tour-welcome')?.remove();
+      document.querySelector('.tour-tooltip')?.remove();
+      document.querySelector('.tour-spotlight')?.remove();
+      if (window.ErrorHandler) {
+        ErrorHandler.showSuccess('Tour completed! You can restart it anytime from the help menu.');
+      }
+    }
+
+    function restartTour() {
+      localStorage.removeItem(TOUR_COMPLETED_KEY);
+      startTour();
+    }
 
     // Get low toner printer count
     function getLowTonerCount() {
@@ -10950,6 +11567,12 @@
       render();
       // Initialize widget drag-and-drop after render
       setTimeout(initWidgetDragDrop, 100);
+      // Show onboarding tour for first-time users
+      setTimeout(() => {
+        if (shouldShowTour()) {
+          startTour();
+        }
+      }, 1000);
     }
 
     // Initial check

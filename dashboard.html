@@ -3899,6 +3899,352 @@
       color: var(--text-muted);
     }
 
+    /* ==================== FAVORITES ==================== */
+    .favorite-btn {
+      position: absolute;
+      top: -6px;
+      right: -6px;
+      width: 20px;
+      height: 20px;
+      background: var(--bg-surface);
+      border: 1px solid var(--border-default);
+      border-radius: 50%;
+      cursor: pointer;
+      font-size: 10px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      opacity: 0;
+      transition: all 0.2s;
+      z-index: 10;
+    }
+
+    .device-marker:hover .favorite-btn {
+      opacity: 1;
+    }
+
+    .favorite-btn:hover {
+      background: var(--bg-elevated);
+      transform: scale(1.1);
+    }
+
+    .favorite-btn.active {
+      opacity: 1;
+      color: #F59E0B;
+      background: rgba(245, 158, 11, 0.15);
+      border-color: #F59E0B;
+    }
+
+    .favorites-panel {
+      background: var(--bg-surface);
+      border: 1px solid var(--border-subtle);
+      border-radius: var(--radius-lg);
+      padding: 16px;
+      margin-bottom: 16px;
+    }
+
+    .favorites-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 12px;
+    }
+
+    .favorites-title {
+      font-weight: 600;
+      font-size: 14px;
+      color: var(--text-primary);
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .favorites-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+      gap: 10px;
+    }
+
+    .favorite-card {
+      background: var(--bg-elevated);
+      border: 1px solid var(--border-subtle);
+      border-radius: var(--radius-md);
+      padding: 10px 12px;
+      cursor: pointer;
+      transition: all 0.2s;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .favorite-card:hover {
+      background: var(--bg-overlay);
+      border-color: var(--accent-blue);
+    }
+
+    .favorite-card .status-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      flex-shrink: 0;
+    }
+
+    .favorite-card .device-name {
+      font-size: 12px;
+      font-weight: 500;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .favorite-card .device-type {
+      font-size: 10px;
+      color: var(--text-muted);
+    }
+
+    .favorites-empty {
+      color: var(--text-muted);
+      font-size: 12px;
+      text-align: center;
+      padding: 16px;
+    }
+
+    /* ==================== ACTIVITY FEED ==================== */
+    .activity-feed-panel {
+      background: var(--bg-surface);
+      border: 1px solid var(--border-subtle);
+      border-radius: var(--radius-lg);
+      padding: 16px;
+      margin-bottom: 16px;
+      max-height: 300px;
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+    }
+
+    .activity-feed-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 12px;
+    }
+
+    .activity-feed-title {
+      font-weight: 600;
+      font-size: 14px;
+      color: var(--text-primary);
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .activity-feed-list {
+      overflow-y: auto;
+      flex: 1;
+    }
+
+    .activity-feed-item {
+      display: flex;
+      align-items: flex-start;
+      gap: 10px;
+      padding: 8px 0;
+      border-bottom: 1px solid var(--border-subtle);
+      font-size: 12px;
+    }
+
+    .activity-feed-item:last-child {
+      border-bottom: none;
+    }
+
+    .activity-feed-icon {
+      width: 24px;
+      height: 24px;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 11px;
+      flex-shrink: 0;
+    }
+
+    .activity-feed-icon.online {
+      background: var(--status-online-bg);
+      color: var(--status-online);
+    }
+
+    .activity-feed-icon.offline {
+      background: var(--status-offline-bg);
+      color: var(--status-offline);
+    }
+
+    .activity-feed-icon.warning {
+      background: var(--status-warning-bg);
+      color: var(--status-warning);
+    }
+
+    .activity-feed-content {
+      flex: 1;
+      min-width: 0;
+    }
+
+    .activity-feed-text {
+      color: var(--text-primary);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .activity-feed-time {
+      color: var(--text-muted);
+      font-size: 10px;
+      margin-top: 2px;
+    }
+
+    .activity-feed-empty {
+      color: var(--text-muted);
+      font-size: 12px;
+      text-align: center;
+      padding: 20px;
+    }
+
+    /* ==================== ENHANCED CONNECTION STATUS ==================== */
+    .connection-status {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 11px;
+      padding: 4px 10px;
+      border-radius: var(--radius-full);
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+
+    .connection-status.connected {
+      background: var(--status-online-bg);
+      color: var(--status-online);
+    }
+
+    .connection-status.disconnected {
+      background: var(--status-offline-bg);
+      color: var(--status-offline);
+    }
+
+    .connection-status.reconnecting {
+      background: var(--status-warning-bg);
+      color: var(--status-warning);
+    }
+
+    .connection-status:hover {
+      filter: brightness(1.1);
+    }
+
+    .connection-status .status-icon {
+      font-size: 8px;
+    }
+
+    .connection-status.reconnecting .status-icon {
+      animation: reconnectSpin 1s linear infinite;
+    }
+
+    .connection-status-tooltip {
+      position: absolute;
+      top: 100%;
+      right: 0;
+      margin-top: 8px;
+      background: var(--bg-surface);
+      border: 1px solid var(--border-default);
+      border-radius: var(--radius-md);
+      padding: 12px;
+      min-width: 200px;
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+      z-index: 1000;
+      display: none;
+    }
+
+    .connection-status-tooltip.active {
+      display: block;
+      animation: fadeIn 0.15s ease;
+    }
+
+    .connection-status-tooltip .tooltip-title {
+      font-weight: 600;
+      font-size: 12px;
+      margin-bottom: 8px;
+    }
+
+    .connection-status-tooltip .tooltip-info {
+      font-size: 11px;
+      color: var(--text-secondary);
+      margin-bottom: 4px;
+    }
+
+    .connection-status-tooltip .reconnect-btn {
+      margin-top: 10px;
+      width: 100%;
+      padding: 8px;
+      background: var(--accent-blue);
+      border: none;
+      border-radius: var(--radius-sm);
+      color: white;
+      font-size: 12px;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+
+    .connection-status-tooltip .reconnect-btn:hover {
+      background: #2563eb;
+    }
+
+    /* ==================== WIDGET CUSTOMIZATION ==================== */
+    .status-metric[draggable="true"] {
+      cursor: grab;
+    }
+
+    .status-metric[draggable="true"]:active {
+      cursor: grabbing;
+    }
+
+    .status-metric.dragging {
+      opacity: 0.5;
+      transform: scale(1.05);
+    }
+
+    .status-metric.drag-over {
+      border: 2px dashed var(--accent-blue);
+    }
+
+    .widget-customize-mode .status-metric::before {
+      content: '⋮⋮';
+      position: absolute;
+      left: 4px;
+      top: 50%;
+      transform: translateY(-50%);
+      color: var(--text-muted);
+      font-size: 10px;
+    }
+
+    /* ==================== OPTIMISTIC UI ==================== */
+    .optimistic-pending {
+      opacity: 0.7;
+      pointer-events: none;
+    }
+
+    .optimistic-pending::after {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: linear-gradient(90deg, transparent, rgba(255,255,255,0.1), transparent);
+      animation: shimmer 1.5s infinite;
+    }
+
+    @keyframes shimmer {
+      0% { transform: translateX(-100%); }
+      100% { transform: translateX(100%); }
+    }
+
     /* ==================== BULK ACTIONS ==================== */
     .bulk-mode-bar {
       position: fixed;
@@ -7882,9 +8228,13 @@
                                  zoomStatus === 'Offline' ? 'Offline' : null;
 
           const popupBelowClass = pos.y < 30 ? 'popup-below' : '';
+          const isFavRoom = isFavorite(device.id);
           deviceMarkersHTML += `
             <div class="device-marker ${popupBelowClass}" data-id="${device.id}" style="left: ${pos.x}%; top: ${pos.y}%;"
               ${editMode ? 'draggable="true" onmousedown="startDrag(event, this)" onclick="event.stopPropagation(); event.preventDefault();"' : `onclick="event.stopPropagation(); openAnalytics('${device.id}', '${device.name.replace(/'/g, "\\'")}', 'polyLens', true)"`}>
+              <button class="favorite-btn ${isFavRoom ? 'active' : ''}" onclick="toggleFavorite('${device.id}', '${device.name.replace(/'/g, "\\'")}', 'Zoom Room', '${activeFloor}')" title="${isFavRoom ? 'Remove from favorites' : 'Add to favorites'}">
+                ${isFavRoom ? '★' : '☆'}
+              </button>
               ${offlineCount > 0 && activeDevices.length > 0 ? `<div class="device-ping" style="background: ${statusColors.down.pulse};"></div>` : ''}
               <div class="device-dot" style="background: ${zoomInMeeting ? '#F59E0B' : status.bg}; border-color: ${typeInfo.color}; min-width: 28px; font-size: 9px;">
                 ${zoomInMeeting ? '📞' : roomDevices.length}
@@ -7937,9 +8287,13 @@
           const zoomStatusText = device.zoom_status === 'Available' ? 'Available' :
                                  device.zoom_status === 'InMeeting' ? 'In Meeting' :
                                  device.zoom_status === 'Offline' ? 'Offline' : device.zoom_status;
+          const isFavZoom = isFavorite(device.id);
           deviceMarkersHTML += `
             <div class="device-marker ${popupBelowClass}" data-id="${device.id}" style="left: ${pos.x}%; top: ${pos.y}%;"
               ${editMode ? 'draggable="true" onmousedown="startDrag(event, this)" onclick="event.stopPropagation(); event.preventDefault();"' : `onclick="event.stopPropagation(); openZoomRoomDetails('${device.zoom_id}', '${device.name.replace(/'/g, "\\'")}')"`}>
+              <button class="favorite-btn ${isFavZoom ? 'active' : ''}" onclick="toggleFavorite('${device.id}', '${device.name.replace(/'/g, "\\'")}', 'Zoom Room', '${activeFloor}')" title="${isFavZoom ? 'Remove from favorites' : 'Add to favorites'}">
+                ${isFavZoom ? '★' : '☆'}
+              </button>
               ${device.status === 'down' ? `<div class="device-ping" style="background: ${statusColors.down.pulse};"></div>` : ''}
               <div class="device-dot" style="background: ${zoomStatusColor}; border-color: ${typeInfo.color};">
                 ${device.zoom_in_meeting ? '📞' : '🎥'}
@@ -7973,10 +8327,14 @@
           const popupBelowClass = pos.y < 30 ? 'popup-below' : '';
 
           const disabledClass = device.disabled ? 'disabled' : '';
+          const isFav = isFavorite(device.id);
           deviceMarkersHTML += `
             <div class="device-marker ${popupBelowClass} ${disabledClass}" data-id="${device.id}" style="left: ${pos.x}%; top: ${pos.y}%;"
               ${editMode ? 'draggable="true" onmousedown="startDrag(event, this)" onclick="event.stopPropagation(); event.preventDefault();"' : `onclick="event.stopPropagation(); openAnalytics('${device.id}', '${device.name.replace(/'/g, "\\'")}', '${device.type}')"`}
               oncontextmenu="showContextMenu(event, ${JSON.stringify({id: device.id, name: device.name, hostname: device.ip || device.hostname, url: device.url, device_type: device.type, notes: device.notes, maintenance: device.maintenance, disabled: device.disabled}).replace(/"/g, '&quot;')}); return false;">
+              <button class="favorite-btn ${isFav ? 'active' : ''}" onclick="toggleFavorite('${device.id}', '${device.name.replace(/'/g, "\\'")}', '${device.type}', '${activeFloor}')" title="${isFav ? 'Remove from favorites' : 'Add to favorites'}">
+                ${isFav ? '★' : '☆'}
+              </button>
               ${device.status === 'down' && !device.disabled ? `<div class="device-ping" style="background: ${status.pulse};"></div>` : ''}
               <div class="device-dot" style="background: ${status.bg}; border-color: ${typeInfo.color};">
                 ${typeInfo.icon.slice(0, 2)}
@@ -8369,29 +8727,35 @@
                 <span class="logo-badge">v2</span>
               </div>
 
-              <div class="status-bar">
-                <div class="status-metric" onclick="showStatusDetail('online')" title="Click for details">
-                  <span class="status-dot online"></span>
-                  <span class="status-value">${totalStats.online}</span>
-                  <span class="status-label">Online</span>
-                </div>
-                <div class="status-metric" onclick="showStatusDetail('offline')" title="Click for details">
-                  <span class="status-dot ${totalStats.offline > 0 ? 'offline' : 'online'}"></span>
-                  <span class="status-value">${totalStats.offline}</span>
-                  <span class="status-label">Offline</span>
-                </div>
-                <div class="status-metric" onclick="showStatusDetail('poly')" title="Click for details">
-                  <span class="status-dot online"></span>
-                  <span class="status-value">${totalStats.polyOnline}</span>
-                  <span class="status-label">Zoom</span>
-                </div>
-
-                <div class="health-bar-container" title="System Health: ${healthPercent}%">
-                  <div class="health-bar">
-                    <div class="health-bar-fill" style="width: ${healthPercent}%; background: ${healthPercent >= 90 ? 'var(--status-online)' : healthPercent >= 70 ? 'var(--status-warning)' : 'var(--status-offline)'};"></div>
-                  </div>
-                  <span class="health-percent" style="color: ${healthPercent >= 90 ? 'var(--status-online)' : healthPercent >= 70 ? 'var(--status-warning)' : 'var(--status-offline)'};">${healthPercent}%</span>
-                </div>
+              <div class="status-bar ${widgetCustomizeMode ? 'widget-customize-mode' : ''}">
+                ${widgetOrder.map(widget => {
+                  if (widget === 'online') return `
+                    <div class="status-metric" data-widget="online" draggable="${widgetCustomizeMode}" onclick="showStatusDetail('online')" title="Click for details (drag to reorder)">
+                      <span class="status-dot online"></span>
+                      <span class="status-value">${totalStats.online}</span>
+                      <span class="status-label">Online</span>
+                    </div>`;
+                  if (widget === 'offline') return `
+                    <div class="status-metric" data-widget="offline" draggable="${widgetCustomizeMode}" onclick="showStatusDetail('offline')" title="Click for details (drag to reorder)">
+                      <span class="status-dot ${totalStats.offline > 0 ? 'offline' : 'online'}"></span>
+                      <span class="status-value">${totalStats.offline}</span>
+                      <span class="status-label">Offline</span>
+                    </div>`;
+                  if (widget === 'poly') return `
+                    <div class="status-metric" data-widget="poly" draggable="${widgetCustomizeMode}" onclick="showStatusDetail('poly')" title="Click for details (drag to reorder)">
+                      <span class="status-dot online"></span>
+                      <span class="status-value">${totalStats.polyOnline}</span>
+                      <span class="status-label">Zoom</span>
+                    </div>`;
+                  if (widget === 'health') return `
+                    <div class="health-bar-container" data-widget="health" title="System Health: ${healthPercent}%">
+                      <div class="health-bar">
+                        <div class="health-bar-fill" style="width: ${healthPercent}%; background: ${healthPercent >= 90 ? 'var(--status-online)' : healthPercent >= 70 ? 'var(--status-warning)' : 'var(--status-offline)'};"></div>
+                      </div>
+                      <span class="health-percent" style="color: ${healthPercent >= 90 ? 'var(--status-online)' : healthPercent >= 70 ? 'var(--status-warning)' : 'var(--status-offline)'};">${healthPercent}%</span>
+                    </div>`;
+                  return '';
+                }).join('')}
               </div>
             </div>
 
@@ -8411,10 +8775,7 @@
 
               <div class="time-display">
                 <span class="time-value">${now}</span>
-                <div id="connection-status" class="connection-status ${wsConnected ? 'connected' : wsReconnecting ? 'reconnecting' : 'disconnected'}">
-                  <span class="status-icon">${wsConnected ? '●' : wsReconnecting ? '↻' : '●'}</span>
-                  ${wsConnected ? 'Live' : wsReconnecting ? 'Reconnecting...' : 'Disconnected'}
-                </div>
+                ${renderConnectionStatus()}
               </div>
               <div class="last-updated" title="Last data refresh">
                 <span>Updated:</span>
@@ -8448,6 +8809,9 @@
                 ` : `
                   <button class="header-btn" onclick="toggleEditMode()" aria-label="Enable edit mode"><span aria-hidden="true">✏️</span> Edit</button>
                 `}
+                <button class="header-btn ${widgetCustomizeMode ? 'active' : ''}" onclick="toggleWidgetCustomize()" title="Reorder Widgets (drag header stats)" aria-label="Toggle widget reorder mode">
+                  <span aria-hidden="true">📊</span><span class="sr-only">Reorder Widgets</span>
+                </button>
                 <button class="header-btn" onclick="openCustomizeModal()" title="Customize Dashboard" aria-label="Customize dashboard">
                   <span aria-hidden="true">🎨</span><span class="sr-only">Customize</span>
                 </button>
@@ -8563,6 +8927,12 @@
                   <span class="quick-stat-value">${currentPolyData.length}</span>
                 </div>
               </div>
+
+              <!-- Favorites Panel -->
+              ${renderFavoritesPanel()}
+
+              <!-- Activity Feed -->
+              ${renderActivityFeed()}
             </aside>
 
             <!-- CENTER - Floor Map (Hero) -->
@@ -9318,6 +9688,10 @@
           }
         );
         addNotification('offline', `${newOfflineDevices.join(', ')} went offline`);
+        // Add to activity feed
+        newOfflineDevices.forEach(name => {
+          addActivityItem('offline', name, `${name} went offline`, activeFloor);
+        });
       }
 
       // Handle back online notifications
@@ -9328,6 +9702,10 @@
           tag: 'online-alert'
         });
         addNotification('online', `${newOnlineDevices.join(', ')} is back online`);
+        // Add to activity feed
+        newOnlineDevices.forEach(name => {
+          addActivityItem('online', name, `${name} is back online`, activeFloor);
+        });
       }
 
       // Handle low toner warnings
@@ -9338,6 +9716,10 @@
           tag: 'toner-alert'
         });
         addNotification('warning', `${lowTonerPrinters.join(', ')} has low toner`);
+        // Add to activity feed
+        lowTonerPrinters.forEach(name => {
+          addActivityItem('warning', name, `${name} has low toner`, activeFloor);
+        });
       }
 
       // Refresh floor health data periodically
@@ -9375,6 +9757,316 @@
     // Notifications storage
     let notifications = JSON.parse(localStorage.getItem('notifications') || '[]');
     let notificationPanelOpen = false;
+
+    // ==================== FAVORITES SYSTEM ====================
+    let favoriteDevices = JSON.parse(localStorage.getItem('favoriteDevices') || '[]');
+
+    function toggleFavorite(deviceId, deviceName, deviceType, floor) {
+      event?.stopPropagation();
+      const index = favoriteDevices.findIndex(f => f.id === deviceId);
+      if (index >= 0) {
+        favoriteDevices.splice(index, 1);
+        if (window.ErrorHandler) ErrorHandler.showInfo(`Removed ${deviceName} from favorites`);
+      } else {
+        favoriteDevices.push({ id: deviceId, name: deviceName, type: deviceType, floor: floor });
+        if (window.ErrorHandler) ErrorHandler.showSuccess(`Added ${deviceName} to favorites`);
+      }
+      localStorage.setItem('favoriteDevices', JSON.stringify(favoriteDevices));
+      renderPage();
+    }
+
+    function isFavorite(deviceId) {
+      return favoriteDevices.some(f => f.id === deviceId);
+    }
+
+    function renderFavoritesPanel() {
+      if (favoriteDevices.length === 0) {
+        return `
+          <div class="favorites-panel">
+            <div class="favorites-header">
+              <span class="favorites-title">⭐ Favorites</span>
+            </div>
+            <div class="favorites-empty">Click the star on any device to add it to favorites</div>
+          </div>
+        `;
+      }
+
+      // Get current status for each favorite
+      const favoritesWithStatus = favoriteDevices.map(fav => {
+        let status = 'unknown';
+        let currentName = fav.name;
+
+        // Check in monitor data
+        Object.values(monitorData).forEach(floorData => {
+          Object.values(floorData).forEach(devices => {
+            if (Array.isArray(devices)) {
+              const device = devices.find(d => d.id === fav.id);
+              if (device) {
+                status = device.status;
+                currentName = device.name;
+              }
+            }
+          });
+        });
+
+        // Check in poly lens data
+        Object.values(polyLensData).forEach(devices => {
+          const device = devices.find(d => d.id === fav.id);
+          if (device) {
+            status = device.connected ? 'up' : 'down';
+            currentName = device.name;
+          }
+        });
+
+        return { ...fav, status, name: currentName };
+      });
+
+      return `
+        <div class="favorites-panel">
+          <div class="favorites-header">
+            <span class="favorites-title">⭐ Favorites (${favoriteDevices.length})</span>
+          </div>
+          <div class="favorites-grid">
+            ${favoritesWithStatus.map(fav => `
+              <div class="favorite-card" onclick="goToDevice('${fav.id}', '${fav.floor}', '${fav.type}')">
+                <div class="status-dot" style="background: ${fav.status === 'up' ? 'var(--status-online)' : fav.status === 'down' ? 'var(--status-offline)' : 'var(--text-muted)'};"></div>
+                <div>
+                  <div class="device-name">${sanitizeHTML(fav.name)}</div>
+                  <div class="device-type">${fav.type} · ${fav.floor}</div>
+                </div>
+              </div>
+            `).join('')}
+          </div>
+        </div>
+      `;
+    }
+
+    // ==================== ACTIVITY FEED ====================
+    let activityFeed = JSON.parse(localStorage.getItem('activityFeed') || '[]');
+    const MAX_ACTIVITY_ITEMS = 50;
+
+    function addActivityItem(type, deviceName, message, floor = '') {
+      const item = {
+        id: Date.now(),
+        type, // 'online', 'offline', 'warning'
+        deviceName,
+        message,
+        floor,
+        time: new Date().toISOString()
+      };
+      activityFeed.unshift(item);
+      if (activityFeed.length > MAX_ACTIVITY_ITEMS) {
+        activityFeed = activityFeed.slice(0, MAX_ACTIVITY_ITEMS);
+      }
+      localStorage.setItem('activityFeed', JSON.stringify(activityFeed));
+    }
+
+    function renderActivityFeed() {
+      if (activityFeed.length === 0) {
+        return `
+          <div class="activity-feed-panel">
+            <div class="activity-feed-header">
+              <span class="activity-feed-title">📋 Recent Activity</span>
+            </div>
+            <div class="activity-feed-empty">No recent activity</div>
+          </div>
+        `;
+      }
+
+      return `
+        <div class="activity-feed-panel">
+          <div class="activity-feed-header">
+            <span class="activity-feed-title">📋 Recent Activity</span>
+            <span style="font-size: 11px; color: var(--text-muted); cursor: pointer;" onclick="clearActivityFeed()">Clear</span>
+          </div>
+          <div class="activity-feed-list">
+            ${activityFeed.slice(0, 15).map(item => `
+              <div class="activity-feed-item">
+                <div class="activity-feed-icon ${item.type}">
+                  ${item.type === 'online' ? '🟢' : item.type === 'offline' ? '🔴' : '⚠️'}
+                </div>
+                <div class="activity-feed-content">
+                  <div class="activity-feed-text">${sanitizeHTML(item.message)}</div>
+                  <div class="activity-feed-time">${getTimeAgo(new Date(item.time))}</div>
+                </div>
+              </div>
+            `).join('')}
+          </div>
+        </div>
+      `;
+    }
+
+    function clearActivityFeed() {
+      activityFeed = [];
+      localStorage.setItem('activityFeed', JSON.stringify(activityFeed));
+      renderPage();
+    }
+
+    // ==================== ENHANCED CONNECTION STATUS ====================
+    let connectionTooltipOpen = false;
+    let wsLastConnectTime = null;
+    // wsReconnectAttempts is already declared in the WebSocket section
+
+    function toggleConnectionTooltip(e) {
+      e?.stopPropagation();
+      connectionTooltipOpen = !connectionTooltipOpen;
+      const tooltip = document.getElementById('connection-tooltip');
+      if (tooltip) {
+        tooltip.classList.toggle('active', connectionTooltipOpen);
+      }
+    }
+
+    function manualReconnect() {
+      wsReconnectAttempts = 0;
+      connectWebSocket();
+      toggleConnectionTooltip();
+      if (window.ErrorHandler) ErrorHandler.showInfo('Reconnecting to server...');
+    }
+
+    function renderConnectionStatus() {
+      const status = wsConnected ? 'connected' : wsReconnecting ? 'reconnecting' : 'disconnected';
+      const statusText = wsConnected ? 'Live' : wsReconnecting ? 'Reconnecting...' : 'Disconnected';
+      const statusIcon = wsConnected ? '●' : wsReconnecting ? '↻' : '●';
+
+      return `
+        <div id="connection-status" class="connection-status ${status}" onclick="toggleConnectionTooltip(event)" style="position: relative;">
+          <span class="status-icon">${statusIcon}</span>
+          ${statusText}
+          <div id="connection-tooltip" class="connection-status-tooltip ${connectionTooltipOpen ? 'active' : ''}">
+            <div class="tooltip-title">Connection Status</div>
+            <div class="tooltip-info">Status: <strong style="color: ${wsConnected ? 'var(--status-online)' : 'var(--status-offline)'};">${statusText}</strong></div>
+            ${wsLastConnectTime ? `<div class="tooltip-info">Connected: ${getTimeAgo(wsLastConnectTime)}</div>` : ''}
+            ${!wsConnected ? `<div class="tooltip-info">Reconnect attempts: ${wsReconnectAttempts}</div>` : ''}
+            ${!wsConnected ? `<button class="reconnect-btn" onclick="manualReconnect()">Reconnect Now</button>` : ''}
+          </div>
+        </div>
+      `;
+    }
+
+    // Close connection tooltip when clicking outside
+    document.addEventListener('click', (e) => {
+      if (connectionTooltipOpen && !e.target.closest('#connection-status')) {
+        connectionTooltipOpen = false;
+        const tooltip = document.getElementById('connection-tooltip');
+        if (tooltip) tooltip.classList.remove('active');
+      }
+    });
+
+    // ==================== WIDGET CUSTOMIZATION ====================
+    let widgetOrder = JSON.parse(localStorage.getItem('widgetOrder') || '["online", "offline", "poly", "health"]');
+    let widgetCustomizeMode = false;
+
+    function toggleWidgetCustomize() {
+      widgetCustomizeMode = !widgetCustomizeMode;
+      const statusBar = document.querySelector('.status-bar');
+      if (statusBar) {
+        statusBar.classList.toggle('widget-customize-mode', widgetCustomizeMode);
+        const metrics = statusBar.querySelectorAll('.status-metric');
+        metrics.forEach(m => {
+          m.draggable = widgetCustomizeMode;
+        });
+      }
+      if (window.ErrorHandler) {
+        ErrorHandler.showInfo(widgetCustomizeMode ? 'Drag widgets to reorder' : 'Widget customization disabled');
+      }
+    }
+
+    function initWidgetDragDrop() {
+      const statusBar = document.querySelector('.status-bar');
+      if (!statusBar) return;
+
+      let draggedWidget = null;
+
+      statusBar.addEventListener('dragstart', (e) => {
+        if (!e.target.classList.contains('status-metric')) return;
+        draggedWidget = e.target;
+        e.target.classList.add('dragging');
+        e.dataTransfer.effectAllowed = 'move';
+      });
+
+      statusBar.addEventListener('dragend', (e) => {
+        if (!e.target.classList.contains('status-metric')) return;
+        e.target.classList.remove('dragging');
+        draggedWidget = null;
+      });
+
+      statusBar.addEventListener('dragover', (e) => {
+        e.preventDefault();
+        const target = e.target.closest('.status-metric');
+        if (target && target !== draggedWidget) {
+          target.classList.add('drag-over');
+        }
+      });
+
+      statusBar.addEventListener('dragleave', (e) => {
+        const target = e.target.closest('.status-metric');
+        if (target) target.classList.remove('drag-over');
+      });
+
+      statusBar.addEventListener('drop', (e) => {
+        e.preventDefault();
+        const target = e.target.closest('.status-metric');
+        if (target && draggedWidget && target !== draggedWidget) {
+          target.classList.remove('drag-over');
+          // Swap positions
+          const parent = statusBar;
+          const widgets = [...parent.querySelectorAll('.status-metric')];
+          const draggedIdx = widgets.indexOf(draggedWidget);
+          const targetIdx = widgets.indexOf(target);
+
+          if (draggedIdx < targetIdx) {
+            parent.insertBefore(draggedWidget, target.nextSibling);
+          } else {
+            parent.insertBefore(draggedWidget, target);
+          }
+
+          // Save new order
+          const newOrder = [...parent.querySelectorAll('.status-metric')].map(w => w.dataset.widget);
+          localStorage.setItem('widgetOrder', JSON.stringify(newOrder));
+        }
+      });
+    }
+
+    // ==================== OPTIMISTIC UI ====================
+    function optimisticAction(element, action, rollback) {
+      // Add pending state
+      element.classList.add('optimistic-pending');
+
+      // Execute action
+      action()
+        .then(() => {
+          element.classList.remove('optimistic-pending');
+        })
+        .catch((error) => {
+          element.classList.remove('optimistic-pending');
+          // Rollback on failure
+          if (rollback) rollback();
+          if (window.ErrorHandler) {
+            ErrorHandler.showError(error, { title: 'Action Failed' });
+          }
+        });
+    }
+
+    // Wrap existing actions with optimistic UI
+    const originalTriggerCheck = window.triggerCheck;
+    window.triggerCheck = function(hostname) {
+      const btn = event?.target;
+      if (btn) {
+        const originalText = btn.innerHTML;
+        btn.innerHTML = '⏳';
+        btn.disabled = true;
+
+        if (originalTriggerCheck) {
+          originalTriggerCheck(hostname)
+            .finally(() => {
+              btn.innerHTML = originalText;
+              btn.disabled = false;
+            });
+        }
+      } else if (originalTriggerCheck) {
+        return originalTriggerCheck(hostname);
+      }
+    };
 
     // Get low toner printer count
     function getLowTonerCount() {
@@ -10256,6 +10948,8 @@
         await fetchPendingChangesCount();
       }
       render();
+      // Initialize widget drag-and-drop after render
+      setTimeout(initWidgetDragDrop, 100);
     }
 
     // Initial check
@@ -12496,6 +13190,7 @@
           wsReconnectAttempts = 0;
           wsTokenRotationInProgress = false;
           wsConnectedWithToken = connectingToken;
+          wsLastConnectTime = new Date();
           updateConnectionStatus();
           // Don't full render - just update connection status indicator
         };
@@ -12565,16 +13260,24 @@
       const statusEl = document.getElementById('connection-status');
       if (!statusEl) return;
 
-      if (wsConnected) {
-        statusEl.className = 'connection-status connected';
-        statusEl.innerHTML = '<span class="status-icon">●</span> Live';
-      } else if (wsReconnecting) {
-        statusEl.className = 'connection-status reconnecting';
-        statusEl.innerHTML = '<span class="status-icon">↻</span> Reconnecting...';
-      } else {
-        statusEl.className = 'connection-status disconnected';
-        statusEl.innerHTML = '<span class="status-icon">●</span> Disconnected';
-      }
+      const status = wsConnected ? 'connected' : wsReconnecting ? 'reconnecting' : 'disconnected';
+      const statusText = wsConnected ? 'Live' : wsReconnecting ? 'Reconnecting...' : 'Disconnected';
+      const statusIcon = wsConnected ? '●' : wsReconnecting ? '↻' : '●';
+
+      statusEl.className = `connection-status ${status}`;
+      statusEl.style.position = 'relative';
+      statusEl.innerHTML = `
+        <span class="status-icon">${statusIcon}</span>
+        ${statusText}
+        <div id="connection-tooltip" class="connection-status-tooltip">
+          <div class="tooltip-title">Connection Status</div>
+          <div class="tooltip-info">Status: <strong style="color: ${wsConnected ? 'var(--status-online)' : 'var(--status-offline)'};">${statusText}</strong></div>
+          ${wsLastConnectTime ? `<div class="tooltip-info">Connected: ${getTimeAgo(wsLastConnectTime)}</div>` : ''}
+          ${!wsConnected ? `<div class="tooltip-info">Reconnect attempts: ${wsReconnectAttempts}</div>` : ''}
+          ${!wsConnected ? `<button class="reconnect-btn" onclick="manualReconnect()">Reconnect Now</button>` : ''}
+        </div>
+      `;
+      statusEl.onclick = toggleConnectionTooltip;
     }
 
     function handleWebSocketMessage(message) {

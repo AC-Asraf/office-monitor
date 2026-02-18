@@ -962,8 +962,13 @@
     };
 
     // Floor dimensions (must be defined before functions that use them)
-    const FLOOR_SIZE = 30;  // Larger for more spacious feel
+    // Match dashboard aspect ratio of ~1.83:1 (width:depth)
+    const FLOOR_WIDTH = 30;  // X dimension
+    const FLOOR_DEPTH = 16.4;  // Z dimension (30/1.83 to match dashboard aspect ratio)
+    const FLOOR_SIZE = FLOOR_WIDTH;  // Keep for backward compat
     const FLOOR_HALF = FLOOR_SIZE / 2;
+    const FLOOR_HALF_WIDTH = FLOOR_WIDTH / 2;
+    const FLOOR_HALF_DEPTH = FLOOR_DEPTH / 2;
 
     // Furniture types configuration (must be after COLORS)
     const FURNITURE_TYPES = {
@@ -1276,12 +1281,12 @@
 
         // Convert to world coords
         const p1 = {
-          x: (points[0].x / 100) * FLOOR_SIZE - FLOOR_HALF,
-          z: (points[0].y / 100) * FLOOR_SIZE - FLOOR_HALF
+          x: (points[0].x / 100) * FLOOR_WIDTH - FLOOR_HALF_WIDTH,
+          z: (points[0].y / 100) * FLOOR_DEPTH - FLOOR_HALF_DEPTH
         };
         const p2 = {
-          x: (points[1].x / 100) * FLOOR_SIZE - FLOOR_HALF,
-          z: (points[1].y / 100) * FLOOR_SIZE - FLOOR_HALF
+          x: (points[1].x / 100) * FLOOR_WIDTH - FLOOR_HALF_WIDTH,
+          z: (points[1].y / 100) * FLOOR_DEPTH - FLOOR_HALF_DEPTH
         };
         return { p1, p2, width: Math.sqrt((p2.x - p1.x) ** 2 + (p2.z - p1.z) ** 2) };
       }).filter(d => d !== null);
@@ -1359,9 +1364,12 @@
             }
           } else {
             // No room zone found - still create the TV group but auto-position
+            // Keep positions within floor bounds (5-95% range to avoid edges)
+            const col = autoIndex % 6;
+            const row = Math.floor(autoIndex / 6) % 5;
             const autoCenter = {
-              x: 20 + (autoIndex % 5) * 15,
-              y: 20 + Math.floor(autoIndex / 5) * 15
+              x: 10 + col * 15,  // 10, 25, 40, 55, 70, 85
+              y: 10 + row * 18   // 10, 28, 46, 64, 82
             };
             const group = createPolyDeviceGroup(primaryDevice, autoCenter, devices.tablets, devices.allDevices);
             if (group) {
@@ -1381,8 +1389,8 @@
 
     // Create floor plane with texture
     function createFloorPlane(floor) {
-      // Large spacious floor
-      const geometry = new THREE.PlaneGeometry(FLOOR_SIZE, FLOOR_SIZE, 1, 1);
+      // Floor sized to match dashboard aspect ratio
+      const geometry = new THREE.PlaneGeometry(FLOOR_WIDTH, FLOOR_DEPTH, 1, 1);
 
       // Dark floor material
       const material = new THREE.MeshStandardMaterial({
@@ -1418,8 +1426,8 @@
         }
       }
 
-      // Subtle grid
-      const gridHelper = new THREE.GridHelper(FLOOR_SIZE, 20, COLORS.floorGrid, COLORS.floorGrid);
+      // Subtle grid (use larger dimension for grid)
+      const gridHelper = new THREE.GridHelper(FLOOR_WIDTH, 20, COLORS.floorGrid, COLORS.floorGrid);
       gridHelper.position.y = 0.005;
       gridHelper.material.opacity = 0.3;
       gridHelper.material.transparent = true;
@@ -1427,7 +1435,7 @@
       wallMeshes.push(gridHelper);
 
       // Glowing floor border
-      const borderGeometry = new THREE.EdgesGeometry(new THREE.PlaneGeometry(FLOOR_SIZE, FLOOR_SIZE));
+      const borderGeometry = new THREE.EdgesGeometry(new THREE.PlaneGeometry(FLOOR_WIDTH, FLOOR_DEPTH));
       const borderMaterial = new THREE.LineBasicMaterial({ color: 0x6366f1, linewidth: 2 });
       const border = new THREE.LineSegments(borderGeometry, borderMaterial);
       border.rotation.x = -Math.PI / 2;
@@ -1514,10 +1522,10 @@
       const wallGroup = new THREE.Group();
       wallGroup.userData = { type: 'wallGroup', zoneId: zone.id, zoneName: zone.name, isOpenPath: isWall || isDoor };
 
-      // Convert 0-100 coords to world coords (20x20 floor centered at origin)
+      // Convert 0-100 coords to world coords (aspect ratio matched to dashboard)
       const worldPoints = points.map(p => ({
-        x: (p.x / 100) * FLOOR_SIZE - FLOOR_HALF,
-        z: (p.y / 100) * FLOOR_SIZE - FLOOR_HALF
+        x: (p.x / 100) * FLOOR_WIDTH - FLOOR_HALF_WIDTH,
+        z: (p.y / 100) * FLOOR_DEPTH - FLOOR_HALF_DEPTH
       }));
 
       const zoneColor = zone.color ? parseInt(zone.color.replace('#', ''), 16) : COLORS.wall;
@@ -1725,12 +1733,12 @@
 
       const y = heightRatio * wallHeight;
 
-      // Determine X/Z position (scale to new floor size)
+      // Determine X/Z position (scale to floor dimensions matching dashboard aspect ratio)
       let x, z;
       if (device.pos_x !== null && device.pos_x !== undefined &&
           device.pos_y !== null && device.pos_y !== undefined) {
-        x = (device.pos_x / 100) * FLOOR_SIZE - FLOOR_HALF;
-        z = (device.pos_y / 100) * FLOOR_SIZE - FLOOR_HALF;
+        x = (device.pos_x / 100) * FLOOR_WIDTH - FLOOR_HALF_WIDTH;
+        z = (device.pos_y / 100) * FLOOR_DEPTH - FLOOR_HALF_DEPTH;
       } else {
         const index = device._autoIndex || 0;
         x = (index % 5) * 2 - 4;
@@ -1819,8 +1827,8 @@
         mesh = new THREE.Mesh(geometry, material);
       }
 
-      const x = (furnitureItem.pos_x / 100) * FLOOR_SIZE - FLOOR_HALF;
-      const z = (furnitureItem.pos_y / 100) * FLOOR_SIZE - FLOOR_HALF;
+      const x = (furnitureItem.pos_x / 100) * FLOOR_WIDTH - FLOOR_HALF_WIDTH;
+      const z = (furnitureItem.pos_y / 100) * FLOOR_DEPTH - FLOOR_HALF_DEPTH;
       const y = furnitureItem.pos_z !== undefined ? furnitureItem.pos_z : type.yOffset;
 
       mesh.position.set(x, y, z);
@@ -1843,13 +1851,45 @@
       return mesh;
     }
 
-    // Find room center by name
+    // Find room center by name - checks roomPositions first, then floorZones
     function findRoomCenter(roomName, floor) {
+      const searchName = (roomName || '').toLowerCase().trim();
+      if (!searchName) return null;
+
+      // roomPositions is a flat object with room_id as key - filter by floor
+      const floorPositions = Object.entries(roomPositions)
+        .filter(([id, pos]) => pos.floor === floor)
+        .map(([id, pos]) => ({ roomId: id, ...pos }));
+
+      // Normalize search name for matching
+      const searchNormalized = searchName.replace(/[\s-]+/g, '').toLowerCase();
+
+      // Try to find matching room position
+      for (const pos of floorPositions) {
+        const roomId = (pos.roomId || pos.room_id || '').toLowerCase();
+        // Remove "room-" prefix and normalize
+        const roomIdClean = roomId.replace(/^room-/, '').replace(/[\s-]+/g, '');
+
+        // Try various matching strategies
+        if (roomIdClean === searchNormalized ||
+            roomId === searchName ||
+            roomId === `room-${searchName}` ||
+            roomId === `room-${searchName.replace(/\s+/g, '-')}` ||
+            roomIdClean.includes(searchNormalized) ||
+            searchNormalized.includes(roomIdClean)) {
+          if (pos.pos_x !== undefined && pos.pos_y !== undefined) {
+            return { x: pos.pos_x, y: pos.pos_y, source: 'roomPositions', roomId: pos.roomId };
+          }
+        }
+      }
+
+      // Fall back to floorZones (polygon boundaries)
       const zones = floorZones[floor] || [];
       const matchingZone = zones.find(z => {
         const zoneName = (z.name || '').toLowerCase().trim();
-        const searchName = roomName.toLowerCase().trim();
+        const zoneNormalized = zoneName.replace(/[\s-]+/g, '');
         return zoneName === searchName ||
+               zoneNormalized === searchNormalized ||
                zoneName.includes(searchName) ||
                searchName.includes(zoneName);
       });
@@ -1862,13 +1902,13 @@
           if (typeof points === 'string') points = JSON.parse(points);
 
           if (points && points.length > 0) {
-            // Calculate centroid
             const sumX = points.reduce((sum, p) => sum + p.x, 0);
             const sumY = points.reduce((sum, p) => sum + p.y, 0);
             return {
               x: sumX / points.length,
               y: sumY / points.length,
-              zone: matchingZone
+              zone: matchingZone,
+              source: 'floorZones'
             };
           }
         } catch (e) {
@@ -1911,8 +1951,8 @@
       let x, z;
       if (device.pos_x !== null && device.pos_x !== undefined &&
           device.pos_y !== null && device.pos_y !== undefined) {
-        x = (device.pos_x / 100) * FLOOR_SIZE - FLOOR_HALF;
-        z = (device.pos_y / 100) * FLOOR_SIZE - FLOOR_HALF;
+        x = (device.pos_x / 100) * FLOOR_WIDTH - FLOOR_HALF_WIDTH;
+        z = (device.pos_y / 100) * FLOOR_DEPTH - FLOOR_HALF_DEPTH;
       } else {
         const index = device._autoIndex || 0;
         x = (index % 5) * 2 - 4;
@@ -2022,8 +2062,8 @@
     // Uses pivot-centered structure so rotation doesn't shift position
     function createPolyDeviceGroup(device, roomCenter, tablets = [], allDevices = []) {
       // Convert room center to world coords
-      const centerX = (roomCenter.x / 100) * FLOOR_SIZE - FLOOR_HALF;
-      const centerZ = (roomCenter.y / 100) * FLOOR_SIZE - FLOOR_HALF;
+      const centerX = (roomCenter.x / 100) * FLOOR_WIDTH - FLOOR_HALF_WIDTH;
+      const centerZ = (roomCenter.y / 100) * FLOOR_DEPTH - FLOOR_HALF_DEPTH;
 
       // Check if ANY device in the group is connected
       const anyConnected = allDevices.length > 0
@@ -2170,8 +2210,8 @@
       const newItem = {
         id: Date.now(),
         type: type,
-        pos_x: ((x + FLOOR_HALF) / FLOOR_SIZE) * 100,
-        pos_y: ((z + FLOOR_HALF) / FLOOR_SIZE) * 100,
+        pos_x: ((x + FLOOR_HALF_WIDTH) / FLOOR_WIDTH) * 100,
+        pos_y: ((z + FLOOR_HALF_DEPTH) / FLOOR_DEPTH) * 100,
         pos_z: FURNITURE_TYPES[type].yOffset,
         rotation: 0
       };
@@ -2428,9 +2468,9 @@
         if (intersects.length > 0) {
           const point = intersects[0].point;
 
-          // Clamp to floor bounds (20x20 floor)
-          draggedDevice.position.x = Math.max(-FLOOR_HALF + 0.5, Math.min(FLOOR_HALF - 0.5, point.x));
-          draggedDevice.position.z = Math.max(-FLOOR_HALF + 0.5, Math.min(FLOOR_HALF - 0.5, point.z));
+          // Clamp to floor bounds (aspect ratio matched to dashboard)
+          draggedDevice.position.x = Math.max(-FLOOR_HALF_WIDTH + 0.5, Math.min(FLOOR_HALF_WIDTH - 0.5, point.x));
+          draggedDevice.position.z = Math.max(-FLOOR_HALF_DEPTH + 0.5, Math.min(FLOOR_HALF_DEPTH - 0.5, point.z));
 
           // Track pending changes
           if (hasDragged && draggedDevice.userData.data) {
@@ -2441,8 +2481,8 @@
               // Update furniture data directly
               const furniture = furnitureData.find(f => f.id === id);
               if (furniture) {
-                furniture.pos_x = ((draggedDevice.position.x + FLOOR_HALF) / FLOOR_SIZE) * 100;
-                furniture.pos_y = ((draggedDevice.position.z + FLOOR_HALF) / FLOOR_SIZE) * 100;
+                furniture.pos_x = ((draggedDevice.position.x + FLOOR_HALF_WIDTH) / FLOOR_WIDTH) * 100;
+                furniture.pos_y = ((draggedDevice.position.z + FLOOR_HALF_DEPTH) / FLOOR_DEPTH) * 100;
               }
             } else {
               // Track device position change
@@ -2450,8 +2490,8 @@
                 data: draggedDevice.userData.data,
                 type: draggedDevice.userData.deviceType,
                 position: {
-                  x: ((draggedDevice.position.x + FLOOR_HALF) / FLOOR_SIZE) * 100,
-                  y: ((draggedDevice.position.z + FLOOR_HALF) / FLOOR_SIZE) * 100,
+                  x: ((draggedDevice.position.x + FLOOR_HALF_WIDTH) / FLOOR_WIDTH) * 100,
+                  y: ((draggedDevice.position.z + FLOOR_HALF_DEPTH) / FLOOR_DEPTH) * 100,
                   z: (draggedDevice.position.y / wallHeight) * 100
                 }
               });
@@ -2730,8 +2770,8 @@
 
     // Generate position/rotation controls HTML
     function generateControlsHTML(mesh) {
-      const posX = ((mesh.position.x + FLOOR_HALF) / FLOOR_SIZE) * 100;
-      const posY = ((mesh.position.z + FLOOR_HALF) / FLOOR_SIZE) * 100;
+      const posX = ((mesh.position.x + FLOOR_HALF_WIDTH) / FLOOR_WIDTH) * 100;
+      const posY = ((mesh.position.z + FLOOR_HALF_DEPTH) / FLOOR_DEPTH) * 100;
       // Get rotation from rotationGroup for Poly devices, otherwise from mesh
       const rotTarget = mesh.userData.rotationGroup || mesh;
       const rotX = rotTarget.rotation.x || 0;
@@ -2789,10 +2829,10 @@
       const v = parseFloat(value);
 
       if (axis === 'x') {
-        selectedDevice.position.x = (v / 100) * FLOOR_SIZE - FLOOR_HALF;
+        selectedDevice.position.x = (v / 100) * FLOOR_WIDTH - FLOOR_HALF_WIDTH;
         document.getElementById('pos-x-value').textContent = v.toFixed(1) + '%';
       } else {
-        selectedDevice.position.z = (v / 100) * FLOOR_SIZE - FLOOR_HALF;
+        selectedDevice.position.z = (v / 100) * FLOOR_DEPTH - FLOOR_HALF_DEPTH;
         document.getElementById('pos-y-value').textContent = v.toFixed(1) + '%';
       }
 
@@ -2830,8 +2870,8 @@
         const id = userData.data.id;
         const furniture = furnitureData.find(f => f.id === id);
         if (furniture) {
-          furniture.pos_x = ((selectedDevice.position.x + FLOOR_HALF) / FLOOR_SIZE) * 100;
-          furniture.pos_y = ((selectedDevice.position.z + FLOOR_HALF) / FLOOR_SIZE) * 100;
+          furniture.pos_x = ((selectedDevice.position.x + FLOOR_HALF_WIDTH) / FLOOR_WIDTH) * 100;
+          furniture.pos_y = ((selectedDevice.position.z + FLOOR_HALF_DEPTH) / FLOOR_DEPTH) * 100;
           furniture.rotation = selectedDevice.rotation.y;
           furniture.rotationX = selectedDevice.rotation.x;
           userData.data.pos_x = furniture.pos_x;
@@ -2844,8 +2884,8 @@
         // Save device position
         const device = userData.data;
         const deviceType = userData.deviceType;
-        const pos_x = ((selectedDevice.position.x + FLOOR_HALF) / FLOOR_SIZE) * 100;
-        const pos_y = ((selectedDevice.position.z + FLOOR_HALF) / FLOOR_SIZE) * 100;
+        const pos_x = ((selectedDevice.position.x + FLOOR_HALF_WIDTH) / FLOOR_WIDTH) * 100;
+        const pos_y = ((selectedDevice.position.z + FLOOR_HALF_DEPTH) / FLOOR_DEPTH) * 100;
 
         // Get rotation from rotationGroup if exists (Poly devices)
         const rotTarget = userData.rotationGroup || selectedDevice;
@@ -2877,8 +2917,8 @@
         const deviceType = selectedDevice.userData.deviceType;
 
         // Convert world position back to percentage
-        const pos_x = ((selectedDevice.position.x + FLOOR_HALF) / FLOOR_SIZE) * 100;
-        const pos_y = ((selectedDevice.position.z + FLOOR_HALF) / FLOOR_SIZE) * 100;
+        const pos_x = ((selectedDevice.position.x + FLOOR_HALF_WIDTH) / FLOOR_WIDTH) * 100;
+        const pos_y = ((selectedDevice.position.z + FLOOR_HALF_DEPTH) / FLOOR_DEPTH) * 100;
 
         pendingChanges.set(device.id, {
           id: device.id,

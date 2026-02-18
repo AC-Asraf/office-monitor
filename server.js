@@ -2348,12 +2348,14 @@ async function fetchPolyLensDevices() {
     allDevices.forEach(device => {
       // Determine floor based on room name or site
       const roomName = device.room?.name || '';
-      let floor = 'Floor 1'; // Default floor
+      let floor = '1st Floor'; // Default floor
 
-      // Try to extract floor from room name (e.g., "5th Floor Room" -> "Floor 5")
+      // Try to extract floor from room name (e.g., "5th Floor Room" -> "5th Floor")
       const floorMatch = roomName.match(/(\d+)(?:st|nd|rd|th)?\s*floor/i);
       if (floorMatch) {
-        floor = `Floor ${floorMatch[1]}`;
+        const num = parseInt(floorMatch[1]);
+        const suffix = num === 1 ? 'st' : num === 2 ? 'nd' : num === 3 ? 'rd' : 'th';
+        floor = `${num}${suffix} Floor`;
       }
 
       recordPolyDeviceHeartbeat(device, floor);

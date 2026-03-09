@@ -1,0 +1,33 @@
+# Dependencies
+node_modules
+
+# Git
+.git
+.gitignore
+
+# Database files (will be created fresh or mounted)
+*.db
+monitor.db
+office-monitor.db
+office_monitor.db
+
+# Logs
+*.log
+logs/
+
+# Environment files (mounted separately)
+.env
+
+# Development files
+.DS_Store
+*.md
+deploy/
+.claude/
+
+# IDE
+.vscode/
+.idea/
+
+# Temporary files
+*.tmp
+*.temp

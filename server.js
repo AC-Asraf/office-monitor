@@ -357,7 +357,7 @@ const BRIVO_SITE_FILTER = process.env.BRIVO_SITE_FILTER || 'Outbrain Israel';
 
 // ==================== DATABASE SETUP ====================
 
-const dbPath = path.join(__dirname, 'monitor.db');
+const dbPath = process.env.DB_PATH || path.join(__dirname, 'monitor.db');
 const db = new Database(dbPath);
 
 // Check and set database file permissions (Unix only)
@@ -1667,9 +1667,16 @@ async function checkMonitor(monitor) {
 
   try {
     if (monitor.type === 'ping') {
+      // Detect platform for correct ping options
+      const isLinux = process.platform === 'linux';
+      const timeoutSec = Math.ceil(PING_TIMEOUT / 1000);
+      const extra = isLinux
+        ? ['-c', '1', '-W', String(timeoutSec)]  // Linux: -W is seconds
+        : ['-c', '1', '-W', String(PING_TIMEOUT)];  // macOS: -W is milliseconds
+
       const result = await ping.promise.probe(monitor.hostname, {
-        timeout: PING_TIMEOUT / 1000,
-        extra: ['-c', '1', '-W', String(PING_TIMEOUT)]  // -W sets timeout in ms on macOS
+        timeout: timeoutSec,
+        extra
       });
       status = result.alive ? 1 : 0;
       pingTime = result.time === 'unknown' ? null : parseFloat(result.time);

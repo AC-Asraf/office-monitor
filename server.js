@@ -332,6 +332,10 @@ const SLACK_WEBHOOK_URL = process.env.SLACK_WEBHOOK_URL;
 const SLACK_CHANNEL = process.env.SLACK_CHANNEL;
 const SLACK_APPROVAL_WEBHOOK_URL = process.env.SLACK_APPROVAL_WEBHOOK_URL; // For edit approval notifications
 
+// Slack 2FA Configuration (DM-based codes)
+const SLACK_BOT_TOKEN = process.env.SLACK_BOT_TOKEN;
+const SLACK_ADMIN_USER_ID = process.env.SLACK_ADMIN_USER_ID;
+
 // Poly Lens Configuration
 const POLY_LENS_CLIENT_ID = process.env.POLY_LENS_CLIENT_ID;
 const POLY_LENS_CLIENT_SECRET = process.env.POLY_LENS_CLIENT_SECRET;
@@ -1163,6 +1167,153 @@ function deleteSession(token) {
   db.prepare('DELETE FROM sessions WHERE token = ?').run(token);
 }
 
+// ==================== SLACK 2FA (DM-BASED CODES) ====================
+
+// In-memory store for pending 2FA codes
+const pending2FACodes = new Map();
+
+// Check if Slack 2FA is configured
+function isSlack2FAConfigured() {
+  return Boolean(SLACK_BOT_TOKEN && SLACK_ADMIN_USER_ID);
+}
+
+// Generate a random 6-digit verification code
+function generate2FACode() {
+  return Math.floor(100000 + Math.random() * 900000).toString();
+}
+
+// Send a 2FA verification code via Slack DM
+async function send2FACodeViaDM(userId, username) {
+  if (!SLACK_BOT_TOKEN) {
+    console.warn('Slack Bot Token not configured, 2FA DM disabled');
+    return { success: false, error: 'Slack 2FA not configured' };
+  }
+
+  if (!SLACK_ADMIN_USER_ID) {
+    console.warn('Slack Admin User ID not configured, 2FA DM disabled');
+    return { success: false, error: 'Slack admin user not configured' };
+  }
+
+  const code = generate2FACode();
+  const sessionId = crypto.randomUUID();
+  const expiresAt = new Date(Date.now() + 5 * 60 * 1000); // 5 minutes expiry
+
+  // Store the pending code
+  pending2FACodes.set(sessionId, { code, expiresAt, userId });
+
+  // Clean up expired codes
+  cleanupExpired2FACodes();
+
+  try {
+    // Send DM to the configured Slack user
+    const response = await fetch('https://slack.com/api/chat.postMessage', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${SLACK_BOT_TOKEN}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        channel: SLACK_ADMIN_USER_ID, // DM to admin user
+        text: `🔐 *Office Monitor 2FA Verification*\n\nYour verification code is: *${code}*\n\nThis code will expire in 5 minutes.\n\n_Login attempt for user: ${username}_`,
+        unfurl_links: false,
+        unfurl_media: false,
+      }),
+    });
+
+    const result = await response.json();
+
+    if (!result.ok) {
+      console.error('Failed to send Slack 2FA code:', result.error);
+      pending2FACodes.delete(sessionId);
+      return { success: false, error: `Slack API error: ${result.error}` };
+    }
+
+    console.log(`2FA code sent via Slack DM for user ${username}`);
+    return { success: true, sessionId };
+  } catch (error) {
+    console.error('Error sending Slack 2FA code:', error.message);
+    pending2FACodes.delete(sessionId);
+    return { success: false, error: 'Failed to send verification code' };
+  }
+}
+
+// Verify a 2FA code
+function verify2FACode(sessionId, code) {
+  const pending = pending2FACodes.get(sessionId);
+
+  if (!pending) {
+    return { valid: false, error: 'Invalid or expired session' };
+  }
+
+  if (new Date() > pending.expiresAt) {
+    pending2FACodes.delete(sessionId);
+    return { valid: false, error: 'Verification code expired' };
+  }
+
+  if (pending.code !== code) {
+    return { valid: false, error: 'Invalid verification code' };
+  }
+
+  // Code is valid - remove it and return success
+  const userId = pending.userId;
+  pending2FACodes.delete(sessionId);
+  console.log(`2FA code verified successfully for user ID ${userId}`);
+  return { valid: true, userId };
+}
+
+// Resend a 2FA code for an existing session
+async function resend2FACode(sessionId, username) {
+  const pending = pending2FACodes.get(sessionId);
+
+  if (!pending) {
+    return { success: false, error: 'Session not found or expired' };
+  }
+
+  // Generate new code and update
+  const newCode = generate2FACode();
+  pending.code = newCode;
+  pending.expiresAt = new Date(Date.now() + 5 * 60 * 1000);
+
+  try {
+    const response = await fetch('https://slack.com/api/chat.postMessage', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${SLACK_BOT_TOKEN}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        channel: SLACK_ADMIN_USER_ID,
+        text: `🔐 *Office Monitor 2FA Verification (Resend)*\n\nYour new verification code is: *${newCode}*\n\nThis code will expire in 5 minutes.\n\n_Login attempt for user: ${username}_`,
+        unfurl_links: false,
+        unfurl_media: false,
+      }),
+    });
+
+    const result = await response.json();
+
+    if (!result.ok) {
+      return { success: false, error: `Slack API error: ${result.error}` };
+    }
+
+    console.log(`2FA code resent via Slack DM for user ${username}`);
+    return { success: true };
+  } catch (error) {
+    return { success: false, error: 'Failed to resend verification code' };
+  }
+}
+
+// Clean up expired 2FA codes
+function cleanupExpired2FACodes() {
+  const now = new Date();
+  for (const [sessionId, pending] of pending2FACodes.entries()) {
+    if (now > pending.expiresAt) {
+      pending2FACodes.delete(sessionId);
+    }
+  }
+}
+
+// ==================== END SLACK 2FA ====================
+
 // Rotate session token (returns new token)
 const TOKEN_ROTATION_INTERVAL = 60 * 60 * 1000; // 1 hour
 const TOKEN_GRACE_PERIOD = 30 * 1000; // 30 seconds grace period for old tokens
@@ -1666,7 +1817,31 @@ async function checkMonitor(monitor) {
   let message = '';
 
   try {
-    if (monitor.type === 'ping') {
+    // For Poly Lens devices (Zoom Rooms), use Zoom Room status instead of ping
+    if (monitor.device_type === 'polyLens') {
+      // Look up Zoom Room status by matching room name
+      // Zoom rooms are named like "IL-NET-1-RoomName" or just "RoomName"
+      const zoomRoom = db.prepare(`
+        SELECT status, health FROM zoom_room_history
+        WHERE room_name LIKE '%' || ? || '%'
+        ORDER BY time DESC LIMIT 1
+      `).get(monitor.name);
+
+      if (zoomRoom) {
+        // Zoom Room statuses: Available, InMeeting, Offline, UnderConstruction
+        const isOnline = zoomRoom.status === 'Available' || zoomRoom.status === 'InMeeting';
+        status = isOnline ? 1 : 0;
+        message = isOnline ? zoomRoom.status : `Zoom Room: ${zoomRoom.status}`;
+        pingTime = null; // No ping for Zoom Rooms
+      } else {
+        // No Zoom data found, fall back to checking Poly Lens connected status
+        const polyDevice = db.prepare(`
+          SELECT connected FROM poly_devices WHERE name = ?
+        `).get(monitor.name);
+        status = polyDevice?.connected ? 1 : 0;
+        message = polyDevice ? (polyDevice.connected ? 'Connected' : 'Disconnected') : 'No Zoom data';
+      }
+    } else if (monitor.type === 'ping') {
       // Detect platform for correct ping options
       const isLinux = process.platform === 'linux';
       const timeoutSec = Math.ceil(PING_TIMEOUT / 1000);
@@ -2522,6 +2697,8 @@ async function fetchZoomRooms() {
           location: room.location?.name || '',
           floor: floor,
           room_id: room.room_id,
+          // Zoom Room control URL
+          control_url: room.room_id ? `https://zoom.us/zrc?nodeId=${room.room_id}` : null,
           // Zoom-specific status info
           zoom_status: room.status || metrics.status || 'Unknown',
           in_meeting: (room.status === 'InMeeting' || metrics.status === 'InMeeting'),
@@ -2542,6 +2719,8 @@ async function fetchZoomRooms() {
           health: 'Unknown',
           issues: [],
           floor: 'Floor 5',
+          room_id: room.room_id,
+          control_url: room.room_id ? `https://zoom.us/zrc?nodeId=${room.room_id}` : null,
           zoom_status: room.status || 'Unknown',
           in_meeting: false,
           zoom_ip: null,
@@ -2634,7 +2813,13 @@ function normalizeName(name) {
 
 // Merge Zoom status with Poly Lens devices by room name
 function getPolyDevicesWithZoomStatus() {
-  const merged = polyLensDevices.map(device => {
+  // Get list of disabled device IDs from database
+  const disabledDevices = db.prepare('SELECT device_id FROM poly_devices WHERE disabled = 1').all();
+  const disabledIds = new Set(disabledDevices.map(d => d.device_id));
+
+  const merged = polyLensDevices
+    .filter(device => !disabledIds.has(device.id)) // Filter out disabled devices
+    .map(device => {
     const roomName = device.room?.name || device.displayName || device.name || '';
     const normalizedRoom = normalizeName(roomName);
 
@@ -2665,7 +2850,8 @@ function getPolyDevicesWithZoomStatus() {
       zoom_ip: matchingZoom?.zoom_ip || null,
       zoom_serial: matchingZoom?.zoom_serial || null,
       zoom_device_type: matchingZoom?.zoom_device_type || null,
-      zoom_devices: matchingZoom?.zoom_devices || []
+      zoom_devices: matchingZoom?.zoom_devices || [],
+      control_url: matchingZoom?.control_url || null
     };
   });
 
@@ -3050,6 +3236,27 @@ app.post('/api/auth/login', async (req, res) => {
 
   // Check if Slack 2FA is enabled
   if (user.slack_2fa_enabled === 1) {
+    // Try DM-based 2FA codes first (preferred method)
+    if (isSlack2FAConfigured()) {
+      try {
+        const result = await send2FACodeViaDM(user.id, user.username);
+        if (result.success) {
+          return res.json({
+            success: false,
+            requires_slack_2fa_code: true,
+            session_id: result.sessionId,
+            user_id: user.id,
+            message: 'A verification code has been sent to the admin via Slack. Please enter the 6-digit code.'
+          });
+        } else {
+          console.error('Failed to send 2FA DM, falling back to webhook:', result.error);
+        }
+      } catch (error) {
+        console.error('Error in 2FA DM flow, falling back to webhook:', error);
+      }
+    }
+
+    // Fall back to webhook-based approval if DM not configured or failed
     // Create pending login
     const pendingToken = crypto.randomBytes(32).toString('hex');
     const expiresAt = new Date(Date.now() + 5 * 60 * 1000); // 5 minutes expiry
@@ -3358,6 +3565,59 @@ app.get('/api/auth/check-login-status/:token', (req, res) => {
 
   // Still pending
   res.json({ success: false, status: 'pending' });
+});
+
+// Verify 2FA code (DM-based)
+app.post('/api/auth/verify-2fa-code', async (req, res) => {
+  const { session_id, code, user_id } = req.body;
+
+  if (!session_id || !code) {
+    return res.status(400).json({ success: false, error: 'Session ID and code are required' });
+  }
+
+  const result = verify2FACode(session_id, code);
+
+  if (!result.valid) {
+    return res.json({ success: false, error: result.error });
+  }
+
+  // Code is valid - create session
+  const userId = user_id || result.userId;
+  const user = db.prepare('SELECT * FROM users WHERE id = ?').get(userId);
+
+  if (!user) {
+    return res.json({ success: false, error: 'User not found' });
+  }
+
+  const sessionToken = createSession(user.id);
+
+  res.json({
+    success: true,
+    token: sessionToken,
+    user: {
+      id: user.id,
+      username: user.username,
+      role: user.role,
+      password_reset_required: user.password_reset_required === 1
+    }
+  });
+});
+
+// Resend 2FA code
+app.post('/api/auth/resend-2fa-code', async (req, res) => {
+  const { session_id, username } = req.body;
+
+  if (!session_id) {
+    return res.status(400).json({ success: false, error: 'Session ID is required' });
+  }
+
+  const result = await resend2FACode(session_id, username || 'unknown');
+
+  if (!result.success) {
+    return res.json({ success: false, error: result.error });
+  }
+
+  res.json({ success: true, message: 'A new verification code has been sent' });
 });
 
 // Get current user

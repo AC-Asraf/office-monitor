@@ -5178,6 +5178,9 @@
     // Login function
     let pendingApprovalToken = null;
     let approvalCheckInterval = null;
+    let pending2FASessionId = null;
+    let pending2FAUserId = null;
+    let pending2FAUsername = null;
 
     async function login(username, password) {
       try {
@@ -5204,6 +5207,11 @@
               showChangePasswordModal(true);
             }, 500);
           }
+        } else if (data.requires_slack_2fa_code) {
+          // Slack 2FA with DM codes - show code entry form
+          pending2FASessionId = data.session_id;
+          pending2FAUserId = data.user_id;
+          show2FACodeEntry(username);
         } else if (data.requires_slack_approval) {
           // Slack 2FA - show waiting screen and poll for approval
           pendingApprovalToken = data.pending_token;
@@ -5333,6 +5341,135 @@
         approvalCheckInterval = null;
       }
       pendingApprovalToken = null;
+      loginError = '';
+      renderLogin();
+    }
+
+    // Show 2FA code entry form (DM-based codes)
+    function show2FACodeEntry(username) {
+      pending2FAUsername = username;
+      document.getElementById('app').innerHTML = `
+        <div class="login-page">
+          <div class="login-container" style="text-align: center;">
+            <div class="login-logo">
+              <div class="login-logo-icon">🔐</div>
+              <div class="login-logo-title">Verification Code</div>
+            </div>
+            <p style="color: var(--text-secondary); font-size: 14px; margin-bottom: 8px;">
+              A verification code has been sent via Slack.
+            </p>
+            <p style="color: var(--text-muted); font-size: 13px; margin-bottom: 24px;">
+              Enter the 6-digit code to complete your login as <strong style="color: var(--text-primary);">${username}</strong>
+            </p>
+            <form onsubmit="handle2FACodeSubmit(event)" style="margin-bottom: 16px;">
+              <input type="text" id="2fa-code-input" class="login-input"
+                     placeholder="Enter 6-digit code"
+                     maxlength="6"
+                     pattern="[0-9]{6}"
+                     inputmode="numeric"
+                     style="text-align: center; font-size: 24px; letter-spacing: 8px; font-weight: 600;"
+                     required autofocus>
+              <div id="2fa-error" style="color: var(--status-offline); font-size: 13px; margin-top: 8px; min-height: 20px;"></div>
+              <button type="submit" class="login-btn" style="width: 100%; margin-top: 12px;">Verify Code</button>
+            </form>
+            <div style="display: flex; gap: 12px; justify-content: center;">
+              <button onclick="resend2FACode()" class="login-btn" style="background: var(--bg-elevated); border: 1px solid var(--border-default); flex: 1;">
+                Resend Code
+              </button>
+              <button onclick="cancel2FACodeEntry()" class="login-btn" style="background: var(--bg-elevated); border: 1px solid var(--border-default); flex: 1;">
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      `;
+    }
+
+    // Handle 2FA code form submission
+    async function handle2FACodeSubmit(event) {
+      event.preventDefault();
+      const code = document.getElementById('2fa-code-input').value.trim();
+      const errorEl = document.getElementById('2fa-error');
+
+      if (!code || code.length !== 6) {
+        errorEl.textContent = 'Please enter a 6-digit code';
+        return;
+      }
+
+      try {
+        const response = await fetch(`${API_URL}/api/auth/verify-2fa-code`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            session_id: pending2FASessionId,
+            code: code,
+            user_id: pending2FAUserId
+          })
+        });
+
+        const data = await response.json();
+
+        if (data.success) {
+          // Login successful!
+          authToken = data.token;
+          currentUser = data.user;
+          localStorage.setItem('authToken', authToken);
+          localStorage.setItem('currentUser', JSON.stringify(currentUser));
+          localStorage.setItem('lastSessionValidated', Date.now().toString());
+          loginError = '';
+          pending2FASessionId = null;
+          pending2FAUserId = null;
+          pending2FAUsername = null;
+
+          renderApp();
+
+          // Check if password reset is required
+          if (data.user && data.user.password_reset_required) {
+            setTimeout(() => showChangePasswordModal(true), 500);
+          }
+        } else {
+          errorEl.textContent = data.error || 'Invalid verification code';
+        }
+      } catch (e) {
+        errorEl.textContent = 'Connection error. Please try again.';
+      }
+    }
+
+    // Resend 2FA code
+    async function resend2FACode() {
+      try {
+        const response = await fetch(`${API_URL}/api/auth/resend-2fa-code`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            session_id: pending2FASessionId,
+            username: pending2FAUsername
+          })
+        });
+
+        const data = await response.json();
+        const errorEl = document.getElementById('2fa-error');
+
+        if (data.success) {
+          errorEl.style.color = 'var(--status-online)';
+          errorEl.textContent = 'A new code has been sent!';
+          setTimeout(() => {
+            errorEl.style.color = 'var(--status-offline)';
+            errorEl.textContent = '';
+          }, 3000);
+        } else {
+          errorEl.textContent = data.error || 'Failed to resend code';
+        }
+      } catch (e) {
+        document.getElementById('2fa-error').textContent = 'Connection error. Please try again.';
+      }
+    }
+
+    // Cancel 2FA code entry and go back to login
+    function cancel2FACodeEntry() {
+      pending2FASessionId = null;
+      pending2FAUserId = null;
+      pending2FAUsername = null;
       loginError = '';
       renderLogin();
     }
@@ -7512,7 +7649,14 @@
 
       // Show in right sidebar using the standard analytics container
       analyticsOpen = true;
-      analyticsDevice = { id: roomId, name: roomName, type: 'zoomRoom', isRoom: true, isZoomOnly: true };
+      analyticsDevice = {
+        id: roomId,
+        name: roomName,
+        type: 'zoomRoom',
+        isRoom: true,
+        isZoomOnly: true,
+        control_url: roomData.control_url
+      };
 
       // Mark device as selected in sidebar
       markDeviceSelected(roomId);
@@ -7608,6 +7752,11 @@
             <button onclick="navigator.clipboard.writeText('${roomData.zoom_serial || ''}'); showAlert('Serial copied!', 'success');" class="btn btn-sm btn-secondary" style="flex: 1; min-width: 100px;" ${!roomData.zoom_serial ? 'disabled' : ''}>
               📋 Copy Serial
             </button>
+            ${roomData.control_url ? `
+            <button onclick="window.open('${roomData.control_url}', '_blank')" class="btn btn-sm btn-primary" style="flex: 1; min-width: 100px;">
+              🎮 Control Room
+            </button>
+            ` : ''}
           </div>
 
           <div class="analytics-content">
@@ -7761,7 +7910,45 @@
       }
 
       const isPolyDevice = polyDeviceData !== null;
-      analyticsDevice = { id: deviceId, name: deviceName, type: deviceType, isRoom, isPolyDevice, polyDeviceData };
+
+      // For Zoom Rooms, fetch the control_url
+      let controlUrl = null;
+      if (deviceType === 'zoomRoom') {
+        try {
+          const zoomId = deviceId.replace('zoom-', '');
+          const response = await authFetch(`${API_URL}/api/zoom-rooms/unmatched`);
+          if (response.ok) {
+            const data = await response.json();
+            const room = data.rooms?.find(r => r.id === zoomId);
+            if (room) {
+              controlUrl = room.control_url;
+            }
+          }
+        } catch (e) {
+          console.error('Failed to fetch Zoom room control URL:', e);
+        }
+      } else if (deviceType === 'polyLens' && isRoom) {
+        // For Poly rooms, check if there's a matching Zoom room
+        try {
+          const response = await authFetch(`${API_URL}/api/poly-lens/by-floor`);
+          if (response.ok) {
+            const data = await response.json();
+            // Find the room devices
+            for (const floor in data) {
+              const devices = data[floor] || [];
+              const roomDevice = devices.find(d => d.room === deviceName);
+              if (roomDevice && roomDevice.control_url) {
+                controlUrl = roomDevice.control_url;
+                break;
+              }
+            }
+          }
+        } catch (e) {
+          console.error('Failed to fetch Poly room control URL:', e);
+        }
+      }
+
+      analyticsDevice = { id: deviceId, name: deviceName, type: deviceType, isRoom, isPolyDevice, polyDeviceData, control_url: controlUrl };
       analyticsOpen = true;
 
       // Add to breadcrumb navigation
@@ -7927,6 +8114,11 @@
               <button onclick="highlightDevice('${device.id}')" class="btn btn-sm btn-secondary" style="flex: 1; min-width: 100px;">
                 📍 Locate on Map
               </button>
+              ${device.control_url ? `
+              <button onclick="window.open('${device.control_url}', '_blank')" class="btn btn-sm btn-primary" style="flex: 1; min-width: 100px;">
+                🎮 Control Room
+              </button>
+              ` : ''}
             </div>
           ` : ''}
 
@@ -8404,6 +8596,7 @@
           zoom_serial: zoomRoom.zoom_serial,
           zoom_device_type: zoomRoom.zoom_device_type,
           zoom_devices: zoomRoom.zoom_devices || [],
+          control_url: zoomRoom.control_url,
           pos_x: null,
           pos_y: null
         });
@@ -8603,7 +8796,7 @@
           const isFav = isFavorite(device.id);
           deviceMarkersHTML += `
             <div class="device-marker ${popupBelowClass} ${disabledClass}" data-id="${device.id}" style="left: ${pos.x}%; top: ${pos.y}%;"
-              ${editMode ? 'draggable="true" onmousedown="startDrag(event, this)" onclick="event.stopPropagation(); event.preventDefault();"' : `onclick="event.stopPropagation(); openAnalytics('${device.id}', '${device.name.replace(/'/g, "\\'")}', '${device.type}')"`}
+              ${editMode ? 'draggable="true" onmousedown="startDrag(event, this)" onclick="event.stopPropagation(); event.preventDefault();"' : `onclick="event.stopPropagation(); openAnalytics('${device.id}', '${device.name.replace(/'/g, "\\'")}', '${device.type}', ${isRoomMarker})"`}
               oncontextmenu="showContextMenu(event, ${JSON.stringify({id: device.id, name: device.name, hostname: device.ip || device.hostname, url: device.url, device_type: device.type, notes: device.notes, maintenance: device.maintenance, disabled: device.disabled}).replace(/"/g, '&quot;')}); return false;">
               <button class="favorite-btn ${isFav ? 'active' : ''}" onclick="toggleFavorite('${device.id}', '${device.name.replace(/'/g, "\\'")}', '${device.type}', '${activeFloor}')" title="${isFav ? 'Remove from favorites' : 'Add to favorites'}">
                 ${isFav ? '★' : '☆'}

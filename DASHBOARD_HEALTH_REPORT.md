@@ -1,6 +1,6 @@
 # Dashboard Health Report - Office Monitor
-**Date:** 2026-02-15
-**Time:** 9:05:20 AM
+**Date:** 2026-03-12
+**Time:** 9:03:04 AM
 **Dashboard URL:** http://localhost:3002/dashboard.html
 **Test Duration:** 20s per category
 
@@ -8,11 +8,11 @@
 
 ## Executive Summary
 
-**Overall Health Score:** HEALTHY
-**Pass Rate:** 95.8%
-**Tests Passed:** 205
-**Tests Failed:** 9
-**Total Tests:** 214
+**Overall Health Score:** NEEDS ATTENTION
+**Pass Rate:** 63.5%
+**Tests Passed:** 87
+**Tests Failed:** 50
+**Total Tests:** 137
 
 ---
 
@@ -22,270 +22,229 @@
 
 | Test | Status | Details | Duration |
 |------|--------|---------|----------|
-| Health Check #1 | ✓ PASS | Monitors: 60, Uptime: 221542.92s | 670ms |
-| Response Time #1 | ✓ PASS | Response time: 670ms | 670ms |
-| Health Check #2 | ✓ PASS | Monitors: 60, Uptime: 221544.93s | 3ms |
-| Response Time #2 | ✓ PASS | Response time: 4ms | 4ms |
-| Health Check #3 | ✓ PASS | Monitors: 60, Uptime: 221546.93s | 2ms |
-| Response Time #3 | ✓ PASS | Response time: 2ms | 2ms |
-| Health Check #4 | ✓ PASS | Monitors: 60, Uptime: 221548.93s | 2ms |
-| Response Time #4 | ✓ PASS | Response time: 2ms | 2ms |
-| Health Check #5 | ✓ PASS | Monitors: 60, Uptime: 221550.93s | 2ms |
-| Response Time #5 | ✓ PASS | Response time: 2ms | 2ms |
-| Health Check #6 | ✓ PASS | Monitors: 60, Uptime: 221552.93s | 1ms |
-| Response Time #6 | ✓ PASS | Response time: 1ms | 1ms |
-| Health Check #7 | ✓ PASS | Monitors: 60, Uptime: 221554.93s | 3ms |
-| Response Time #7 | ✓ PASS | Response time: 3ms | 3ms |
-| Health Check #8 | ✓ PASS | Monitors: 60, Uptime: 221556.94s | 1ms |
-| Response Time #8 | ✓ PASS | Response time: 1ms | 1ms |
-| Health Check #9 | ✓ PASS | Monitors: 60, Uptime: 221558.94s | 2ms |
-| Response Time #9 | ✓ PASS | Response time: 3ms | 3ms |
-| Health Check #10 | ✓ PASS | Monitors: 60, Uptime: 221560.94s | 2ms |
-| Response Time #10 | ✓ PASS | Response time: 2ms | 2ms |
+| Health Check #1 | ✓ PASS | Monitors: 58, Uptime: 2552.86s | 13ms |
+| Response Time #1 | ✓ PASS | Response time: 13ms | 13ms |
+| Health Check #2 | ✓ PASS | Monitors: 58, Uptime: 2554.86s | 6ms |
+| Response Time #2 | ✓ PASS | Response time: 6ms | 6ms |
+| Health Check #3 | ✓ PASS | Monitors: 58, Uptime: 2556.87s | 3ms |
+| Response Time #3 | ✓ PASS | Response time: 3ms | 3ms |
+| Health Check #4 | ✓ PASS | Monitors: 58, Uptime: 2558.87s | 4ms |
+| Response Time #4 | ✓ PASS | Response time: 4ms | 4ms |
+| Health Check #5 | ✓ PASS | Monitors: 58, Uptime: 2560.88s | 4ms |
+| Response Time #5 | ✓ PASS | Response time: 4ms | 4ms |
+| Health Check #6 | ✓ PASS | Monitors: 58, Uptime: 2562.88s | 3ms |
+| Response Time #6 | ✓ PASS | Response time: 3ms | 3ms |
+| Health Check #7 | ✓ PASS | Monitors: 58, Uptime: 2564.89s | 4ms |
+| Response Time #7 | ✓ PASS | Response time: 4ms | 4ms |
+| Health Check #8 | ✓ PASS | Monitors: 58, Uptime: 2566.89s | 4ms |
+| Response Time #8 | ✓ PASS | Response time: 4ms | 4ms |
+| Health Check #9 | ✓ PASS | Monitors: 58, Uptime: 2568.90s | 4ms |
+| Response Time #9 | ✓ PASS | Response time: 4ms | 4ms |
+| Health Check #10 | ✓ PASS | Monitors: 58, Uptime: 2570.90s | 4ms |
+| Response Time #10 | ✓ PASS | Response time: 4ms | 4ms |
 
-### ✅ API Endpoints (100% pass rate)
+### ❌ API Endpoints (56% pass rate)
 
 | Test | Status | Details | Duration |
 |------|--------|---------|----------|
-| Get All Monitors #1 | ✓ PASS | Status: 200, 60 monitors | 4ms |
-| Get Monitors By Floor #1 | ✓ PASS | Status: 200, 4 floors | 3ms |
-| Get Poly Lens Devices #1 | ✓ PASS | Status: 200, 70 devices | 1ms |
-| Get Poly Lens By Floor #1 | ✓ PASS | Status: 200, 4 floors | 3ms |
-| Get Floor Plans #1 | ✓ PASS | Status: 200 | 5ms |
-| Get Floor Zones #1 | ✓ PASS | Status: 200 | 3ms |
-| Get Room Positions #1 | ✓ PASS | Status: 200 | 1ms |
-| Get Settings #1 | ✓ PASS | Status: 200 | 0ms |
+| Get All Monitors #1 | ✗ FAIL | Status: 401 | 4ms |
+| Get Monitors By Floor #1 | ✗ FAIL | Status: 401 | 1ms |
+| Get Poly Lens Devices #1 | ✗ FAIL | Status: 401 | 1ms |
+| Get Poly Lens By Floor #1 | ✗ FAIL | Status: 401 | 1ms |
+| Get Floor Plans #1 | ✓ PASS | Status: 200 | 7ms |
+| Get Floor Zones #1 | ✓ PASS | Status: 200 | 5ms |
+| Get Room Positions #1 | ✓ PASS | Status: 200 | 2ms |
+| Get Settings #1 | ✓ PASS | Status: 200 | 2ms |
 | Get Health Scores #1 | ✓ PASS | Status: 200 | 1ms |
-| Get All Monitors #2 | ✓ PASS | Status: 200, 60 monitors | 5ms |
-| Get Monitors By Floor #2 | ✓ PASS | Status: 200, 4 floors | 4ms |
-| Get Poly Lens Devices #2 | ✓ PASS | Status: 200, 70 devices | 1ms |
-| Get Poly Lens By Floor #2 | ✓ PASS | Status: 200, 4 floors | 3ms |
-| Get Floor Plans #2 | ✓ PASS | Status: 200 | 1ms |
-| Get Floor Zones #2 | ✓ PASS | Status: 200 | 2ms |
+| Get All Monitors #2 | ✗ FAIL | Status: 401 | 1ms |
+| Get Monitors By Floor #2 | ✗ FAIL | Status: 401 | 1ms |
+| Get Poly Lens Devices #2 | ✗ FAIL | Status: 401 | 1ms |
+| Get Poly Lens By Floor #2 | ✗ FAIL | Status: 401 | 1ms |
+| Get Floor Plans #2 | ✓ PASS | Status: 200 | 3ms |
+| Get Floor Zones #2 | ✓ PASS | Status: 200 | 1ms |
 | Get Room Positions #2 | ✓ PASS | Status: 200 | 1ms |
-| Get Settings #2 | ✓ PASS | Status: 200 | 2ms |
-| Get Health Scores #2 | ✓ PASS | Status: 200 | 1ms |
-| Get All Monitors #3 | ✓ PASS | Status: 200, 60 monitors | 4ms |
-| Get Monitors By Floor #3 | ✓ PASS | Status: 200, 4 floors | 3ms |
-| Get Poly Lens Devices #3 | ✓ PASS | Status: 200, 70 devices | 1ms |
-| Get Poly Lens By Floor #3 | ✓ PASS | Status: 200, 4 floors | 3ms |
-| Get Floor Plans #3 | ✓ PASS | Status: 200 | 1ms |
-| Get Floor Zones #3 | ✓ PASS | Status: 200 | 2ms |
-| Get Room Positions #3 | ✓ PASS | Status: 200 | 1ms |
+| Get Settings #2 | ✓ PASS | Status: 200 | 1ms |
+| Get Health Scores #2 | ✓ PASS | Status: 200 | 0ms |
+| Get All Monitors #3 | ✗ FAIL | Status: 401 | 2ms |
+| Get Monitors By Floor #3 | ✗ FAIL | Status: 401 | 1ms |
+| Get Poly Lens Devices #3 | ✗ FAIL | Status: 401 | 2ms |
+| Get Poly Lens By Floor #3 | ✗ FAIL | Status: 401 | 2ms |
+| Get Floor Plans #3 | ✓ PASS | Status: 200 | 3ms |
+| Get Floor Zones #3 | ✓ PASS | Status: 200 | 3ms |
+| Get Room Positions #3 | ✓ PASS | Status: 200 | 2ms |
 | Get Settings #3 | ✓ PASS | Status: 200 | 1ms |
 | Get Health Scores #3 | ✓ PASS | Status: 200 | 1ms |
-| Get All Monitors #4 | ✓ PASS | Status: 200, 60 monitors | 6ms |
-| Get Monitors By Floor #4 | ✓ PASS | Status: 200, 4 floors | 6ms |
-| Get Poly Lens Devices #4 | ✓ PASS | Status: 200, 70 devices | 1ms |
-| Get Poly Lens By Floor #4 | ✓ PASS | Status: 200, 4 floors | 4ms |
-| Get Floor Plans #4 | ✓ PASS | Status: 200 | 2ms |
-| Get Floor Zones #4 | ✓ PASS | Status: 200 | 3ms |
-| Get Room Positions #4 | ✓ PASS | Status: 200 | 1ms |
-| Get Settings #4 | ✓ PASS | Status: 200 | 1ms |
+| Get All Monitors #4 | ✗ FAIL | Status: 401 | 3ms |
+| Get Monitors By Floor #4 | ✗ FAIL | Status: 401 | 2ms |
+| Get Poly Lens Devices #4 | ✗ FAIL | Status: 401 | 2ms |
+| Get Poly Lens By Floor #4 | ✗ FAIL | Status: 401 | 2ms |
+| Get Floor Plans #4 | ✓ PASS | Status: 200 | 5ms |
+| Get Floor Zones #4 | ✓ PASS | Status: 200 | 4ms |
+| Get Room Positions #4 | ✓ PASS | Status: 200 | 2ms |
+| Get Settings #4 | ✓ PASS | Status: 200 | 2ms |
 | Get Health Scores #4 | ✓ PASS | Status: 200 | 1ms |
-| Get All Monitors #5 | ✓ PASS | Status: 200, 60 monitors | 5ms |
-| Get Monitors By Floor #5 | ✓ PASS | Status: 200, 4 floors | 6ms |
-| Get Poly Lens Devices #5 | ✓ PASS | Status: 200, 70 devices | 1ms |
-| Get Poly Lens By Floor #5 | ✓ PASS | Status: 200, 4 floors | 4ms |
-| Get Floor Plans #5 | ✓ PASS | Status: 200 | 1ms |
+| Get All Monitors #5 | ✗ FAIL | Status: 401 | 5ms |
+| Get Monitors By Floor #5 | ✗ FAIL | Status: 401 | 3ms |
+| Get Poly Lens Devices #5 | ✗ FAIL | Status: 401 | 2ms |
+| Get Poly Lens By Floor #5 | ✗ FAIL | Status: 401 | 3ms |
+| Get Floor Plans #5 | ✓ PASS | Status: 200 | 3ms |
 | Get Floor Zones #5 | ✓ PASS | Status: 200 | 3ms |
 | Get Room Positions #5 | ✓ PASS | Status: 200 | 2ms |
 | Get Settings #5 | ✓ PASS | Status: 200 | 1ms |
-| Get Health Scores #5 | ✓ PASS | Status: 200 | 2ms |
-| Get All Monitors #6 | ✓ PASS | Status: 200, 60 monitors | 7ms |
-| Get Monitors By Floor #6 | ✓ PASS | Status: 200, 4 floors | 4ms |
-| Get Poly Lens Devices #6 | ✓ PASS | Status: 200, 70 devices | 1ms |
-| Get Poly Lens By Floor #6 | ✓ PASS | Status: 200, 4 floors | 4ms |
-| Get Floor Plans #6 | ✓ PASS | Status: 200 | 2ms |
-| Get Floor Zones #6 | ✓ PASS | Status: 200 | 3ms |
-| Get Room Positions #6 | ✓ PASS | Status: 200 | 1ms |
-| Get Settings #6 | ✓ PASS | Status: 200 | 1ms |
+| Get Health Scores #5 | ✓ PASS | Status: 200 | 1ms |
+| Get All Monitors #6 | ✗ FAIL | Status: 401 | 3ms |
+| Get Monitors By Floor #6 | ✗ FAIL | Status: 401 | 1ms |
+| Get Poly Lens Devices #6 | ✗ FAIL | Status: 401 | 2ms |
+| Get Poly Lens By Floor #6 | ✗ FAIL | Status: 401 | 2ms |
+| Get Floor Plans #6 | ✓ PASS | Status: 200 | 4ms |
+| Get Floor Zones #6 | ✓ PASS | Status: 200 | 4ms |
+| Get Room Positions #6 | ✓ PASS | Status: 200 | 3ms |
+| Get Settings #6 | ✓ PASS | Status: 200 | 3ms |
 | Get Health Scores #6 | ✓ PASS | Status: 200 | 1ms |
-| Get All Monitors #7 | ✓ PASS | Status: 200, 60 monitors | 8ms |
-| Get Monitors By Floor #7 | ✓ PASS | Status: 200, 4 floors | 6ms |
-| Get Poly Lens Devices #7 | ✓ PASS | Status: 200, 70 devices | 2ms |
-| Get Poly Lens By Floor #7 | ✓ PASS | Status: 200, 4 floors | 6ms |
-| Get Floor Plans #7 | ✓ PASS | Status: 200 | 2ms |
+| Get All Monitors #7 | ✗ FAIL | Status: 401 | 3ms |
+| Get Monitors By Floor #7 | ✗ FAIL | Status: 401 | 2ms |
+| Get Poly Lens Devices #7 | ✗ FAIL | Status: 401 | 1ms |
+| Get Poly Lens By Floor #7 | ✗ FAIL | Status: 401 | 1ms |
+| Get Floor Plans #7 | ✓ PASS | Status: 200 | 3ms |
 | Get Floor Zones #7 | ✓ PASS | Status: 200 | 3ms |
 | Get Room Positions #7 | ✓ PASS | Status: 200 | 1ms |
 | Get Settings #7 | ✓ PASS | Status: 200 | 1ms |
-| Get Health Scores #7 | ✓ PASS | Status: 200 | 2ms |
+| Get Health Scores #7 | ✓ PASS | Status: 200 | 1ms |
 
-### ✅ Database (100% pass rate)
-
-| Test | Status | Details | Duration |
-|------|--------|---------|----------|
-| Monitors Query #1 | ✓ PASS | 60 monitors retrieved | 9ms |
-| Uptime Query #1 | ✓ PASS | Uptime: 0.00% | 5ms |
-| History Query #1 | ✓ PASS | 10 heartbeats | 2ms |
-| Printer Status Query #1 | ✓ PASS | Printer status retrieved | 1ms |
-| Monitors Query #2 | ✓ PASS | 60 monitors retrieved | 5ms |
-| Uptime Query #2 | ✓ PASS | Uptime: 0.00% | 1ms |
-| History Query #2 | ✓ PASS | 10 heartbeats | 0ms |
-| Printer Status Query #2 | ✓ PASS | Printer status retrieved | 0ms |
-| Monitors Query #3 | ✓ PASS | 60 monitors retrieved | 4ms |
-| Uptime Query #3 | ✓ PASS | Uptime: 0.00% | 1ms |
-| History Query #3 | ✓ PASS | 10 heartbeats | 1ms |
-| Printer Status Query #3 | ✓ PASS | Printer status retrieved | 0ms |
-| Monitors Query #4 | ✓ PASS | 60 monitors retrieved | 8ms |
-| Uptime Query #4 | ✓ PASS | Uptime: 0.00% | 2ms |
-| History Query #4 | ✓ PASS | 10 heartbeats | 1ms |
-| Printer Status Query #4 | ✓ PASS | Printer status retrieved | 1ms |
-| Monitors Query #5 | ✓ PASS | 60 monitors retrieved | 7ms |
-| Uptime Query #5 | ✓ PASS | Uptime: 0.00% | 1ms |
-| History Query #5 | ✓ PASS | 10 heartbeats | 1ms |
-| Printer Status Query #5 | ✓ PASS | Printer status retrieved | 1ms |
-
-### ❌ Monitoring (67% pass rate)
+### ❌ Database (0% pass rate)
 
 | Test | Status | Details | Duration |
 |------|--------|---------|----------|
-| Device Status Check #1 | ✓ PASS | Total: 28, Online: 6, Offline: 22 | 4ms |
-| Data Freshness #1 | ✗ FAIL | 28 devices with stale data | 5ms |
-| Poly Lens Status #1 | ✓ PASS | 67/70 devices connected | 1ms |
-| Device Status Check #2 | ✓ PASS | Total: 28, Online: 6, Offline: 22 | 5ms |
-| Data Freshness #2 | ✗ FAIL | 28 devices with stale data | 12ms |
-| Poly Lens Status #2 | ✓ PASS | 0/0 devices connected | 1ms |
-| Device Status Check #3 | ✓ PASS | Total: 28, Online: 6, Offline: 22 | 5ms |
-| Data Freshness #3 | ✗ FAIL | 28 devices with stale data | 5ms |
-| Poly Lens Status #3 | ✓ PASS | 0/0 devices connected | 1ms |
-| Device Status Check #4 | ✓ PASS | Total: 28, Online: 6, Offline: 22 | 4ms |
-| Data Freshness #4 | ✗ FAIL | 28 devices with stale data | 4ms |
-| Poly Lens Status #4 | ✓ PASS | 0/0 devices connected | 1ms |
-| Device Status Check #5 | ✓ PASS | Total: 28, Online: 6, Offline: 22 | 6ms |
-| Data Freshness #5 | ✗ FAIL | 28 devices with stale data | 6ms |
-| Poly Lens Status #5 | ✓ PASS | 0/0 devices connected | 1ms |
+| Monitors Query #1 | ✗ FAIL | 0 monitors retrieved | 2ms |
+| Monitors Query #2 | ✗ FAIL | 0 monitors retrieved | 4ms |
+| Monitors Query #3 | ✗ FAIL | 0 monitors retrieved | 4ms |
+| Monitors Query #4 | ✗ FAIL | 0 monitors retrieved | 6ms |
+| Monitors Query #5 | ✗ FAIL | 0 monitors retrieved | 6ms |
 
-### ✅ Printers (100% pass rate)
+### ❌ Monitoring (0% pass rate)
 
 | Test | Status | Details | Duration |
 |------|--------|---------|----------|
-| Printer Count #1 | ✓ PASS | Found 6 printers | 8ms |
-| Israel -1st Floor Bunker Status #1 | ✓ PASS | No toner data | 1ms |
-| Israel - 2nd Floor Bunker Status #1 | ✓ PASS | No toner data | 1ms |
-| Israel - 1st Floor Kitchen Status #1 | ✓ PASS | No toner data | 1ms |
-| Floor Assignment #1 | ✓ PASS | All printers have valid floors | 0ms |
-| Serial Number Field #1 | ✓ PASS | Some printers have serial numbers | 0ms |
-| Printer Count #2 | ✓ PASS | Found 6 printers | 7ms |
-| Israel -1st Floor Bunker Status #2 | ✓ PASS | No toner data | 2ms |
-| Israel - 2nd Floor Bunker Status #2 | ✓ PASS | No toner data | 1ms |
-| Israel - 1st Floor Kitchen Status #2 | ✓ PASS | No toner data | 1ms |
-| Floor Assignment #2 | ✓ PASS | All printers have valid floors | 0ms |
-| Serial Number Field #2 | ✓ PASS | Some printers have serial numbers | 0ms |
-| Printer Count #3 | ✓ PASS | Found 6 printers | 5ms |
-| Israel -1st Floor Bunker Status #3 | ✓ PASS | No toner data | 1ms |
-| Israel - 2nd Floor Bunker Status #3 | ✓ PASS | No toner data | 1ms |
-| Israel - 1st Floor Kitchen Status #3 | ✓ PASS | No toner data | 1ms |
-| Floor Assignment #3 | ✓ PASS | All printers have valid floors | 0ms |
-| Serial Number Field #3 | ✓ PASS | Some printers have serial numbers | 0ms |
-| Printer Count #4 | ✓ PASS | Found 6 printers | 5ms |
-| Israel -1st Floor Bunker Status #4 | ✓ PASS | No toner data | 1ms |
-| Israel - 2nd Floor Bunker Status #4 | ✓ PASS | No toner data | 2ms |
-| Israel - 1st Floor Kitchen Status #4 | ✓ PASS | No toner data | 1ms |
-| Floor Assignment #4 | ✓ PASS | All printers have valid floors | 0ms |
-| Serial Number Field #4 | ✓ PASS | Some printers have serial numbers | 0ms |
+| Poly Lens Status #1 | ✗ FAIL | Poly Lens API unavailable | 4ms |
+| Poly Lens Status #2 | ✗ FAIL | Poly Lens API unavailable | 1ms |
+| Poly Lens Status #3 | ✗ FAIL | Poly Lens API unavailable | 1ms |
+| Poly Lens Status #4 | ✗ FAIL | Poly Lens API unavailable | 1ms |
+| Poly Lens Status #5 | ✗ FAIL | Poly Lens API unavailable | 2ms |
+
+### ❌ Printers (0% pass rate)
+
+| Test | Status | Details | Duration |
+|------|--------|---------|----------|
+| Printer Count #1 | ✗ FAIL | Found 0 printers | 4ms |
+| Printer Count #2 | ✗ FAIL | Found 0 printers | 4ms |
+| Printer Count #3 | ✗ FAIL | Found 0 printers | 4ms |
+| Printer Count #4 | ✗ FAIL | Found 0 printers | 7ms |
 
 ### ✅ Dashboard (100% pass rate)
 
 | Test | Status | Details | Duration |
 |------|--------|---------|----------|
-| Dashboard HTML #1 | ✓ PASS | Loaded (459668 bytes) | 6ms |
-| Settings HTML #1 | ✓ PASS | Loaded (86675 bytes) | 2ms |
-| 3D Floor View HTML #1 | ✓ PASS | Loaded (106459 bytes) | 1ms |
-| Floor Plans #1 | ✓ PASS | 4 floor plans configured | 6ms |
-| Floor Zones #1 | ✓ PASS | NaN zones defined | 3ms |
+| Dashboard HTML #1 | ✓ PASS | Loaded (518970 bytes) | 14ms |
+| Settings HTML #1 | ✓ PASS | Loaded (112561 bytes) | 3ms |
+| 3D Floor View HTML #1 | ✓ PASS | Loaded (108893 bytes) | 3ms |
+| Floor Plans #1 | ✓ PASS | 4 floor plans configured | 10ms |
+| Floor Zones #1 | ✓ PASS | NaN zones defined | 4ms |
 | Room Positions #1 | ✓ PASS | Room positions loaded | 1ms |
-| Dashboard HTML #2 | ✓ PASS | Loaded (459668 bytes) | 7ms |
-| Settings HTML #2 | ✓ PASS | Loaded (86675 bytes) | 3ms |
-| 3D Floor View HTML #2 | ✓ PASS | Loaded (106459 bytes) | 2ms |
-| Floor Plans #2 | ✓ PASS | 4 floor plans configured | 2ms |
-| Floor Zones #2 | ✓ PASS | NaN zones defined | 5ms |
+| Dashboard HTML #2 | ✓ PASS | Loaded (518970 bytes) | 8ms |
+| Settings HTML #2 | ✓ PASS | Loaded (112561 bytes) | 5ms |
+| 3D Floor View HTML #2 | ✓ PASS | Loaded (108893 bytes) | 5ms |
+| Floor Plans #2 | ✓ PASS | 4 floor plans configured | 3ms |
+| Floor Zones #2 | ✓ PASS | NaN zones defined | 4ms |
 | Room Positions #2 | ✓ PASS | Room positions loaded | 1ms |
-| Dashboard HTML #3 | ✓ PASS | Loaded (459668 bytes) | 6ms |
-| Settings HTML #3 | ✓ PASS | Loaded (86675 bytes) | 2ms |
-| 3D Floor View HTML #3 | ✓ PASS | Loaded (106459 bytes) | 1ms |
-| Floor Plans #3 | ✓ PASS | 4 floor plans configured | 2ms |
-| Floor Zones #3 | ✓ PASS | NaN zones defined | 2ms |
+| Dashboard HTML #3 | ✓ PASS | Loaded (518970 bytes) | 8ms |
+| Settings HTML #3 | ✓ PASS | Loaded (112561 bytes) | 2ms |
+| 3D Floor View HTML #3 | ✓ PASS | Loaded (108893 bytes) | 2ms |
+| Floor Plans #3 | ✓ PASS | 4 floor plans configured | 3ms |
+| Floor Zones #3 | ✓ PASS | NaN zones defined | 4ms |
 | Room Positions #3 | ✓ PASS | Room positions loaded | 1ms |
-| Dashboard HTML #4 | ✓ PASS | Loaded (459668 bytes) | 6ms |
-| Settings HTML #4 | ✓ PASS | Loaded (86675 bytes) | 2ms |
-| 3D Floor View HTML #4 | ✓ PASS | Loaded (106459 bytes) | 2ms |
+| Dashboard HTML #4 | ✓ PASS | Loaded (518970 bytes) | 8ms |
+| Settings HTML #4 | ✓ PASS | Loaded (112561 bytes) | 3ms |
+| 3D Floor View HTML #4 | ✓ PASS | Loaded (108893 bytes) | 4ms |
 | Floor Plans #4 | ✓ PASS | 4 floor plans configured | 3ms |
 | Floor Zones #4 | ✓ PASS | NaN zones defined | 5ms |
 | Room Positions #4 | ✓ PASS | Room positions loaded | 2ms |
 
-### ✅ Analytics (100% pass rate)
+### ❌ Poly Lens (0% pass rate)
 
 | Test | Status | Details | Duration |
 |------|--------|---------|----------|
-| 24h Uptime #1 | ✓ PASS | Uptime: 2.08%, Checks: 48 | 3ms |
-| 7-Day Uptime #1 | ✓ PASS | Uptime: 87.77% | 91ms |
-| History Data #1 | ✓ PASS | 50 heartbeat records | 6ms |
-| Health Scores #1 | ✓ PASS | Average score: 0.0 | 2ms |
-| 24h Uptime #2 | ✓ PASS | Uptime: 2.08%, Checks: 48 | 0ms |
-| 7-Day Uptime #2 | ✓ PASS | Uptime: 87.77% | 9ms |
-| History Data #2 | ✓ PASS | 50 heartbeat records | 1ms |
-| Health Scores #2 | ✓ PASS | Average score: 0.0 | 1ms |
-| 24h Uptime #3 | ✓ PASS | Uptime: 2.08%, Checks: 48 | 2ms |
-| 7-Day Uptime #3 | ✓ PASS | Uptime: 87.77% | 12ms |
-| History Data #3 | ✓ PASS | 50 heartbeat records | 5ms |
-| Health Scores #3 | ✓ PASS | Average score: 0.0 | 3ms |
-| 24h Uptime #4 | ✓ PASS | Uptime: 2.08%, Checks: 48 | 2ms |
-| 7-Day Uptime #4 | ✓ PASS | Uptime: 87.77% | 10ms |
-| History Data #4 | ✓ PASS | 50 heartbeat records | 1ms |
-| Health Scores #4 | ✓ PASS | Average score: 0.0 | 2ms |
+| Integration #1 | ✗ FAIL | Poly Lens API not responding | 4ms |
+| Integration #2 | ✗ FAIL | Poly Lens API not responding | 4ms |
+| Integration #3 | ✗ FAIL | Poly Lens API not responding | 6ms |
+| Integration #4 | ✗ FAIL | Poly Lens API not responding | 4ms |
 
-### ✅ Poly Lens (100% pass rate)
+### ❌ 3D View (67% pass rate)
 
 | Test | Status | Details | Duration |
 |------|--------|---------|----------|
-| Devices Fetch #1 | ✓ PASS | 70 devices, 67 connected, 34 rooms | 2ms |
-| Floor Grouping #1 | ✓ PASS | Devices on 4 floors: 1st Floor, 2nd Floor, 3rd Floor, 5th Floor | 5ms |
-| Device Types #1 | ✓ PASS | Video Systems: 34, Tablets: 36 | 0ms |
-| Device History #1 | ✓ PASS | History available | 2ms |
-| Devices Fetch #2 | ✓ PASS | 70 devices, 67 connected, 34 rooms | 2ms |
-| Floor Grouping #2 | ✓ PASS | Devices on 4 floors: 1st Floor, 2nd Floor, 3rd Floor, 5th Floor | 6ms |
-| Device Types #2 | ✓ PASS | Video Systems: 34, Tablets: 36 | 0ms |
-| Device History #2 | ✓ PASS | History available | 1ms |
-| Devices Fetch #3 | ✓ PASS | 70 devices, 67 connected, 34 rooms | 4ms |
-| Floor Grouping #3 | ✓ PASS | Devices on 4 floors: 1st Floor, 2nd Floor, 3rd Floor, 5th Floor | 4ms |
-| Device Types #3 | ✓ PASS | Video Systems: 34, Tablets: 36 | 0ms |
-| Device History #3 | ✓ PASS | History available | 1ms |
-| Devices Fetch #4 | ✓ PASS | 70 devices, 67 connected, 34 rooms | 5ms |
-| Floor Grouping #4 | ✓ PASS | Devices on 4 floors: 1st Floor, 2nd Floor, 3rd Floor, 5th Floor | 8ms |
-| Device Types #4 | ✓ PASS | Video Systems: 34, Tablets: 36 | 0ms |
-| Device History #4 | ✓ PASS | History available | 2ms |
-
-### ❌ 3D View (75% pass rate)
-
-| Test | Status | Details | Duration |
-|------|--------|---------|----------|
-| Page Load #1 | ✓ PASS | Loaded (106459 bytes) | 5ms |
-| Zone Data #1 | ✗ FAIL | 0 zones, 0 wall vertices | 6ms |
-| Device Positions #1 | ✓ PASS | 54/60 devices positioned | 0ms |
+| Page Load #1 | ✓ PASS | Loaded (108893 bytes) | 5ms |
+| Zone Data #1 | ✗ FAIL | 0 zones, 0 wall vertices | 5ms |
 | Room Positions #1 | ✓ PASS | 49 rooms positioned | 2ms |
-| Page Load #2 | ✓ PASS | Loaded (106459 bytes) | 5ms |
+| Page Load #2 | ✓ PASS | Loaded (108893 bytes) | 4ms |
 | Zone Data #2 | ✗ FAIL | 0 zones, 0 wall vertices | 5ms |
-| Device Positions #2 | ✓ PASS | 54/60 devices positioned | 0ms |
-| Room Positions #2 | ✓ PASS | 49 rooms positioned | 2ms |
-| Page Load #3 | ✓ PASS | Loaded (106459 bytes) | 6ms |
-| Zone Data #3 | ✗ FAIL | 0 zones, 0 wall vertices | 8ms |
-| Device Positions #3 | ✓ PASS | 54/60 devices positioned | 0ms |
-| Room Positions #3 | ✓ PASS | 49 rooms positioned | 1ms |
-| Page Load #4 | ✓ PASS | Loaded (106459 bytes) | 5ms |
-| Zone Data #4 | ✗ FAIL | 0 zones, 0 wall vertices | 5ms |
-| Device Positions #4 | ✓ PASS | 54/60 devices positioned | 0ms |
-| Room Positions #4 | ✓ PASS | 49 rooms positioned | 2ms |
+| Room Positions #2 | ✓ PASS | 49 rooms positioned | 3ms |
+| Page Load #3 | ✓ PASS | Loaded (108893 bytes) | 5ms |
+| Zone Data #3 | ✗ FAIL | 0 zones, 0 wall vertices | 5ms |
+| Room Positions #3 | ✓ PASS | 49 rooms positioned | 2ms |
+| Page Load #4 | ✓ PASS | Loaded (108893 bytes) | 5ms |
+| Zone Data #4 | ✗ FAIL | 0 zones, 0 wall vertices | 6ms |
+| Room Positions #4 | ✓ PASS | 49 rooms positioned | 3ms |
 
 ---
 
 ## Failed Tests Summary
 
-- **Monitoring / Data Freshness #1**: 28 devices with stale data
-- **Monitoring / Data Freshness #2**: 28 devices with stale data
-- **Monitoring / Data Freshness #3**: 28 devices with stale data
-- **Monitoring / Data Freshness #4**: 28 devices with stale data
-- **Monitoring / Data Freshness #5**: 28 devices with stale data
+- **API Endpoints / Get All Monitors #1**: Status: 401
+- **API Endpoints / Get Monitors By Floor #1**: Status: 401
+- **API Endpoints / Get Poly Lens Devices #1**: Status: 401
+- **API Endpoints / Get Poly Lens By Floor #1**: Status: 401
+- **API Endpoints / Get All Monitors #2**: Status: 401
+- **API Endpoints / Get Monitors By Floor #2**: Status: 401
+- **API Endpoints / Get Poly Lens Devices #2**: Status: 401
+- **API Endpoints / Get Poly Lens By Floor #2**: Status: 401
+- **API Endpoints / Get All Monitors #3**: Status: 401
+- **API Endpoints / Get Monitors By Floor #3**: Status: 401
+- **API Endpoints / Get Poly Lens Devices #3**: Status: 401
+- **API Endpoints / Get Poly Lens By Floor #3**: Status: 401
+- **API Endpoints / Get All Monitors #4**: Status: 401
+- **API Endpoints / Get Monitors By Floor #4**: Status: 401
+- **API Endpoints / Get Poly Lens Devices #4**: Status: 401
+- **API Endpoints / Get Poly Lens By Floor #4**: Status: 401
+- **API Endpoints / Get All Monitors #5**: Status: 401
+- **API Endpoints / Get Monitors By Floor #5**: Status: 401
+- **API Endpoints / Get Poly Lens Devices #5**: Status: 401
+- **API Endpoints / Get Poly Lens By Floor #5**: Status: 401
+- **API Endpoints / Get All Monitors #6**: Status: 401
+- **API Endpoints / Get Monitors By Floor #6**: Status: 401
+- **API Endpoints / Get Poly Lens Devices #6**: Status: 401
+- **API Endpoints / Get Poly Lens By Floor #6**: Status: 401
+- **API Endpoints / Get All Monitors #7**: Status: 401
+- **API Endpoints / Get Monitors By Floor #7**: Status: 401
+- **API Endpoints / Get Poly Lens Devices #7**: Status: 401
+- **API Endpoints / Get Poly Lens By Floor #7**: Status: 401
+- **Database / Monitors Query #1**: 0 monitors retrieved
+- **Database / Monitors Query #2**: 0 monitors retrieved
+- **Database / Monitors Query #3**: 0 monitors retrieved
+- **Database / Monitors Query #4**: 0 monitors retrieved
+- **Database / Monitors Query #5**: 0 monitors retrieved
+- **Monitoring / Poly Lens Status #1**: Poly Lens API unavailable
+- **Monitoring / Poly Lens Status #2**: Poly Lens API unavailable
+- **Monitoring / Poly Lens Status #3**: Poly Lens API unavailable
+- **Monitoring / Poly Lens Status #4**: Poly Lens API unavailable
+- **Monitoring / Poly Lens Status #5**: Poly Lens API unavailable
+- **Printers / Printer Count #1**: Found 0 printers
+- **Printers / Printer Count #2**: Found 0 printers
+- **Printers / Printer Count #3**: Found 0 printers
+- **Printers / Printer Count #4**: Found 0 printers
+- **Poly Lens / Integration #1**: Poly Lens API not responding
+- **Poly Lens / Integration #2**: Poly Lens API not responding
+- **Poly Lens / Integration #3**: Poly Lens API not responding
+- **Poly Lens / Integration #4**: Poly Lens API not responding
 - **3D View / Zone Data #1**: 0 zones, 0 wall vertices
 - **3D View / Zone Data #2**: 0 zones, 0 wall vertices
 - **3D View / Zone Data #3**: 0 zones, 0 wall vertices
@@ -295,11 +254,13 @@
 
 ## Recommendations
 
-1. System is healthy - continue regular monitoring
-2. Review any failed tests above for potential improvements
+1. **URGENT**: Multiple test failures detected
+2. Check if server is running: `curl http://localhost:3002/api/health`
+3. Review server logs: `pm2 logs office-monitor`
+4. Restart server if necessary: `pm2 restart office-monitor`
 
 ---
 
-**Report Generated:** 2026-02-15T07:05:20.278Z
-**Test Categories:** 9
-**Total Test Duration:** ~3.0 minutes
+**Report Generated:** 2026-03-12T07:03:04.873Z
+**Test Categories:** 8
+**Total Test Duration:** ~2.7 minutes

@@ -10,11 +10,25 @@ Office IT monitoring dashboard for tracking network devices, printers, and Zoom 
 
 ## Owner
 
-**Angel Chen-Asraf** - IT Admin
+**Angel Chen-Asraf** - IT/Endpoint Engineering at Teads
+
+Works on device management, endpoint configuration, MDM systems (Kandji, Intune), and IT infrastructure. Also administering Claude team account rollout.
+
+## Working Preferences
+
 - Prefers working solutions over incomplete rewrites (V2 was scrapped)
 - Likes parallel agents for efficiency
 - Always create save points before major changes
 - Test in Chrome after changes to verify nothing broke
+- Focus on improvements/cleanup, not feature additions
+- Be direct, skip unnecessary explanations
+
+## Project History
+
+**Key challenges solved:**
+- Icon positioning breaking when sidebar collapsed → migrated from absolute pixels to percentage-based positioning
+- Built AI agent prompt for automated dashboard health monitoring
+- V2 React rewrite was scrapped (not good enough) → staying with V1
 
 ## Project State
 

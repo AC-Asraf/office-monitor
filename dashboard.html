@@ -1569,10 +1569,6 @@
       padding: var(--space-sm);
     }
 
-    .device-category {
-      margin-bottom: var(--space-sm);
-    }
-
     .category-header {
       display: flex;
       align-items: center;
@@ -2919,7 +2915,15 @@
 
     /* ==================== ENHANCED SIDEBAR COMPONENTS ==================== */
     .device-category {
-      margin-bottom: var(--space-sm);
+      margin-bottom: var(--space-md);
+      padding-bottom: var(--space-md);
+      border-bottom: 1px solid var(--border-subtle);
+    }
+
+    .device-category:last-child {
+      border-bottom: none;
+      margin-bottom: 0;
+      padding-bottom: 0;
     }
 
     .category-header {
@@ -3473,7 +3477,7 @@
     }
 
     .sidebar-toner-dot.black { background: #1a1a1a; border: 1px solid #444; }
-    .sidebar-toner-dot.cyan { background: #06B6D4; }
+    .sidebar-toner-dot.cyan { background: var(--accent-cyan); }
     .sidebar-toner-dot.magenta { background: #EC4899; }
     .sidebar-toner-dot.yellow { background: #EAB308; }
     .sidebar-toner-dot.low { opacity: 0.3; }
@@ -3930,9 +3934,9 @@
 
     .favorite-btn.active {
       opacity: 1;
-      color: #F59E0B;
-      background: rgba(245, 158, 11, 0.15);
-      border-color: #F59E0B;
+      color: var(--status-warning);
+      background: var(--status-warning-bg);
+      border-color: var(--status-warning);
     }
 
     .favorites-panel {
@@ -4092,6 +4096,15 @@
       white-space: nowrap;
       overflow: hidden;
       text-overflow: ellipsis;
+      position: relative;
+      cursor: default;
+    }
+
+    /* Tooltip on hover for truncated activity feed text */
+    .activity-feed-item:hover .activity-feed-text {
+      overflow: visible;
+      white-space: normal;
+      word-break: break-word;
     }
 
     .activity-feed-time {
@@ -9517,14 +9530,18 @@
             </div>
 
             <div class="footer-right">
+              ${apiStatus.monitors.monitorCount > 0 ? `
               <div class="data-source" onclick="showDataSourceInfo('monitors')">
                 <span style="color: ${apiStatus.monitors.connected ? 'var(--status-online)' : 'var(--status-offline)'};">●</span>
                 Monitors (${apiStatus.monitors.monitorCount})
               </div>
+              ` : ''}
+              ${apiStatus.polyLens.deviceCount > 0 ? `
               <div class="data-source" onclick="showDataSourceInfo('polylens')">
                 <span style="color: ${apiStatus.polyLens.configured ? 'var(--status-online)' : 'var(--status-offline)'};">●</span>
                 Poly Lens (${apiStatus.polyLens.deviceCount})
               </div>
+              ` : ''}
             </div>
           </footer>
         </div>
@@ -10370,7 +10387,7 @@
           </div>
           <div class="activity-feed-list">
             ${activityFeed.slice(0, 15).map(item => `
-              <div class="activity-feed-item">
+              <div class="activity-feed-item" title="${sanitizeHTML(item.message).replace(/"/g, '&quot;')}">
                 <div class="activity-feed-icon ${item.type}">
                   ${item.type === 'online' ? '🟢' : item.type === 'offline' ? '🔴' : '⚠️'}
                 </div>

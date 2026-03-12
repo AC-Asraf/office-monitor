@@ -55,14 +55,16 @@ const ENV_CONFIG = {
 // Warn about missing recommended variables
 const missingRecommended = ENV_CONFIG.recommended.filter(key => !process.env[key]);
 if (missingRecommended.length > 0) {
-  console.warn(`[WARN] Missing recommended environment variables: ${missingRecommended.join(', ')}`);
+  // Note: logger not defined yet, using console directly for startup warnings
+  console.warn('[WARN] Missing recommended environment variables:', missingRecommended.join(', '));
   console.warn('[WARN] Some features may not work properly');
 }
 
 // Validate sensitive variables aren't exposed in logs
 ENV_CONFIG.sensitive.forEach(key => {
   if (process.env[key] && process.env.LOG_LEVEL === 'debug') {
-    console.warn(`[WARN] Sensitive variable ${key} is set - ensure debug logging doesn't expose it`);
+    // Note: logger not defined yet, using console directly for startup warnings
+    console.warn('[WARN] Sensitive variable', key, 'is set - ensure debug logging doesn\'t expose it');
   }
 });
 
@@ -77,7 +79,8 @@ if (AUDIT_LOG_ENABLED && !fs.existsSync(logsDir)) {
   try {
     fs.mkdirSync(logsDir, { recursive: true, mode: 0o750 });
   } catch (e) {
-    console.warn(`[WARN] Could not create audit log directory: ${e.message}`);
+    // Note: logger not defined yet, using console directly for startup warnings
+    console.warn('[WARN] Could not create audit log directory:', e.message);
   }
 }
 
@@ -94,7 +97,7 @@ function auditLog(event, details = {}) {
 
   // Log to console in development
   if (process.env.NODE_ENV !== 'production') {
-    console.log(`[AUDIT] ${event}:`, JSON.stringify(details));
+    logger.info(`[AUDIT] ${event}:`, JSON.stringify(details));
   }
 
   // Append to audit log file
@@ -160,7 +163,7 @@ app.use(cors({
     if (allowedOrigins.some(allowed => origin.startsWith(allowed.replace(':3002', '')))) {
       return callback(null, true);
     }
-    console.warn(`CORS blocked origin: ${origin}`);
+    logger.warn(`CORS blocked origin: ${origin}`);
     return callback(new Error('Not allowed by CORS'), false);
   },
   credentials: true,
@@ -371,14 +374,14 @@ if (process.platform !== 'win32') {
     const mode = stats.mode & 0o777;
     // Warn if database is world-readable or world-writable
     if (mode & 0o044) {
-      console.warn('[SECURITY] Database file has overly permissive read permissions');
+      logger.warn('[SECURITY] Database file has overly permissive read permissions');
       // Try to fix permissions to owner-only (0600)
       try {
         fs.chmodSync(dbPath, 0o600);
-        console.log('[SECURITY] Database file permissions corrected to 600');
+        logger.info('[SECURITY] Database file permissions corrected to 600');
         auditLog('DB_PERMISSIONS_FIXED', { path: dbPath, oldMode: mode.toString(8), newMode: '600' });
       } catch (e) {
-        console.warn('[SECURITY] Could not fix database permissions:', e.message);
+        logger.warn('[SECURITY] Could not fix database permissions:', e.message);
       }
     }
   } catch (e) {
@@ -977,27 +980,27 @@ const existingAdmin = db.prepare('SELECT id, password FROM users WHERE username 
 if (!existingAdmin) {
   const hashedPassword = bcrypt.hashSync(defaultAdminPassword, 10);
   db.prepare('INSERT INTO users (username, password, role, password_reset_required) VALUES (?, ?, ?, 1)').run(defaultAdminUsername, hashedPassword, 'admin');
-  console.log('Created default admin user (password change required on first login)');
+  logger.info('Created default admin user (password change required on first login)');
   if (!process.env.DEFAULT_ADMIN_PASSWORD) {
-    console.log(`⚠️  IMPORTANT: Generated temporary admin password: ${defaultAdminPassword}`);
-    console.log('   Please change this immediately after first login!');
+    logger.warn('IMPORTANT: Generated temporary admin password:', defaultAdminPassword);
+    logger.warn('Please change this immediately after first login!');
   }
 } else if (!existingAdmin.password.startsWith('$2')) {
   // Migrate existing plain text password to hashed
   const hashedPassword = bcrypt.hashSync(existingAdmin.password, 10);
   db.prepare('UPDATE users SET password = ? WHERE id = ?').run(hashedPassword, existingAdmin.id);
-  console.log('Migrated admin password to hashed format');
+  logger.info('Migrated admin password to hashed format');
 }
 
 // Migrate all other users with plain text passwords to hashed
 const usersToMigrate = db.prepare('SELECT id, password FROM users WHERE password NOT LIKE ?').all('$2%');
 if (usersToMigrate.length > 0) {
-  console.log(`Migrating ${usersToMigrate.length} user passwords to hashed format...`);
+  logger.info(`Migrating ${usersToMigrate.length} user passwords to hashed format...`);
   usersToMigrate.forEach(user => {
     const hashedPassword = bcrypt.hashSync(user.password, 10);
     db.prepare('UPDATE users SET password = ? WHERE id = ?').run(hashedPassword, user.id);
   });
-  console.log('Password migration complete');
+  logger.info('Password migration complete');
 }
 
 // Initialize default device types
@@ -1061,7 +1064,7 @@ function loadPreviousStatus() {
       });
     }
   }
-  console.log(`Loaded previous status for ${monitorStatus.size} monitors`);
+  logger.info(`Loaded previous status for ${monitorStatus.size} monitors`);
 }
 
 // Load previous status immediately
@@ -1185,12 +1188,12 @@ function generate2FACode() {
 // Send a 2FA verification code via Slack DM
 async function send2FACodeViaDM(userId, username) {
   if (!SLACK_BOT_TOKEN) {
-    console.warn('Slack Bot Token not configured, 2FA DM disabled');
+    logger.warn('Slack Bot Token not configured, 2FA DM disabled');
     return { success: false, error: 'Slack 2FA not configured' };
   }
 
   if (!SLACK_ADMIN_USER_ID) {
-    console.warn('Slack Admin User ID not configured, 2FA DM disabled');
+    logger.warn('Slack Admin User ID not configured, 2FA DM disabled');
     return { success: false, error: 'Slack admin user not configured' };
   }
 
@@ -1223,15 +1226,15 @@ async function send2FACodeViaDM(userId, username) {
     const result = await response.json();
 
     if (!result.ok) {
-      console.error('Failed to send Slack 2FA code:', result.error);
+      logger.error('Failed to send Slack 2FA code:', result.error);
       pending2FACodes.delete(sessionId);
       return { success: false, error: `Slack API error: ${result.error}` };
     }
 
-    console.log(`2FA code sent via Slack DM for user ${username}`);
+    logger.info(`2FA code sent via Slack DM for user ${username}`);
     return { success: true, sessionId };
   } catch (error) {
-    console.error('Error sending Slack 2FA code:', error.message);
+    logger.error('Error sending Slack 2FA code:', error.message);
     pending2FACodes.delete(sessionId);
     return { success: false, error: 'Failed to send verification code' };
   }
@@ -1257,7 +1260,7 @@ function verify2FACode(sessionId, code) {
   // Code is valid - remove it and return success
   const userId = pending.userId;
   pending2FACodes.delete(sessionId);
-  console.log(`2FA code verified successfully for user ID ${userId}`);
+  logger.info(`2FA code verified successfully for user ID ${userId}`);
   return { valid: true, userId };
 }
 
@@ -1295,7 +1298,7 @@ async function resend2FACode(sessionId, username) {
       return { success: false, error: `Slack API error: ${result.error}` };
     }
 
-    console.log(`2FA code resent via Slack DM for user ${username}`);
+    logger.info(`2FA code resent via Slack DM for user ${username}`);
     return { success: true };
   } catch (error) {
     return { success: false, error: 'Failed to resend verification code' };
@@ -1372,10 +1375,10 @@ function rotateSessionIfNeeded(session) {
   // Mark rotation in progress BEFORE database update
   rotationInProgress.set(sessionId, { newToken, timestamp: now });
 
-  console.log('TOKEN ROTATION:');
-  console.log('  Old token:', oldToken.substring(0, 25) + '...');
-  console.log('  New token:', newToken.substring(0, 25) + '...');
-  console.log('  Session ID:', sessionId);
+  logger.info('TOKEN ROTATION:');
+  logger.info('  Old token:', oldToken.substring(0, 25) + '...');
+  logger.info('  New token:', newToken.substring(0, 25) + '...');
+  logger.info('  Session ID:', sessionId);
 
   // Update session with new token
   db.prepare(`
@@ -1438,18 +1441,18 @@ function getSessionWithGrace(token) {
 function authMiddleware(req, res, next) {
   const token = req.headers.authorization?.replace('Bearer ', '');
 
-  console.log('AUTH MIDDLEWARE:', req.path);
-  console.log('  Token received:', token ? token.substring(0, 25) + '...' : 'NULL');
+  logger.info('AUTH MIDDLEWARE:', req.path);
+  logger.info('  Token received:', token ? token.substring(0, 25) + '...' : 'NULL');
 
   if (!token) {
     return res.status(401).json({ success: false, error: 'Authentication required' });
   }
 
   const { session, isGracePeriod, newToken: gracePeriodNewToken } = getSessionWithGrace(token);
-  console.log('  Session found:', !!session, 'isGracePeriod:', isGracePeriod);
+  logger.info('  Session found:', !!session, 'isGracePeriod:', isGracePeriod);
 
   if (!session) {
-    console.log('  REJECTED: No session found');
+    logger.info('  REJECTED: No session found');
     return res.status(401).json({ success: false, error: 'Invalid or expired session' });
   }
 
@@ -1460,17 +1463,17 @@ function authMiddleware(req, res, next) {
 
   // If using grace period token, tell client about the new token
   if (isGracePeriod && gracePeriodNewToken) {
-    console.log('  Grace period token, sending X-New-Token:', gracePeriodNewToken.substring(0, 25) + '...');
+    logger.info('  Grace period token, sending X-New-Token:', gracePeriodNewToken.substring(0, 25) + '...');
     res.setHeader('X-New-Token', gracePeriodNewToken);
   } else {
     // Check if token should be rotated (only for non-grace-period requests)
     const newToken = rotateSessionIfNeeded(session);
     if (newToken) {
-      console.log('  Token rotated, sending X-New-Token:', newToken.substring(0, 25) + '...');
+      logger.info('  Token rotated, sending X-New-Token:', newToken.substring(0, 25) + '...');
       // Set header to inform client of new token
       res.setHeader('X-New-Token', newToken);
     } else {
-      console.log('  No rotation needed');
+      logger.info('  No rotation needed');
     }
   }
 
@@ -1585,7 +1588,7 @@ async function createPendingChange(userId, changeType, entityType, entityId, dat
         body: JSON.stringify(message)
       });
     } catch (e) {
-      console.error('Failed to send Slack approval notification:', e);
+      logger.error('Failed to send Slack approval notification:', e);
     }
   }
 
@@ -1655,7 +1658,7 @@ async function sendSlackAlert(monitor, status, message, alertType = 'status') {
   const channel = getSetting('slack_channel');
 
   if (!webhookUrl || webhookEnabled !== '1') {
-    console.log('Webhook notifications disabled or not configured');
+    logger.info('Webhook notifications disabled or not configured');
     return;
   }
 
@@ -1682,7 +1685,7 @@ async function sendSlackAlert(monitor, status, message, alertType = 'status') {
     }
 
     if (isQuietTime) {
-      console.log(`Quiet hours active (${quietStart}-${quietEnd}), suppressing alert for ${monitor.name}`);
+      logger.info(`Quiet hours active (${quietStart}-${quietEnd}), suppressing alert for ${monitor.name}`);
       return;
     }
   }
@@ -1693,11 +1696,11 @@ async function sendSlackAlert(monitor, status, message, alertType = 'status') {
     if (monitor.maintenance_until) {
       const maintenanceEnd = new Date(monitor.maintenance_until);
       if (maintenanceEnd > new Date()) {
-        console.log(`Skipping alert for ${monitor.name} - in maintenance mode until ${maintenanceEnd}`);
+        logger.info(`Skipping alert for ${monitor.name} - in maintenance mode until ${maintenanceEnd}`);
         return;
       }
     } else {
-      console.log(`Skipping alert for ${monitor.name} - in maintenance mode`);
+      logger.info(`Skipping alert for ${monitor.name} - in maintenance mode`);
       return;
     }
   }
@@ -1800,12 +1803,12 @@ async function sendSlackAlert(monitor, status, message, alertType = 'status') {
 
     if (!response.ok) {
       const errorText = await response.text().catch(() => 'Unknown error');
-      console.error(`${webhookType} alert failed:`, response.status, errorText);
+      logger.error(`${webhookType} alert failed:`, response.status + ' ' + errorText);
     } else {
-      console.log(`${webhookType} alert sent: ${monitor.name} is ${statusText}`);
+      logger.info(`${webhookType} alert sent: ${monitor.name} is ${statusText}`);
     }
   } catch (error) {
-    console.error(`${webhookType} alert error:`, error.message);
+    logger.error(`${webhookType} alert error:`, error.message);
   }
 }
 
@@ -1936,7 +1939,7 @@ async function runMonitorCheck(monitor) {
     if (status === 0) {
       // Device went DOWN - schedule a retry before alerting
       if (!pendingDownAlerts.has(monitor.id)) {
-        console.log(`${monitor.name} appears DOWN, scheduling retry in 15s...`);
+        logger.info(`${monitor.name} appears DOWN, scheduling retry in 15s...`);
         pendingDownAlerts.set(monitor.id, { firstFailTime: new Date(), retryScheduled: true });
 
         // Schedule retry check after 15 seconds
@@ -1948,7 +1951,7 @@ async function runMonitorCheck(monitor) {
 
           if (retryResult.status === 0) {
             // Still down after retry - send alert and create incident
-            console.log(`${monitor.name} confirmed DOWN after retry, sending alert`);
+            logger.info(`${monitor.name} confirmed DOWN after retry, sending alert`);
             await sendSlackAlert(monitor, 0, retryResult.message);
 
             // Create incident
@@ -1974,7 +1977,7 @@ async function runMonitorCheck(monitor) {
             });
           } else {
             // Recovered during retry period - no alert needed
-            console.log(`${monitor.name} recovered during retry period, no alert sent`);
+            logger.info(`${monitor.name} recovered during retry period, no alert sent`);
 
             // Broadcast via WebSocket
             broadcastStatusUpdate(monitor, 'up', 'monitor');
@@ -2032,13 +2035,13 @@ async function runMonitorCheck(monitor) {
 
 async function runAllChecks() {
   const monitors = db.prepare('SELECT * FROM monitors WHERE active = 1').all();
-  console.log(`Running checks for ${monitors.length} monitors...`);
+  logger.info(`Running checks for ${monitors.length} monitors...`);
 
   for (const monitor of monitors) {
     try {
       await runMonitorCheck(monitor);
     } catch (error) {
-      console.error(`Error checking ${monitor.name}:`, error.message);
+      logger.error(`Error checking ${monitor.name}:`, error.message);
     }
   }
 }
@@ -2071,10 +2074,10 @@ async function getPolyLensToken() {
     const data = await response.json();
     polyLensToken = data.access_token;
     polyLensTokenExpiry = Date.now() + (data.expires_in - 300) * 1000;
-    console.log('Poly Lens token refreshed');
+    logger.info('Poly Lens token refreshed');
     return polyLensToken;
   } catch (error) {
-    console.error('Poly Lens auth error:', error.message);
+    logger.error('Poly Lens auth error:', error.message);
     return null;
   }
 }
@@ -2130,7 +2133,7 @@ function recordPolyDeviceHeartbeat(device, floor) {
       });
     }
   } catch (error) {
-    console.error('Error recording Poly device heartbeat:', error.message);
+    logger.error('Error recording Poly device heartbeat:', error.message);
   }
 }
 
@@ -2173,7 +2176,7 @@ function snmpWalk(session, baseOid) {
     function feedCb(varbinds) {
       for (const vb of varbinds) {
         if (snmp.isVarbindError(vb)) {
-          console.error('SNMP varbind error:', snmp.varbindError(vb));
+          logger.error('SNMP varbind error:', snmp.varbindError(vb));
         } else {
           results.push({
             oid: vb.oid,
@@ -2285,7 +2288,7 @@ async function fetchPrinterStatus(hostname, monitorId) {
           result.info.pageCount = basicInfo[PRINTER_OIDS.pageCount] || null;
           if (Object.keys(basicInfo).length > 0) snmpResponsive = true;
         } catch (e) {
-          console.log(`SNMP basic info failed for ${hostname}: ${e.message}`);
+          logger.info(`SNMP basic info failed for ${hostname}: ${e.message}`);
         }
 
         // Get supplies (toner levels)
@@ -2430,17 +2433,17 @@ async function fetchPrinterStatus(hostname, monitorId) {
               result.info.model,
               result.info.serialNumber
             );
-            console.log(`Saved printer status for ${hostname}`);
+            logger.info(`Saved printer status for ${hostname}`);
           } catch (e) {
-            console.error('Error saving printer status:', e.message);
+            logger.error('Error saving printer status:', e.message);
           }
         } else {
-          console.log(`No SNMP response from printer ${hostname} - SNMP may be disabled`);
+          logger.info(`No SNMP response from printer ${hostname} - SNMP may be disabled`);
         }
 
         resolve(result);
       } catch (error) {
-        console.error(`SNMP error for ${hostname}:`, error.message);
+        logger.error(`SNMP error for ${hostname}:`, error.message);
         resolve(result);
       } finally {
         session.close();
@@ -2457,13 +2460,13 @@ async function fetchAllPrinterStatus() {
     SELECT id, hostname FROM monitors WHERE device_type = 'printers' AND active = 1 AND hostname IS NOT NULL
   `).all();
 
-  console.log(`Fetching SNMP data for ${printers.length} printers...`);
+  logger.info(`Fetching SNMP data for ${printers.length} printers...`);
 
   for (const printer of printers) {
     try {
       await fetchPrinterStatus(printer.hostname, printer.id);
     } catch (e) {
-      console.error(`Failed to fetch printer ${printer.hostname}:`, e.message);
+      logger.error(`Failed to fetch printer ${printer.hostname}:`, e.message);
     }
   }
 }
@@ -2524,7 +2527,7 @@ async function fetchPolyLensDevices() {
 
     polyLensDevices = allDevices;
     polyLensLastFetch = new Date();
-    console.log(`Fetched ${allDevices.length} devices from Poly Lens`);
+    logger.info(`Fetched ${allDevices.length} devices from Poly Lens`);
 
     // Record heartbeats for all devices
     allDevices.forEach(device => {
@@ -2545,7 +2548,7 @@ async function fetchPolyLensDevices() {
 
     return allDevices;
   } catch (error) {
-    console.error('Poly Lens fetch error:', error.message);
+    logger.error('Poly Lens fetch error:', error.message);
     return polyLensDevices;
   }
 }
@@ -2584,10 +2587,10 @@ async function getZoomToken() {
     const data = await response.json();
     zoomToken = data.access_token;
     zoomTokenExpiry = Date.now() + (data.expires_in - 300) * 1000;
-    console.log('Zoom token refreshed');
+    logger.info('Zoom token refreshed');
     return zoomToken;
   } catch (error) {
-    console.error('Zoom auth error:', error.message);
+    logger.error('Zoom auth error:', error.message);
     return null;
   }
 }
@@ -2710,7 +2713,7 @@ async function fetchZoomRooms() {
           zoom_devices: devices
         };
       } catch (err) {
-        console.error(`Error fetching details for room ${room.name}:`, err.message);
+        logger.error(`Error fetching details for room ${room.name}:`, err.message);
         return {
           id: room.id,
           name: room.name,
@@ -2733,7 +2736,7 @@ async function fetchZoomRooms() {
 
     zoomRooms = roomsWithStatus;
     zoomRoomsLastFetch = new Date();
-    console.log(`Fetched ${roomsWithStatus.length} IL Zoom Rooms (filtered from ${allRooms.length} total)`);
+    logger.info(`Fetched ${roomsWithStatus.length} IL Zoom Rooms (filtered from ${allRooms.length} total)`);
 
     // Record status history for each room
     const insertHistory = db.prepare(`
@@ -2791,7 +2794,7 @@ async function fetchZoomRooms() {
 
     return roomsWithStatus;
   } catch (error) {
-    console.error('Zoom Rooms fetch error:', error.message);
+    logger.error('Zoom Rooms fetch error:', error.message);
     return zoomRooms; // Return cached data on error
   }
 }
@@ -2896,7 +2899,7 @@ async function getBrivoToken() {
   }
 
   if (!BRIVO_CLIENT_ID || !BRIVO_CLIENT_SECRET || !BRIVO_USERNAME || !BRIVO_PASSWORD || !BRIVO_API_KEY) {
-    console.warn('[Brivo] Missing credentials (need CLIENT_ID, CLIENT_SECRET, USERNAME, PASSWORD, and API_KEY) - integration disabled');
+    logger.warn('[Brivo] Missing credentials (need CLIENT_ID, CLIENT_SECRET, USERNAME, PASSWORD, and API_KEY) - integration disabled');
     return null;
   }
 
@@ -2921,7 +2924,7 @@ async function getBrivoToken() {
 
     if (!response.ok) {
       const errorText = await response.text();
-      console.error('[Brivo] Auth failed:', response.status, errorText);
+      logger.error('[Brivo] Auth failed:', response.status + ' ' + errorText);
       return null;
     }
 
@@ -2931,10 +2934,10 @@ async function getBrivoToken() {
     // Token expires in 60 seconds according to docs
     brivoTokenExpiry = Date.now() + (data.expires_in || 60) * 1000;
 
-    console.log('[Brivo] Token refreshed successfully');
+    logger.info('[Brivo] Token refreshed successfully');
     return brivoToken;
   } catch (error) {
-    console.error('[Brivo] Auth error:', error.message);
+    logger.error('[Brivo] Auth error:', error.message);
     return null;
   }
 }
@@ -2962,7 +2965,7 @@ async function refreshBrivoToken() {
     });
 
     if (!response.ok) {
-      console.warn('[Brivo] Refresh token failed, getting new token');
+      logger.warn('[Brivo] Refresh token failed, getting new token');
       return getBrivoToken();
     }
 
@@ -2973,7 +2976,7 @@ async function refreshBrivoToken() {
 
     return brivoToken;
   } catch (error) {
-    console.error('[Brivo] Refresh error:', error.message);
+    logger.error('[Brivo] Refresh error:', error.message);
     return getBrivoToken();
   }
 }
@@ -3032,7 +3035,7 @@ async function fetchBrivoDoors() {
 
     if (!response.ok) {
       const errorText = await response.text();
-      console.error('[Brivo] Failed to fetch doors:', response.status, errorText);
+      logger.error('[Brivo] Failed to fetch doors:', response.status + ' ' + errorText);
       return brivoDoors; // Return cached data on error
     }
 
@@ -3066,10 +3069,10 @@ async function fetchBrivoDoors() {
 
     brivoDoorsLastFetch = Date.now();
 
-    console.log(`[Brivo] Fetched ${brivoDoors.length} access points for ${BRIVO_SITE_FILTER}`);
+    logger.info(`[Brivo] Fetched ${brivoDoors.length} access points for ${BRIVO_SITE_FILTER}`);
     return brivoDoors;
   } catch (error) {
-    console.error('[Brivo] Fetch doors error:', error.message);
+    logger.error('[Brivo] Fetch doors error:', error.message);
     return brivoDoors;
   }
 }
@@ -3079,13 +3082,13 @@ async function getBrivoDoorStatus(accessPointId) {
     const response = await brivoApiRequest(`/device-status/${accessPointId}`);
 
     if (!response.ok) {
-      console.error('[Brivo] Failed to get door status:', response.status);
+      logger.error('[Brivo] Failed to get door status:', response.status);
       return null;
     }
 
     return await response.json();
   } catch (error) {
-    console.error('[Brivo] Door status error:', error.message);
+    logger.error('[Brivo] Door status error:', error.message);
     return null;
   }
 }
@@ -3099,17 +3102,17 @@ async function unlockBrivoDoor(accessPointId) {
 
     // 204 No Content is success
     if (response.status === 204 || response.ok) {
-      console.log(`[Brivo] Door ${accessPointId} unlocked successfully`);
+      logger.info(`[Brivo] Door ${accessPointId} unlocked successfully`);
       auditLog('BRIVO_DOOR_UNLOCK', { accessPointId, success: true });
       return { success: true };
     }
 
     const errorText = await response.text();
-    console.error('[Brivo] Unlock failed:', response.status, errorText);
+    logger.error('[Brivo] Unlock failed:', response.status + ' ' + errorText);
     auditLog('BRIVO_DOOR_UNLOCK', { accessPointId, success: false, error: errorText });
     return { success: false, error: errorText };
   } catch (error) {
-    console.error('[Brivo] Unlock error:', error.message);
+    logger.error('[Brivo] Unlock error:', error.message);
     auditLog('BRIVO_DOOR_UNLOCK', { accessPointId, success: false, error: error.message });
     return { success: false, error: error.message };
   }
@@ -3194,7 +3197,7 @@ app.post('/api/auth/login', async (req, res) => {
               { type: 'section', text: { type: 'mrkdwn', text: `Account locked for ${LOCKOUT_DURATION_MINUTES} minutes after ${MAX_FAILED_ATTEMPTS} failed login attempts.` }}
             ]
           })
-        }).catch(err => console.error('Failed to send lockout notification:', err));
+        }).catch(err => logger.error('Failed to send lockout notification:', err));
       }
 
       // Audit log account lockout
@@ -3249,10 +3252,10 @@ app.post('/api/auth/login', async (req, res) => {
             message: 'A verification code has been sent to the admin via Slack. Please enter the 6-digit code.'
           });
         } else {
-          console.error('Failed to send 2FA DM, falling back to webhook:', result.error);
+          logger.error('Failed to send 2FA DM, falling back to webhook:', result.error);
         }
       } catch (error) {
-        console.error('Error in 2FA DM flow, falling back to webhook:', error);
+        logger.error('Error in 2FA DM flow, falling back to webhook:', error);
       }
     }
 
@@ -3355,7 +3358,7 @@ app.post('/api/auth/login', async (req, res) => {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(message)
-      }).catch(err => console.error('Failed to send Slack 2FA notification:', err));
+      }).catch(err => logger.error('Failed to send Slack 2FA notification:', err));
     }
 
     return res.json({
@@ -3770,7 +3773,7 @@ app.post('/api/auth/forgot-password', async (req, res) => {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(message)
-      }).catch(err => console.error('Failed to send Slack notification:', err))
+      }).catch(err => logger.error('Failed to send Slack notification:', err))
     ));
 
     auditLog('PASSWORD_RESET_REQUESTED', { userId: user.id, username: user.username, ip: clientIp });
@@ -4030,7 +4033,7 @@ app.patch('/api/users/:id/slack-2fa', authMiddleware, (req, res) => {
     }
 
     db.prepare('UPDATE users SET slack_2fa_enabled = ? WHERE id = ?').run(enabled ? 1 : 0, userId);
-    console.log(`Slack 2FA ${enabled ? 'enabled' : 'disabled'} for user ${user.username}`);
+    logger.info(`Slack 2FA ${enabled ? 'enabled' : 'disabled'} for user ${user.username}`);
     res.json({ success: true, slack_2fa_enabled: enabled });
   } catch (e) {
     logger.error('Failed to toggle Slack 2FA', e);
@@ -4723,7 +4726,7 @@ app.get('/api/brivo/doors', authMiddleware, async (req, res) => {
       }))
     });
   } catch (error) {
-    console.error('[Brivo] Doors endpoint error:', error.message);
+    logger.error('[Brivo] Doors endpoint error:', error.message);
     res.status(500).json({ success: false, error: error.message });
   }
 });
@@ -4756,7 +4759,7 @@ app.get('/api/brivo/doors/:id/status', authMiddleware, async (req, res) => {
       }
     });
   } catch (error) {
-    console.error('[Brivo] Door status error:', error.message);
+    logger.error('[Brivo] Door status error:', error.message);
     res.status(500).json({ success: false, error: error.message });
   }
 });
@@ -4810,7 +4813,7 @@ app.post('/api/brivo/doors/:id/unlock', authMiddleware, async (req, res) => {
       });
     }
   } catch (error) {
-    console.error('[Brivo] Unlock endpoint error:', error.message);
+    logger.error('[Brivo] Unlock endpoint error:', error.message);
     res.status(500).json({ success: false, error: error.message });
   }
 });
@@ -5227,7 +5230,7 @@ app.patch('/api/poly-devices/:deviceId/maintenance', authMiddleware, (req, res) 
   );
 
   const action = maintenance ? 'entered' : 'exited';
-  console.log(`Poly device ${device.name} ${action} maintenance mode${note ? `: ${note}` : ''}`);
+  logger.info(`Poly device ${device.name} ${action} maintenance mode${note ? `: ${note}` : ''}`);
 
   res.json({ success: true, maintenance: maintenance ? 1 : 0 });
 });
@@ -5245,7 +5248,7 @@ app.patch('/api/poly-devices/:deviceId/disable', authMiddleware, (req, res) => {
     .run(disabled ? 1 : 0, req.params.deviceId);
 
   const action = disabled ? 'disabled' : 'enabled';
-  console.log(`Poly device ${device.name} ${action}`);
+  logger.info(`Poly device ${device.name} ${action}`);
 
   res.json({ success: true, disabled: disabled ? 1 : 0 });
 });
@@ -5314,7 +5317,7 @@ app.post('/api/monitors', authMiddleware, (req, res) => {
 
     res.json({ success: true, id: result.lastInsertRowid });
   } catch (e) {
-    console.error('Failed to create monitor:', e);
+    logger.error('Failed to create monitor:', e);
     res.status(500).json({ success: false, error: 'Failed to create monitor' });
   }
 });
@@ -5464,7 +5467,7 @@ app.patch('/api/monitors/:id/maintenance', authMiddleware, (req, res) => {
   );
 
   const action = maintenance ? 'entered' : 'exited';
-  console.log(`${monitor.name} ${action} maintenance mode${note ? `: ${note}` : ''}`);
+  logger.info(`${monitor.name} ${action} maintenance mode${note ? `: ${note}` : ''}`);
 
   res.json({ success: true, maintenance: maintenance ? 1 : 0 });
 });
@@ -5491,7 +5494,7 @@ app.patch('/api/monitors/:id/disable', authMiddleware, (req, res) => {
   db.prepare('UPDATE monitors SET disabled = ? WHERE id = ?')
     .run(disabled ? 1 : 0, req.params.id);
 
-  console.log(`${monitor.name} ${disabled ? 'disabled' : 'enabled'} (non-serviceable)`);
+  logger.info(`${monitor.name} ${disabled ? 'disabled' : 'enabled'} (non-serviceable)`);
 
   res.json({ success: true, disabled: disabled ? 1 : 0 });
 });
@@ -5602,9 +5605,9 @@ async function sendThresholdAlert(monitor, alertType, currentValue, threshold) {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload)
     });
-    console.log(`Threshold alert sent: ${monitor.name} - ${alertType} at ${currentValue}%`);
+    logger.info(`Threshold alert sent: ${monitor.name} - ${alertType} at ${currentValue}%`);
   } catch (e) {
-    console.error('Threshold alert error:', e.message);
+    logger.error('Threshold alert error:', e.message);
   }
 
   // Also create in-app notification
@@ -5685,7 +5688,7 @@ app.patch('/api/threshold-alerts/:id/dismiss', authMiddleware, (req, res) => {
     WHERE id = ?
   `).run(req.user?.username || 'unknown', req.params.id);
 
-  console.log(`Alert ${req.params.id} dismissed by ${req.user?.username || 'unknown'}`);
+  logger.info(`Alert ${req.params.id} dismissed by ${req.user?.username || 'unknown'}`);
   res.json({ success: true });
 });
 
@@ -5697,7 +5700,7 @@ app.post('/api/threshold-alerts/dismiss-all', authMiddleware, (req, res) => {
     WHERE resolved_at IS NULL AND dismissed_at IS NULL
   `).run(req.user?.username || 'unknown');
 
-  console.log(`${result.changes} alerts dismissed by ${req.user?.username || 'unknown'}`);
+  logger.info(`${result.changes} alerts dismissed by ${req.user?.username || 'unknown'}`);
   res.json({ success: true, dismissed: result.changes });
 });
 
@@ -5938,7 +5941,7 @@ app.put('/api/floor-plans/:floor', authMiddleware, (req, res) => {
       updated_at = CURRENT_TIMESTAMP
   `).run(floor, image_data, image_type);
 
-  console.log(`Floor plan uploaded: ${floor} by ${req.user.username}`);
+  logger.info(`Floor plan uploaded: ${floor} by ${req.user.username}`);
   res.json({ success: true });
 });
 
@@ -5957,7 +5960,7 @@ setInterval(runAllChecks, CHECK_INTERVAL);
 setTimeout(async () => {
   await runAllChecks();
   isFirstRun = false; // Allow alerts after first run
-  console.log('Initial checks complete, alerts now enabled');
+  logger.info('Initial checks complete, alerts now enabled');
   if (POLY_LENS_CLIENT_ID) {
     await fetchPolyLensDevices();
   }
@@ -5984,69 +5987,9 @@ function logActivity(req, action, entityType = null, entityId = null, entityName
       VALUES (?, ?, ?, ?, ?, ?, ?)
     `).run(username, action, entityType, entityId, entityName, details ? JSON.stringify(details) : null, ip);
   } catch (e) {
-    console.error('Failed to log activity:', e);
+    logger.error('Failed to log activity:', e);
   }
 }
-
-// Get activity log
-app.get('/api/activity-log', authMiddleware, (req, res) => {
-  const limit = Math.min(parseInt(req.query.limit) || 100, 500);
-  const offset = parseInt(req.query.offset) || 0;
-  const username = req.query.username;
-  const action = req.query.action;
-
-  let query = 'SELECT * FROM activity_log WHERE 1=1';
-  const params = [];
-
-  if (username) {
-    query += ' AND username = ?';
-    params.push(username);
-  }
-  if (action) {
-    query += ' AND action LIKE ?';
-    params.push(`%${action}%`);
-  }
-
-  query += ' ORDER BY created_at DESC LIMIT ? OFFSET ?';
-  params.push(limit, offset);
-
-  const logs = db.prepare(query).all(...params);
-  const total = db.prepare('SELECT COUNT(*) as count FROM activity_log').get().count;
-
-  res.json({ success: true, logs, total, limit, offset });
-});
-
-// ==================== INCIDENTS ====================
-
-// Get incidents
-app.get('/api/incidents', (req, res) => {
-  const limit = Math.min(parseInt(req.query.limit) || 50, 200);
-  const offset = parseInt(req.query.offset) || 0;
-  const status = req.query.status; // 'active', 'resolved', 'all'
-  const floor = req.query.floor;
-
-  let query = 'SELECT * FROM incidents WHERE 1=1';
-  const params = [];
-
-  if (status === 'active') {
-    query += ' AND ended_at IS NULL';
-  } else if (status === 'resolved') {
-    query += ' AND ended_at IS NOT NULL';
-  }
-
-  if (floor) {
-    query += ' AND floor = ?';
-    params.push(floor);
-  }
-
-  query += ' ORDER BY started_at DESC LIMIT ? OFFSET ?';
-  params.push(limit, offset);
-
-  const incidents = db.prepare(query).all(...params);
-  const total = db.prepare('SELECT COUNT(*) as count FROM incidents' + (status === 'active' ? ' WHERE ended_at IS NULL' : '')).get().count;
-
-  res.json({ success: true, incidents, total, limit, offset });
-});
 
 // Acknowledge incident
 app.patch('/api/incidents/:id/acknowledge', authMiddleware, (req, res) => {
@@ -6189,7 +6132,7 @@ function createNotification(type, title, message, severity = 'info', entityType 
       VALUES (?, ?, ?, ?, ?, ?)
     `).run(type, title, message, severity, entityType, entityId);
   } catch (e) {
-    console.error('Failed to create notification:', e);
+    logger.error('Failed to create notification:', e);
   }
 }
 
@@ -6425,7 +6368,7 @@ async function triggerWebhooks(event, data) {
       const response = await fetch(webhook.url, { method: 'POST', headers, body });
       db.prepare('UPDATE webhooks SET last_triggered = datetime("now"), last_status = ? WHERE id = ?').run(response.status, webhook.id);
     } catch (e) {
-      console.error(`Webhook ${webhook.name} failed:`, e.message);
+      logger.error(`Webhook ${webhook.name} failed:`, e.message);
       db.prepare('UPDATE webhooks SET last_triggered = datetime("now"), last_status = 0 WHERE id = ?').run(webhook.id);
     }
   }
@@ -6579,7 +6522,7 @@ async function sendReportToSlack(reportData, channel) {
       body: JSON.stringify({ channel, blocks })
     });
   } catch (e) {
-    console.error('Failed to send report to Slack:', e);
+    logger.error('Failed to send report to Slack:', e);
   }
 }
 
@@ -7165,7 +7108,7 @@ app.post('/api/monitors/:id/ping', authMiddleware, async (req, res) => {
       }
     });
   } catch (e) {
-    console.error('Manual ping error:', e);
+    logger.error('Manual ping error:', e);
     res.status(500).json({ success: false, error: e.message });
   }
 });
@@ -7193,7 +7136,7 @@ app.post('/api/ping', authMiddleware, async (req, res) => {
       }
     });
   } catch (e) {
-    console.error('Ping by IP error:', e);
+    logger.error('Ping by IP error:', e);
     res.status(500).json({ success: false, error: e.message });
   }
 });
@@ -7704,7 +7647,7 @@ app.get('/api/reports/uptime', authMiddleware, (req, res) => {
     });
 
   } catch (error) {
-    console.error('Report error:', error);
+    logger.error('Report error:', error);
     res.status(500).json({ success: false, error: 'Failed to generate report' });
   }
 });
@@ -7735,7 +7678,7 @@ app.get('/api/reports/response-time/:id', authMiddleware, (req, res) => {
       }))
     });
   } catch (error) {
-    console.error('Response time history error:', error);
+    logger.error('Response time history error:', error);
     res.status(500).json({ success: false, error: 'Failed to get response time history' });
   }
 });
@@ -7756,7 +7699,7 @@ wss.on('connection', (ws, req) => {
 
   if (!token) {
     ws.close(4001, 'Authentication required');
-    console.log('WebSocket connection rejected: no token');
+    logger.info('WebSocket connection rejected: no token');
     return;
   }
 
@@ -7764,13 +7707,13 @@ wss.on('connection', (ws, req) => {
   const { session, isGracePeriod } = getSessionWithGrace(token);
   if (!session) {
     ws.close(4002, 'Invalid or expired token');
-    console.log('WebSocket connection rejected: invalid token');
-    console.log('  Token received:', token ? token.substring(0, 25) + '...' : 'NULL');
-    console.log('  Grace period tokens:', Array.from(tokenGracePeriod.keys()).map(t => t.substring(0, 20) + '...'));
+    logger.info('WebSocket connection rejected: invalid token');
+    logger.info('  Token received:', token ? token.substring(0, 25) + '...' : 'NULL');
+    logger.info('  Grace period tokens:', Array.from(tokenGracePeriod.keys()).map(t => t.substring(0, 20) + '...'));
     return;
   }
   if (isGracePeriod) {
-    console.log('WebSocket using grace period token:', token.substring(0, 20) + '...');
+    logger.info('WebSocket using grace period token:', token.substring(0, 20) + '...');
   }
 
   // Store user info on the WebSocket for potential future use
@@ -7778,18 +7721,18 @@ wss.on('connection', (ws, req) => {
   ws.username = session.username;
 
   wsClients.add(ws);
-  console.log(`WebSocket client connected (${session.username}). Total: ${wsClients.size}`);
+  logger.info(`WebSocket client connected (${session.username}). Total: ${wsClients.size}`);
 
   // Send initial connection acknowledgment
   ws.send(JSON.stringify({ type: 'connected', message: 'WebSocket connected' }));
 
   ws.on('close', () => {
     wsClients.delete(ws);
-    console.log(`WebSocket client disconnected. Total: ${wsClients.size}`);
+    logger.info(`WebSocket client disconnected. Total: ${wsClients.size}`);
   });
 
   ws.on('error', (error) => {
-    console.error('WebSocket error:', error);
+    logger.error('WebSocket error:', error);
     wsClients.delete(ws);
   });
 });
@@ -7862,10 +7805,10 @@ function runDatabaseCleanup() {
                          (sessionsDeleted.changes || 0);
 
     if (totalDeleted > 0) {
-      console.log(`🧹 Database cleanup: Removed ${totalDeleted} old records`);
+      logger.info(`Database cleanup: Removed ${totalDeleted} old records`);
     }
   } catch (err) {
-    console.error('Database cleanup error:', err.message);
+    logger.error('Database cleanup error:', err.message);
   }
 }
 
@@ -7876,11 +7819,11 @@ setInterval(runDatabaseCleanup, 6 * 60 * 60 * 1000);
 // Start server
 server.listen(PORT, () => {
   const monitorCount = db.prepare('SELECT COUNT(*) as count FROM monitors').get().count;
-  console.log(`\n🖥️  Office Monitor running on port ${PORT}`);
-  console.log(`📊 Monitors: ${monitorCount}`);
-  console.log(`⏱️  Check interval: ${CHECK_INTERVAL / 1000}s`);
-  console.log(`🔔 Slack: ${SLACK_WEBHOOK_URL ? 'Configured' : 'Not configured'}`);
-  console.log(`📹 Poly Lens: ${POLY_LENS_CLIENT_ID ? 'Configured' : 'Not configured'}`);
-  console.log(`🎥 Zoom Rooms: ${ZOOM_ACCOUNT_ID ? 'Configured' : 'Not configured'}`);
-  console.log(`🔌 WebSocket: Enabled\n`);
+  logger.info(`Office Monitor running on port ${PORT}`);
+  logger.info(`Monitors: ${monitorCount}`);
+  logger.info(`Check interval: ${CHECK_INTERVAL / 1000}s`);
+  logger.info(`Slack: ${SLACK_WEBHOOK_URL ? 'Configured' : 'Not configured'}`);
+  logger.info(`Poly Lens: ${POLY_LENS_CLIENT_ID ? 'Configured' : 'Not configured'}`);
+  logger.info(`Zoom Rooms: ${ZOOM_ACCOUNT_ID ? 'Configured' : 'Not configured'}`);
+  logger.info(`WebSocket: Enabled`);
 });

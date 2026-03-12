@@ -10,9 +10,9 @@ Office IT monitoring dashboard for tracking network devices, printers, and Zoom 
 
 ## Owner
 
-**Angel Chen-Asraf** - IT/Endpoint Engineering at Teads
+**Angel** - IT/Endpoint Engineer
 
-Works on device management, endpoint configuration, MDM systems (Kandji, Intune), and IT infrastructure. Also administering Claude team account rollout.
+Device management, endpoint configuration, MDM systems, and IT infrastructure.
 
 ## Working Preferences
 

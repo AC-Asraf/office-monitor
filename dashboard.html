@@ -8573,14 +8573,17 @@
       Object.entries(polyRoomGroups).forEach(([roomName, devices]) => {
         // Filter out disabled and maintenance devices for count display
         const activeDevices = devices.filter(d => !d.disabled && !d.maintenance);
-        // Check ALL devices for connection status (even disabled/maintenance ones should show if disconnected)
-        const anyDeviceDisconnected = devices.some(d => !d.connected);
-        const allDevicesConnected = devices.length > 0 && devices.every(d => d.connected);
+        // Prioritize Zoom status over Poly Lens connected status
+        const zoomDevice = devices.find(d => d.zoom_status);
+        const zoomStatus = zoomDevice?.zoom_status;
+        const isZoomOnline = zoomStatus === 'Available' || zoomStatus === 'InMeeting';
+        // Use Zoom status if available, otherwise fall back to Poly Lens connected status
+        const roomIsOnline = zoomStatus ? isZoomOnline : (devices.length > 0 && devices.every(d => d.connected));
         allDevices.push({
           id: `room-${roomName.replace(/\s+/g, '-')}`,
           name: roomName,
           ip: devices.map(d => d.ip).filter(Boolean).join(', '),
-          status: allDevicesConnected ? 'up' : 'down',
+          status: roomIsOnline ? 'up' : 'down',
           type: 'polyLens',
           source: 'polyLensRoom',
           roomDevices: devices,
@@ -8706,6 +8709,11 @@
                                  zoomStatus === 'InMeeting' ? 'In Meeting' :
                                  zoomStatus === 'Offline' ? 'Offline' : null;
 
+          // Prioritize Zoom status for room online/offline determination
+          const isZoomOnline = zoomStatus === 'Available' || zoomStatus === 'InMeeting';
+          const roomIsOffline = zoomStatus ? !isZoomOnline : (offlineCount > 0 && activeDevices.length > 0);
+          const roomStatusBg = zoomStatus ? zoomStatusColor : status.bg;
+
           const popupBelowClass = pos.y < 30 ? 'popup-below' : '';
           const isFavRoom = isFavorite(device.id);
           deviceMarkersHTML += `
@@ -8714,8 +8722,8 @@
               <button class="favorite-btn ${isFavRoom ? 'active' : ''}" onclick="toggleFavorite('${device.id}', '${device.name.replace(/'/g, "\\'")}', 'Zoom Room', '${activeFloor}')" title="${isFavRoom ? 'Remove from favorites' : 'Add to favorites'}">
                 ${isFavRoom ? '★' : '☆'}
               </button>
-              ${offlineCount > 0 && activeDevices.length > 0 ? `<div class="device-ping" style="background: ${statusColors.down.pulse};"></div>` : ''}
-              <div class="device-dot" style="background: ${zoomInMeeting ? '#F59E0B' : status.bg}; border-color: ${typeInfo.color}; min-width: 28px; font-size: 9px;">
+              ${roomIsOffline ? `<div class="device-ping" style="background: ${statusColors.down.pulse};"></div>` : ''}
+              <div class="device-dot" style="background: ${zoomInMeeting ? '#F59E0B' : roomStatusBg}; border-color: ${typeInfo.color}; min-width: 28px; font-size: 9px;">
                 ${zoomInMeeting ? '📞' : roomDevices.length}
               </div>
               <div class="device-popup">

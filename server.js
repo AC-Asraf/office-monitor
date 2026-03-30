@@ -339,9 +339,9 @@ const SLACK_APPROVAL_WEBHOOK_URL = process.env.SLACK_APPROVAL_WEBHOOK_URL; // Fo
 const SLACK_BOT_TOKEN = process.env.SLACK_BOT_TOKEN;
 const SLACK_ADMIN_USER_ID = process.env.SLACK_ADMIN_USER_ID;
 
-// Poly Lens Configuration
-const POLY_LENS_CLIENT_ID = process.env.POLY_LENS_CLIENT_ID;
-const POLY_LENS_CLIENT_SECRET = process.env.POLY_LENS_CLIENT_SECRET;
+// Poly Lens Configuration (check env first, then fall back to database on first use)
+let POLY_LENS_CLIENT_ID = process.env.POLY_LENS_CLIENT_ID;
+let POLY_LENS_CLIENT_SECRET = process.env.POLY_LENS_CLIENT_SECRET;
 const POLY_LENS_AUTH_URL = 'https://login.lens.poly.com/oauth/token';
 const POLY_LENS_GRAPHQL_URL = 'https://api.silica-prod01.io.lens.poly.com/graphql';
 
@@ -1038,6 +1038,7 @@ let polyLensToken = null;
 let polyLensTokenExpiry = null;
 let polyLensDevices = [];
 let polyLensLastFetch = null;
+let polyLensCache = null; // Persistent cache for when API fails
 
 // Zoom Rooms state
 let zoomToken = null;
@@ -2053,6 +2054,14 @@ async function getPolyLensToken() {
     return polyLensToken;
   }
 
+  // Fall back to database settings if env vars not set
+  if (!POLY_LENS_CLIENT_ID || !POLY_LENS_CLIENT_SECRET) {
+    const dbClientId = db.prepare("SELECT value FROM settings WHERE key = 'poly_lens_client_id'").get();
+    const dbClientSecret = db.prepare("SELECT value FROM settings WHERE key = 'poly_lens_client_secret'").get();
+    if (dbClientId?.value) POLY_LENS_CLIENT_ID = dbClientId.value;
+    if (dbClientSecret?.value) POLY_LENS_CLIENT_SECRET = dbClientSecret.value;
+  }
+
   if (!POLY_LENS_CLIENT_ID || !POLY_LENS_CLIENT_SECRET) {
     return null;
   }
@@ -2529,6 +2538,15 @@ async function fetchPolyLensDevices() {
     polyLensLastFetch = new Date();
     logger.info(`Fetched ${allDevices.length} devices from Poly Lens`);
 
+    // Cache successful fetch to database for persistence across restarts
+    try {
+      db.prepare("INSERT OR REPLACE INTO settings (key, value) VALUES ('poly_lens_cache', ?)").run(JSON.stringify(allDevices));
+      db.prepare("INSERT OR REPLACE INTO settings (key, value) VALUES ('poly_lens_cache_time', ?)").run(new Date().toISOString());
+      polyLensCache = allDevices;
+    } catch (e) {
+      logger.error('Failed to cache Poly data:', e.message);
+    }
+
     // Record heartbeats for all devices
     allDevices.forEach(device => {
       // Determine floor based on room name or site
@@ -2549,6 +2567,12 @@ async function fetchPolyLensDevices() {
     return allDevices;
   } catch (error) {
     logger.error('Poly Lens fetch error:', error.message);
+    // Use cached data if available when API fails
+    if (polyLensCache && polyLensCache.length > 0) {
+      logger.info(`Using cached Poly data (${polyLensCache.length} devices) due to API error`);
+      polyLensDevices = polyLensCache;
+      return polyLensCache;
+    }
     return polyLensDevices;
   }
 }
@@ -2843,7 +2867,8 @@ function getPolyDevicesWithZoomStatus() {
              zoomDisplay.toLowerCase().includes(roomName.toLowerCase());
     });
 
-    return {
+    // If matching Zoom room found, use Zoom floor (from IL-NET-X naming) as authoritative
+    let deviceWithZoom = {
       ...device,
       zoom_status: matchingZoom?.zoom_status || null,
       zoom_in_meeting: matchingZoom?.in_meeting || false,
@@ -2856,6 +2881,18 @@ function getPolyDevicesWithZoomStatus() {
       zoom_devices: matchingZoom?.zoom_devices || [],
       control_url: matchingZoom?.control_url || null
     };
+
+    // Override floor with Zoom floor if available (Zoom naming IL-NET-X is authoritative)
+    if (matchingZoom?.floor) {
+      const zoomFloorMatch = matchingZoom.floor.match(/Floor\s*(\d+)/i);
+      if (zoomFloorMatch) {
+        const num = parseInt(zoomFloorMatch[1]);
+        const suffix = num === 1 ? 'st' : num === 2 ? 'nd' : num === 3 ? 'rd' : 'th';
+        deviceWithZoom.site = { ...device.site, name: `${num}${suffix} Floor` };
+      }
+    }
+
+    return deviceWithZoom;
   });
 
   return merged;
@@ -4659,12 +4696,15 @@ app.get('/api/poly-lens/by-floor', authMiddleware, async (req, res) => {
     const floor = device.site?.name;
     const maintenanceInfo = maintenanceMap[device.id];
     if (floor && floors[floor]) {
+      // Prioritize Zoom status over Poly Lens connected status
+      const isZoomOnline = device.zoom_status === 'Available' || device.zoom_status === 'InMeeting';
+      const deviceStatus = device.zoom_status ? (isZoomOnline ? 'up' : 'down') : (device.connected ? 'up' : 'down');
       floors[floor].push({
         id: device.id,
         name: device.name,
         ip: device.internalIp,
         connected: device.connected,
-        status: device.connected ? 'up' : 'down',
+        status: deviceStatus,
         lastDetected: device.lastDetected,
         hardwareModel: device.hardwareModel,
         room: device.room?.name,
@@ -5530,13 +5570,13 @@ async function checkPrinterThresholds() {
     // Skip if in maintenance mode
     if (printer.maintenance === 1) continue;
 
-    // Check toner levels (alert at 20%)
+    // Check toner levels (alert only at 0% - empty)
     const tonerColors = ['black', 'cyan', 'magenta', 'yellow'];
     for (const color of tonerColors) {
       const level = printer[`toner_${color}`];
-      if (level !== null && level <= 20) {
-        await sendThresholdAlert(printer, `toner_${color}`, level, 20);
-      } else if (level !== null && level > 25) {
+      if (level !== null && level === 0) {
+        await sendThresholdAlert(printer, `toner_${color}`, level, 0);
+      } else if (level !== null && level > 0) {
         resolveThresholdAlert(printer.id, `toner_${color}`);
       }
     }
@@ -5961,6 +6001,20 @@ setTimeout(async () => {
   await runAllChecks();
   isFirstRun = false; // Allow alerts after first run
   logger.info('Initial checks complete, alerts now enabled');
+
+  // Load Poly Lens cache from database on startup
+  try {
+    const cachedData = db.prepare("SELECT value FROM settings WHERE key = 'poly_lens_cache'").get();
+    if (cachedData?.value) {
+      polyLensCache = JSON.parse(cachedData.value);
+      polyLensDevices = polyLensCache;
+      const cacheTime = db.prepare("SELECT value FROM settings WHERE key = 'poly_lens_cache_time'").get();
+      logger.info(`Loaded ${polyLensCache.length} cached Poly devices from database (cached at: ${cacheTime?.value || 'unknown'})`);
+    }
+  } catch (e) {
+    logger.error('Failed to load Poly cache from database:', e.message);
+  }
+
   if (POLY_LENS_CLIENT_ID) {
     await fetchPolyLensDevices();
   }

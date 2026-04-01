@@ -10,6 +10,7 @@ const crypto = require('crypto');
 const snmp = require('net-snmp');
 const WebSocket = require('ws');
 const bcrypt = require('bcrypt');
+const cookieParser = require('cookie-parser');
 const fs = require('fs');
 
 // ==================== GLOBAL ERROR HANDLERS ====================
@@ -168,8 +169,11 @@ app.use(cors({
   },
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization']
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-CSRF-Token']
 }));
+
+// Cookie parser middleware
+app.use(cookieParser());
 
 // Security headers middleware with Content Security Policy
 app.use((req, res, next) => {
@@ -177,15 +181,22 @@ app.use((req, res, next) => {
   res.setHeader('X-Frame-Options', 'SAMEORIGIN');
   res.setHeader('X-XSS-Protection', '1; mode=block');
   res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
+  // HSTS - enforces HTTPS connections
+  res.setHeader('Strict-Transport-Security', 'max-age=31536000; includeSubDomains');
+  // Permissions-Policy - restricts browser features
+  res.setHeader('Permissions-Policy', 'geolocation=(), microphone=(), camera=(), payment=()');
   // Content Security Policy - prevents XSS by controlling resource loading
+  // NOTE: 'unsafe-inline' required for script-src due to inline scripts in dashboard.html
+  // TODO: Refactor inline scripts to external files to remove 'unsafe-inline'
   res.setHeader('Content-Security-Policy', [
     "default-src 'self'",
-    "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://cdnjs.cloudflare.com https://cdn.jsdelivr.net https://unpkg.com",
+    "script-src 'self' 'unsafe-inline' https://cdnjs.cloudflare.com https://cdn.jsdelivr.net https://unpkg.com",
     "style-src 'self' 'unsafe-inline' https://cdnjs.cloudflare.com https://fonts.googleapis.com",
-    "font-src 'self' https://fonts.gstatic.com https://cdnjs.cloudflare.com",
+    "font-src 'self' data: https://fonts.gstatic.com https://cdnjs.cloudflare.com",
     "img-src 'self' data: blob: https:",
     "connect-src 'self' ws: wss:",
-    "frame-ancestors 'self'",
+    "object-src 'none'",
+    "frame-ancestors 'none'",
     "base-uri 'self'",
     "form-action 'self'"
   ].join('; '));
@@ -672,6 +683,8 @@ const migrations = [
   // Session token rotation columns
   `ALTER TABLE sessions ADD COLUMN created_at DATETIME DEFAULT CURRENT_TIMESTAMP`,
   `ALTER TABLE sessions ADD COLUMN last_rotated_at DATETIME DEFAULT NULL`,
+  // Session inactivity timeout column
+  `ALTER TABLE sessions ADD COLUMN last_activity TEXT DEFAULT NULL`,
 ];
 
 // Create zoom meeting utilization table
@@ -1218,7 +1231,10 @@ async function send2FACodeViaDM(userId, username) {
       },
       body: JSON.stringify({
         channel: SLACK_ADMIN_USER_ID, // DM to admin user
-        text: `🔐 *Office Monitor 2FA Verification*\n\nYour verification code is: *${code}*\n\nThis code will expire in 5 minutes.\n\n_Login attempt for user: ${username}_`,
+        text: `🔐 *Office Monitor 2FA Verification*\n\nA login attempt was made to your account.\n\n` +
+              `If this was you, enter the code shown on your login screen.\n` +
+              `If this was NOT you, ignore this message and consider changing your password.\n\n` +
+              `_This code expires in 5 minutes._`,
         unfurl_links: false,
         unfurl_media: false,
       }),
@@ -1287,7 +1303,10 @@ async function resend2FACode(sessionId, username) {
       },
       body: JSON.stringify({
         channel: SLACK_ADMIN_USER_ID,
-        text: `🔐 *Office Monitor 2FA Verification (Resend)*\n\nYour new verification code is: *${newCode}*\n\nThis code will expire in 5 minutes.\n\n_Login attempt for user: ${username}_`,
+        text: `🔐 *Office Monitor 2FA Verification (Resend)*\n\nA login attempt was made to your account.\n\n` +
+              `If this was you, enter the code shown on your login screen.\n` +
+              `If this was NOT you, ignore this message and consider changing your password.\n\n` +
+              `_This code expires in 5 minutes._`,
         unfurl_links: false,
         unfurl_media: false,
       }),
@@ -1438,6 +1457,10 @@ function getSessionWithGrace(token) {
   return { session: null, isGracePeriod: false };
 }
 
+
+// Session inactivity timeout (30 minutes)
+const INACTIVITY_TIMEOUT = 30 * 60 * 1000;
+
 // Auth middleware - only accepts tokens in Authorization header (not URL for security)
 function authMiddleware(req, res, next) {
   const token = req.headers.authorization?.replace('Bearer ', '');
@@ -1456,6 +1479,21 @@ function authMiddleware(req, res, next) {
     logger.info('  REJECTED: No session found');
     return res.status(401).json({ success: false, error: 'Invalid or expired session' });
   }
+
+
+  // Check for inactivity timeout
+  if (session.last_activity) {
+    const lastActivity = new Date(session.last_activity).getTime();
+    if (Date.now() - lastActivity > INACTIVITY_TIMEOUT) {
+      logger.info('  REJECTED: Session expired due to inactivity');
+      deleteSession(token);
+      return res.status(401).json({ error: 'Session expired due to inactivity' });
+    }
+  }
+
+  // Update last_activity
+  db.prepare('UPDATE sessions SET last_activity = ? WHERE token = ?')
+    .run(new Date().toISOString(), token);
 
   // Prevent caching of authenticated responses to avoid stale X-New-Token headers
   res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, private');
@@ -1490,6 +1528,34 @@ function authMiddleware(req, res, next) {
 function adminMiddleware(req, res, next) {
   if (req.user.role !== 'admin') {
     return res.status(403).json({ success: false, error: 'Admin access required' });
+  }
+  next();
+}
+
+// CSRF token generation
+function generateCsrfToken() {
+  return crypto.randomBytes(32).toString('hex');
+}
+
+// CSRF protection middleware (double-submit cookie pattern)
+function csrfMiddleware(req, res, next) {
+  // Skip for GET, HEAD, OPTIONS (safe methods)
+  if (['GET', 'HEAD', 'OPTIONS'].includes(req.method)) {
+    return next();
+  }
+
+  const cookieToken = req.cookies?.csrf_token;
+  const headerToken = req.headers['x-csrf-token'];
+
+  if (!cookieToken || !headerToken || cookieToken !== headerToken) {
+    auditLog('CSRF_VALIDATION_FAILED', {
+      path: req.path,
+      method: req.method,
+      ip: req.ip,
+      hasCookie: !!cookieToken,
+      hasHeader: !!headerToken
+    });
+    return res.status(403).json({ error: 'Invalid CSRF token' });
   }
   next();
 }
@@ -3439,7 +3505,7 @@ app.post('/api/auth/logout', authMiddleware, (req, res) => {
 });
 
 // Approve login via Slack 2FA
-app.get('/api/auth/approve-login/:token', (req, res) => {
+app.get('/api/auth/approve-login/:token', authMiddleware, adminMiddleware, (req, res) => {
   const { token } = req.params;
   const approverIp = req.ip || req.connection.remoteAddress || 'Unknown';
 
@@ -3509,7 +3575,7 @@ app.get('/api/auth/approve-login/:token', (req, res) => {
 });
 
 // Deny login via Slack 2FA
-app.get('/api/auth/deny-login/:token', (req, res) => {
+app.get('/api/auth/deny-login/:token', authMiddleware, adminMiddleware, (req, res) => {
   const { token } = req.params;
 
   const pending = db.prepare('SELECT * FROM pending_logins WHERE token = ?').get(token);
@@ -3615,6 +3681,15 @@ app.post('/api/auth/verify-2fa-code', async (req, res) => {
     return res.status(400).json({ success: false, error: 'Session ID and code are required' });
   }
 
+  // Rate limiting - 5 attempts per session
+  const rateLimit = checkRateLimit(`2fa-verify:${session_id}`, 5, 5 * 60 * 1000);
+  if (!rateLimit.allowed) {
+    return res.status(429).json({
+      success: false,
+      error: 'Too many verification attempts. Please request a new code.'
+    });
+  }
+
   const result = verify2FACode(session_id, code);
 
   if (!result.valid) {
@@ -3674,8 +3749,20 @@ app.get('/api/auth/me', authMiddleware, (req, res) => {
   });
 });
 
+// Get CSRF token (call after login to get token for state-changing requests)
+app.get('/api/auth/csrf-token', authMiddleware, (req, res) => {
+  const token = generateCsrfToken();
+  res.cookie('csrf_token', token, {
+    httpOnly: false, // JS needs to read it for header
+    secure: process.env.NODE_ENV === 'production',
+    sameSite: 'strict',
+    maxAge: 24 * 60 * 60 * 1000 // 24 hours
+  });
+  res.json({ token });
+});
+
 // Change password
-app.post('/api/auth/change-password', authMiddleware, async (req, res) => {
+app.post('/api/auth/change-password', authMiddleware, csrfMiddleware, async (req, res) => {
   const { current_password, new_password } = req.body;
 
   // Input validation
@@ -3721,8 +3808,8 @@ app.post('/api/auth/forgot-password', async (req, res) => {
     return res.status(400).json({ success: false, error: 'Username is required' });
   }
 
-  // Rate limiting - 5 requests per hour per IP
-  const ipRateLimit = checkRateLimit(`pwd-reset-ip:${clientIp}`, 5);
+  // Rate limiting - 3 requests per hour per IP
+  const ipRateLimit = checkRateLimit(`pwd-reset-ip:${clientIp}`, 3, 60 * 60 * 1000);
   if (!ipRateLimit.allowed) {
     return res.status(429).json({
       success: false,
@@ -3730,8 +3817,8 @@ app.post('/api/auth/forgot-password', async (req, res) => {
     });
   }
 
-  // Rate limiting - 3 requests per hour per username
-  const userRateLimit = checkRateLimit(`pwd-reset-user:${username.toLowerCase()}`, 3);
+  // Rate limiting - 2 requests per hour per username
+  const userRateLimit = checkRateLimit(`pwd-reset-user:${username.toLowerCase()}`, 2, 60 * 60 * 1000);
   if (!userRateLimit.allowed) {
     // Return generic message to not reveal if username exists
     return res.json({ success: true, message: 'If the username exists, a password reset has been initiated' });
@@ -3826,6 +3913,11 @@ app.post('/api/auth/forgot-password', async (req, res) => {
 app.get('/api/auth/validate-reset-token/:token', (req, res) => {
   const { token } = req.params;
 
+  // Validate token format (64 hex chars)
+  if (!/^[a-f0-9]{64}$/i.test(token)) {
+    return res.status(400).json({ valid: false, error: 'Invalid token format' });
+  }
+
   const resetToken = db.prepare(`
     SELECT prt.*, u.username
     FROM password_reset_tokens prt
@@ -3882,7 +3974,7 @@ app.post('/api/auth/reset-password', async (req, res) => {
 });
 
 // Admin password reset - mark user as needing to change password
-app.post('/api/auth/admin-password-reset/:userId', authMiddleware, (req, res) => {
+app.post('/api/auth/admin-password-reset/:userId', authMiddleware, csrfMiddleware, (req, res) => {
   if (req.user.role !== 'admin') {
     return res.status(403).json({ success: false, error: 'Admin access required' });
   }
@@ -3920,7 +4012,7 @@ app.get('/api/users', authMiddleware, (req, res) => {
 });
 
 // Unlock user account (admin only)
-app.post('/api/users/:id/unlock', authMiddleware, (req, res) => {
+app.post('/api/users/:id/unlock', authMiddleware, csrfMiddleware, (req, res) => {
   if (req.user.role !== 'admin') {
     return res.status(403).json({ success: false, error: 'Admin access required' });
   }
@@ -3946,7 +4038,7 @@ app.post('/api/users/:id/unlock', authMiddleware, (req, res) => {
 });
 
 // Create new user (admin only)
-app.post('/api/users', authMiddleware, async (req, res) => {
+app.post('/api/users', authMiddleware, csrfMiddleware, async (req, res) => {
   if (req.user.role !== 'admin') {
     return res.status(403).json({ success: false, error: 'Admin access required' });
   }
@@ -4001,7 +4093,7 @@ app.post('/api/users', authMiddleware, async (req, res) => {
 });
 
 // Update user (admin only)
-app.put('/api/users/:id', authMiddleware, async (req, res) => {
+app.put('/api/users/:id', authMiddleware, csrfMiddleware, async (req, res) => {
   if (req.user.role !== 'admin') {
     return res.status(403).json({ success: false, error: 'Admin access required' });
   }
@@ -4048,7 +4140,7 @@ app.put('/api/users/:id', authMiddleware, async (req, res) => {
 });
 
 // Toggle Slack 2FA for a user (admin only)
-app.patch('/api/users/:id/slack-2fa', authMiddleware, (req, res) => {
+app.patch('/api/users/:id/slack-2fa', authMiddleware, csrfMiddleware, (req, res) => {
   if (req.user.role !== 'admin') {
     return res.status(403).json({ success: false, error: 'Admin access required' });
   }
@@ -4079,7 +4171,7 @@ app.patch('/api/users/:id/slack-2fa', authMiddleware, (req, res) => {
 });
 
 // Delete user (admin only)
-app.delete('/api/users/:id', authMiddleware, (req, res) => {
+app.delete('/api/users/:id', authMiddleware, csrfMiddleware, (req, res) => {
   if (req.user.role !== 'admin') {
     return res.status(403).json({ success: false, error: 'Admin access required' });
   }
@@ -4111,7 +4203,7 @@ app.get('/api/incidents', authMiddleware, (req, res) => {
 });
 
 // Create incident
-app.post('/api/incidents', authMiddleware, (req, res) => {
+app.post('/api/incidents', authMiddleware, csrfMiddleware, (req, res) => {
   const { device_id, device_name, device_type, type, notes } = req.body;
   try {
     const result = db.prepare(`
@@ -4125,7 +4217,7 @@ app.post('/api/incidents', authMiddleware, (req, res) => {
 });
 
 // Resolve incident
-app.put('/api/incidents/:id/resolve', authMiddleware, (req, res) => {
+app.put('/api/incidents/:id/resolve', authMiddleware, csrfMiddleware, (req, res) => {
   const id = parseInt(req.params.id);
   try {
     const incident = db.prepare('SELECT started_at FROM incidents WHERE id = ?').get(id);
@@ -4170,7 +4262,7 @@ app.post('/api/activity-log', authMiddleware, (req, res) => {
 // ==================== ZONES ROUTES ====================
 
 // Get zones for a floor
-app.get('/api/zones', (req, res) => {
+app.get('/api/zones', authMiddleware, (req, res) => {
   const floor = req.query.floor;
   let zones;
   if (floor) {
@@ -4182,7 +4274,7 @@ app.get('/api/zones', (req, res) => {
 });
 
 // Create zone
-app.post('/api/zones', authMiddleware, (req, res) => {
+app.post('/api/zones', authMiddleware, csrfMiddleware, (req, res) => {
   const { floor, name, x, y, width, height, color } = req.body;
   try {
     const result = db.prepare(`
@@ -4196,7 +4288,7 @@ app.post('/api/zones', authMiddleware, (req, res) => {
 });
 
 // Update zone
-app.put('/api/zones/:id', authMiddleware, (req, res) => {
+app.put('/api/zones/:id', authMiddleware, csrfMiddleware, (req, res) => {
   const { name, x, y, width, height, color } = req.body;
   try {
     db.prepare(`
@@ -4210,7 +4302,7 @@ app.put('/api/zones/:id', authMiddleware, (req, res) => {
 });
 
 // Delete zone
-app.delete('/api/zones/:id', authMiddleware, (req, res) => {
+app.delete('/api/zones/:id', authMiddleware, csrfMiddleware, (req, res) => {
   try {
     db.prepare('DELETE FROM zones WHERE id = ?').run(req.params.id);
     res.json({ success: true });
@@ -4271,7 +4363,7 @@ app.get('/api/integrations/:id', authMiddleware, (req, res) => {
 });
 
 // Add new API integration
-app.post('/api/integrations', authMiddleware, (req, res) => {
+app.post('/api/integrations', authMiddleware, csrfMiddleware, (req, res) => {
   const { name, auth_type, base_url, description, active,
     api_key_header, api_key, bearer_token, username, password,
     client_id, client_secret, token_url } = req.body;
@@ -4306,7 +4398,7 @@ app.post('/api/integrations', authMiddleware, (req, res) => {
 });
 
 // Update API integration (admin only, or requires approval)
-app.put('/api/integrations/:id', authMiddleware, (req, res) => {
+app.put('/api/integrations/:id', authMiddleware, csrfMiddleware, (req, res) => {
   const { name, auth_type, base_url, description, active,
     api_key_header, api_key, bearer_token, username, password,
     client_id, client_secret, token_url } = req.body;
@@ -4360,7 +4452,7 @@ app.put('/api/integrations/:id', authMiddleware, (req, res) => {
 });
 
 // Delete API integration (admin only)
-app.delete('/api/integrations/:id', authMiddleware, adminMiddleware, (req, res) => {
+app.delete('/api/integrations/:id', authMiddleware, csrfMiddleware, adminMiddleware, (req, res) => {
   db.prepare('DELETE FROM api_integrations WHERE id = ?').run(req.params.id);
   res.json({ success: true });
 });
@@ -4408,13 +4500,13 @@ app.get('/api/pending-changes/count', authMiddleware, (req, res) => {
 });
 
 // Approve pending change (admin only)
-app.post('/api/pending-changes/:id/approve', authMiddleware, adminMiddleware, (req, res) => {
+app.post('/api/pending-changes/:id/approve', authMiddleware, csrfMiddleware, adminMiddleware, (req, res) => {
   const result = approvePendingChange(parseInt(req.params.id), req.user.id);
   res.json(result);
 });
 
 // Reject pending change (admin only)
-app.post('/api/pending-changes/:id/reject', authMiddleware, adminMiddleware, (req, res) => {
+app.post('/api/pending-changes/:id/reject', authMiddleware, csrfMiddleware, adminMiddleware, (req, res) => {
   const result = rejectPendingChange(parseInt(req.params.id), req.user.id);
   res.json(result);
 });
@@ -4505,7 +4597,7 @@ app.get('/api/monitors/by-floor', authMiddleware, (req, res) => {
 });
 
 // Get monitor history
-app.get('/api/monitors/:id/history', (req, res) => {
+app.get('/api/monitors/:id/history', authMiddleware, (req, res) => {
   const limit = parseInt(req.query.limit) || 100;
   const heartbeats = db.prepare(`
     SELECT * FROM heartbeats WHERE monitor_id = ? ORDER BY time DESC LIMIT ?
@@ -4533,7 +4625,7 @@ app.get('/api/heartbeats', authMiddleware, (req, res) => {
 });
 
 // Get uptime stats
-app.get('/api/monitors/:id/uptime', (req, res) => {
+app.get('/api/monitors/:id/uptime', authMiddleware, (req, res) => {
   const hours = parseInt(req.query.hours) || 24;
   const since = new Date(Date.now() - hours * 60 * 60 * 1000).toISOString();
 
@@ -4557,7 +4649,7 @@ app.get('/api/monitors/:id/uptime', (req, res) => {
 });
 
 // Printer status endpoints
-app.get('/api/printers/:id/status', (req, res) => {
+app.get('/api/printers/:id/status', authMiddleware, (req, res) => {
   const status = db.prepare(`
     SELECT * FROM printer_status WHERE monitor_id = ? ORDER BY time DESC LIMIT 1
   `).get(req.params.id);
@@ -5080,7 +5172,7 @@ app.get('/api/zoom-rooms/utilization/summary', authMiddleware, (req, res) => {
 });
 
 // Get floor health summary
-app.get('/api/floors/health', (req, res) => {
+app.get('/api/floors/health', authMiddleware, (req, res) => {
   const floors = {};
 
   // Get monitors by floor with latest heartbeat status (optimized query)
@@ -5137,7 +5229,7 @@ app.get('/api/floors/health', (req, res) => {
 });
 
 // Update device tags
-app.patch('/api/monitors/:id/tags', authMiddleware, (req, res) => {
+app.patch('/api/monitors/:id/tags', authMiddleware, csrfMiddleware, (req, res) => {
   const { tags } = req.body;
   const tagsJson = Array.isArray(tags) ? JSON.stringify(tags) : tags;
 
@@ -5164,7 +5256,7 @@ app.get('/api/tags', authMiddleware, (req, res) => {
 });
 
 // Get Poly device from database by device_id (Poly Lens ID)
-app.get('/api/poly-devices/:deviceId', (req, res) => {
+app.get('/api/poly-devices/:deviceId', authMiddleware, (req, res) => {
   // Handle the maintenance list route first
   if (req.params.deviceId === 'maintenance') {
     const devices = db.prepare(`
@@ -5186,7 +5278,7 @@ app.get('/api/poly-devices/:deviceId', (req, res) => {
 });
 
 // Get Poly device history (heartbeats)
-app.get('/api/poly-devices/:deviceId/history', (req, res) => {
+app.get('/api/poly-devices/:deviceId/history', authMiddleware, (req, res) => {
   const limit = parseInt(req.query.limit) || 100;
 
   // First get the database ID from the Poly Lens device_id
@@ -5208,7 +5300,7 @@ app.get('/api/poly-devices/:deviceId/history', (req, res) => {
 });
 
 // Get Poly device uptime stats
-app.get('/api/poly-devices/:deviceId/uptime', (req, res) => {
+app.get('/api/poly-devices/:deviceId/uptime', authMiddleware, (req, res) => {
   const hours = parseInt(req.query.hours) || 24;
   const since = new Date(Date.now() - hours * 60 * 60 * 1000).toISOString();
 
@@ -5248,7 +5340,7 @@ app.get('/api/poly-devices', (req, res) => {
 });
 
 // Toggle maintenance mode for a Poly device
-app.patch('/api/poly-devices/:deviceId/maintenance', authMiddleware, (req, res) => {
+app.patch('/api/poly-devices/:deviceId/maintenance', authMiddleware, csrfMiddleware, (req, res) => {
   const { maintenance, note, until } = req.body;
   const device = db.prepare('SELECT * FROM poly_devices WHERE device_id = ?').get(req.params.deviceId);
 
@@ -5276,7 +5368,7 @@ app.patch('/api/poly-devices/:deviceId/maintenance', authMiddleware, (req, res) 
 });
 
 // Disable/enable a poly device
-app.patch('/api/poly-devices/:deviceId/disable', authMiddleware, (req, res) => {
+app.patch('/api/poly-devices/:deviceId/disable', authMiddleware, csrfMiddleware, (req, res) => {
   const { disabled } = req.body;
   const device = db.prepare('SELECT * FROM poly_devices WHERE device_id = ?').get(req.params.deviceId);
 
@@ -5295,7 +5387,7 @@ app.patch('/api/poly-devices/:deviceId/disable', authMiddleware, (req, res) => {
 
 
 // Add a new monitor (any authenticated user can add)
-app.post('/api/monitors', authMiddleware, (req, res) => {
+app.post('/api/monitors', authMiddleware, csrfMiddleware, (req, res) => {
   const { name, type, hostname, url, floor, device_type } = req.body;
 
   // Input validation
@@ -5363,7 +5455,7 @@ app.post('/api/monitors', authMiddleware, (req, res) => {
 });
 
 // Delete a monitor (admin only, or requires approval)
-app.delete('/api/monitors/:id', authMiddleware, (req, res) => {
+app.delete('/api/monitors/:id', authMiddleware, csrfMiddleware, (req, res) => {
   if (req.user.role !== 'admin') {
     // Create pending change for approval
     const monitor = db.prepare('SELECT * FROM monitors WHERE id = ?').get(req.params.id);
@@ -5404,7 +5496,7 @@ app.get('/api/monitors/ping/:host', authMiddleware, async (req, res) => {
 });
 
 // Update a monitor (admin only, or requires approval)
-app.put('/api/monitors/:id', authMiddleware, (req, res) => {
+app.put('/api/monitors/:id', authMiddleware, csrfMiddleware, (req, res) => {
   const { name, type, hostname, url, floor, device_type, active, interval } = req.body;
   const monitor = db.prepare('SELECT * FROM monitors WHERE id = ?').get(req.params.id);
 
@@ -5439,7 +5531,7 @@ app.put('/api/monitors/:id', authMiddleware, (req, res) => {
 });
 
 // Update monitor position (any authenticated user)
-app.patch('/api/monitors/:id/position', authMiddleware, (req, res) => {
+app.patch('/api/monitors/:id/position', authMiddleware, csrfMiddleware, (req, res) => {
   const { pos_x, pos_y, tv_mode } = req.body;
 
   if (tv_mode) {
@@ -5454,7 +5546,7 @@ app.patch('/api/monitors/:id/position', authMiddleware, (req, res) => {
 });
 
 // Update monitor 3D position (includes height)
-app.patch('/api/monitors/:id/position-3d', authMiddleware, (req, res) => {
+app.patch('/api/monitors/:id/position-3d', authMiddleware, csrfMiddleware, (req, res) => {
   const { pos_x, pos_y, pos_z } = req.body;
 
   db.prepare('UPDATE monitors SET pos_x = ?, pos_y = ?, pos_z = ? WHERE id = ?')
@@ -5465,7 +5557,7 @@ app.patch('/api/monitors/:id/position-3d', authMiddleware, (req, res) => {
 });
 
 // Update room 3D position (includes height)
-app.patch('/api/room-positions/:roomId/position-3d', authMiddleware, (req, res) => {
+app.patch('/api/room-positions/:roomId/position-3d', authMiddleware, csrfMiddleware, (req, res) => {
   const { pos_x, pos_y, pos_z, floor } = req.body;
   const roomId = req.params.roomId;
 
@@ -5485,7 +5577,7 @@ app.patch('/api/room-positions/:roomId/position-3d', authMiddleware, (req, res) 
 });
 
 // Toggle maintenance mode for a monitor
-app.patch('/api/monitors/:id/maintenance', authMiddleware, (req, res) => {
+app.patch('/api/monitors/:id/maintenance', authMiddleware, csrfMiddleware, (req, res) => {
   const { maintenance, note, until } = req.body;
   const monitor = db.prepare('SELECT * FROM monitors WHERE id = ?').get(req.params.id);
 
@@ -5523,7 +5615,7 @@ app.get('/api/monitors/maintenance', (req, res) => {
 });
 
 // Toggle disabled status for a monitor (non-serviceable devices)
-app.patch('/api/monitors/:id/disable', authMiddleware, (req, res) => {
+app.patch('/api/monitors/:id/disable', authMiddleware, csrfMiddleware, (req, res) => {
   const { disabled } = req.body;
   const monitor = db.prepare('SELECT * FROM monitors WHERE id = ?').get(req.params.id);
 
@@ -5681,7 +5773,7 @@ function resolveThresholdAlert(monitorId, alertType) {
 }
 
 // Get active threshold alerts (not resolved and not dismissed)
-app.get('/api/threshold-alerts', (req, res) => {
+app.get('/api/threshold-alerts', authMiddleware, (req, res) => {
   const alerts = db.prepare(`
     SELECT ta.*, m.name as monitor_name, m.floor
     FROM threshold_alerts ta
@@ -5695,7 +5787,7 @@ app.get('/api/threshold-alerts', (req, res) => {
 
 // Get active threshold alerts as a map (monitor_id -> array of alert_types)
 // Used by dashboard to check if alerts are already active before showing browser notifications
-app.get('/api/threshold-alerts/active-map', (req, res) => {
+app.get('/api/threshold-alerts/active-map', authMiddleware, (req, res) => {
   const alerts = db.prepare(`
     SELECT monitor_id, alert_type
     FROM threshold_alerts
@@ -5751,7 +5843,7 @@ setTimeout(checkPrinterThresholds, 30000); // Initial check after 30 seconds
 // ==================== ROOM POSITIONS ====================
 
 // Get all room positions
-app.get('/api/room-positions', (req, res) => {
+app.get('/api/room-positions', authMiddleware, (req, res) => {
   const positions = db.prepare('SELECT * FROM room_positions').all();
   const posMap = {};
   positions.forEach(p => { posMap[p.room_id] = p; });
@@ -5759,7 +5851,7 @@ app.get('/api/room-positions', (req, res) => {
 });
 
 // Get room positions by floor
-app.get('/api/room-positions/:floor', (req, res) => {
+app.get('/api/room-positions/:floor', authMiddleware, (req, res) => {
   const positions = db.prepare('SELECT * FROM room_positions WHERE floor = ?').all(req.params.floor);
   const posMap = {};
   positions.forEach(p => { posMap[p.room_id] = p; });
@@ -5799,7 +5891,7 @@ app.patch('/api/room-positions/:roomId', authMiddleware, (req, res) => {
 });
 
 // Toggle monitor active status (admin only)
-app.patch('/api/monitors/:id/toggle', authMiddleware, adminMiddleware, (req, res) => {
+app.patch('/api/monitors/:id/toggle', authMiddleware, csrfMiddleware, adminMiddleware, (req, res) => {
   const monitor = db.prepare('SELECT active FROM monitors WHERE id = ?').get(req.params.id);
 
   if (!monitor) {
@@ -5815,7 +5907,7 @@ app.patch('/api/monitors/:id/toggle', authMiddleware, adminMiddleware, (req, res
 // ==================== SETTINGS ENDPOINTS ====================
 
 // Get all settings
-app.get('/api/settings', (req, res) => {
+app.get('/api/settings', authMiddleware, (req, res) => {
   const settings = getAllSettings();
   // Mask sensitive values
   if (settings.slack_webhook_url) {
@@ -5856,11 +5948,11 @@ function updateSettings(req, res) {
   res.json({ success: true });
 }
 
-app.put('/api/settings', updateSettings);
-app.post('/api/settings', updateSettings);
+app.put('/api/settings', authMiddleware, csrfMiddleware, adminMiddleware, updateSettings);
+app.post('/api/settings', authMiddleware, csrfMiddleware, adminMiddleware, updateSettings);
 
 // Test Slack notification
-app.post('/api/settings/test-slack', async (req, res) => {
+app.post('/api/settings/test-slack', authMiddleware, csrfMiddleware, async (req, res) => {
   const webhookUrl = getSetting('slack_webhook_url');
   const slackChannel = getSetting('slack_channel');
 
@@ -5902,7 +5994,7 @@ app.post('/api/settings/test-slack', async (req, res) => {
 // ==================== FLOOR PLAN ENDPOINTS ====================
 
 // Get all floor plans
-app.get('/api/floor-plans', (req, res) => {
+app.get('/api/floor-plans', authMiddleware, (req, res) => {
   const plans = db.prepare('SELECT floor, image_type, updated_at FROM floor_plans').all();
   res.json({ success: true, plans });
 });
@@ -6082,7 +6174,7 @@ app.get('/api/tags', authMiddleware, (req, res) => {
 });
 
 // Create tag
-app.post('/api/tags', authMiddleware, (req, res) => {
+app.post('/api/tags', authMiddleware, csrfMiddleware, (req, res) => {
   const { name, color, priority } = req.body;
 
   if (!name) {
@@ -6099,7 +6191,7 @@ app.post('/api/tags', authMiddleware, (req, res) => {
 });
 
 // Update tag
-app.put('/api/tags/:id', authMiddleware, (req, res) => {
+app.put('/api/tags/:id', authMiddleware, csrfMiddleware, (req, res) => {
   const { name, color, priority } = req.body;
 
   db.prepare('UPDATE device_tags SET name = ?, color = ?, priority = ? WHERE id = ?').run(name, color, priority, req.params.id);
@@ -6108,7 +6200,7 @@ app.put('/api/tags/:id', authMiddleware, (req, res) => {
 });
 
 // Delete tag
-app.delete('/api/tags/:id', authMiddleware, (req, res) => {
+app.delete('/api/tags/:id', authMiddleware, csrfMiddleware, (req, res) => {
   const tag = db.prepare('SELECT * FROM device_tags WHERE id = ?').get(req.params.id);
   db.prepare('DELETE FROM device_tags WHERE id = ?').run(req.params.id);
   logActivity(req, 'delete_tag', 'tag', req.params.id, tag?.name);
@@ -6332,7 +6424,7 @@ app.get('/api/webhooks', authMiddleware, (req, res) => {
 });
 
 // Create webhook
-app.post('/api/webhooks', authMiddleware, (req, res) => {
+app.post('/api/webhooks', authMiddleware, csrfMiddleware, (req, res) => {
   const { name, url, type, events, headers, enabled } = req.body;
 
   if (!name || !url) {
@@ -6349,7 +6441,7 @@ app.post('/api/webhooks', authMiddleware, (req, res) => {
 });
 
 // Update webhook
-app.put('/api/webhooks/:id', authMiddleware, (req, res) => {
+app.put('/api/webhooks/:id', authMiddleware, csrfMiddleware, (req, res) => {
   const { name, url, type, events, headers, enabled } = req.body;
 
   db.prepare(`
@@ -6362,7 +6454,7 @@ app.put('/api/webhooks/:id', authMiddleware, (req, res) => {
 });
 
 // Delete webhook
-app.delete('/api/webhooks/:id', authMiddleware, (req, res) => {
+app.delete('/api/webhooks/:id', authMiddleware, csrfMiddleware, (req, res) => {
   const webhook = db.prepare('SELECT * FROM webhooks WHERE id = ?').get(req.params.id);
   db.prepare('DELETE FROM webhooks WHERE id = ?').run(req.params.id);
   logActivity(req, 'delete_webhook', 'webhook', req.params.id, webhook?.name);
@@ -6370,7 +6462,7 @@ app.delete('/api/webhooks/:id', authMiddleware, (req, res) => {
 });
 
 // Test webhook
-app.post('/api/webhooks/:id/test', authMiddleware, async (req, res) => {
+app.post('/api/webhooks/:id/test', authMiddleware, csrfMiddleware, async (req, res) => {
   const webhook = db.prepare('SELECT * FROM webhooks WHERE id = ?').get(req.params.id);
 
   if (!webhook) {
@@ -6437,7 +6529,7 @@ app.get('/api/scheduled-reports', authMiddleware, (req, res) => {
 });
 
 // Create scheduled report
-app.post('/api/scheduled-reports', authMiddleware, (req, res) => {
+app.post('/api/scheduled-reports', authMiddleware, csrfMiddleware, (req, res) => {
   const { name, schedule, report_type, recipients, slack_channel, include_floors, include_device_types, enabled } = req.body;
 
   const result = db.prepare(`
@@ -6450,7 +6542,7 @@ app.post('/api/scheduled-reports', authMiddleware, (req, res) => {
 });
 
 // Update scheduled report
-app.put('/api/scheduled-reports/:id', authMiddleware, (req, res) => {
+app.put('/api/scheduled-reports/:id', authMiddleware, csrfMiddleware, (req, res) => {
   const { name, schedule, report_type, recipients, slack_channel, include_floors, include_device_types, enabled } = req.body;
 
   db.prepare(`
@@ -6463,7 +6555,7 @@ app.put('/api/scheduled-reports/:id', authMiddleware, (req, res) => {
 });
 
 // Delete scheduled report
-app.delete('/api/scheduled-reports/:id', authMiddleware, (req, res) => {
+app.delete('/api/scheduled-reports/:id', authMiddleware, csrfMiddleware, (req, res) => {
   const report = db.prepare('SELECT * FROM scheduled_reports WHERE id = ?').get(req.params.id);
   db.prepare('DELETE FROM scheduled_reports WHERE id = ?').run(req.params.id);
   logActivity(req, 'delete_report', 'scheduled_report', req.params.id, report?.name);
@@ -6471,7 +6563,7 @@ app.delete('/api/scheduled-reports/:id', authMiddleware, (req, res) => {
 });
 
 // Generate report now
-app.post('/api/scheduled-reports/:id/run', authMiddleware, async (req, res) => {
+app.post('/api/scheduled-reports/:id/run', authMiddleware, csrfMiddleware, async (req, res) => {
   const report = db.prepare('SELECT * FROM scheduled_reports WHERE id = ?').get(req.params.id);
 
   if (!report) {
@@ -6624,7 +6716,7 @@ app.get('/api/alert-rules', authMiddleware, (req, res) => {
 });
 
 // Create alert rule
-app.post('/api/alert-rules', authMiddleware, (req, res) => {
+app.post('/api/alert-rules', authMiddleware, csrfMiddleware, (req, res) => {
   const { monitor_id, tag_id, rule_type, condition, threshold, retry_count, notify_slack, notify_webhook, enabled } = req.body;
 
   const result = db.prepare(`
@@ -6637,7 +6729,7 @@ app.post('/api/alert-rules', authMiddleware, (req, res) => {
 });
 
 // Update alert rule
-app.put('/api/alert-rules/:id', authMiddleware, (req, res) => {
+app.put('/api/alert-rules/:id', authMiddleware, csrfMiddleware, (req, res) => {
   const { monitor_id, tag_id, rule_type, condition, threshold, retry_count, notify_slack, notify_webhook, enabled } = req.body;
 
   db.prepare(`
@@ -6650,7 +6742,7 @@ app.put('/api/alert-rules/:id', authMiddleware, (req, res) => {
 });
 
 // Delete alert rule
-app.delete('/api/alert-rules/:id', authMiddleware, (req, res) => {
+app.delete('/api/alert-rules/:id', authMiddleware, csrfMiddleware, (req, res) => {
   db.prepare('DELETE FROM alert_rules WHERE id = ?').run(req.params.id);
   logActivity(req, 'delete_alert_rule', 'alert_rule', req.params.id);
   res.json({ success: true });
@@ -6665,7 +6757,7 @@ app.get('/api/api-monitors', authMiddleware, (req, res) => {
 });
 
 // Create API monitor
-app.post('/api/api-monitors', authMiddleware, (req, res) => {
+app.post('/api/api-monitors', authMiddleware, csrfMiddleware, (req, res) => {
   const { name, url, method, headers, body, expected_status, timeout, interval, enabled } = req.body;
 
   const result = db.prepare(`
@@ -6678,7 +6770,7 @@ app.post('/api/api-monitors', authMiddleware, (req, res) => {
 });
 
 // Update API monitor
-app.put('/api/api-monitors/:id', authMiddleware, (req, res) => {
+app.put('/api/api-monitors/:id', authMiddleware, csrfMiddleware, (req, res) => {
   const { name, url, method, headers, body, expected_status, timeout, interval, enabled } = req.body;
 
   db.prepare(`
@@ -6691,7 +6783,7 @@ app.put('/api/api-monitors/:id', authMiddleware, (req, res) => {
 });
 
 // Delete API monitor
-app.delete('/api/api-monitors/:id', authMiddleware, (req, res) => {
+app.delete('/api/api-monitors/:id', authMiddleware, csrfMiddleware, (req, res) => {
   const monitor = db.prepare('SELECT * FROM api_monitors WHERE id = ?').get(req.params.id);
   db.prepare('DELETE FROM api_monitors WHERE id = ?').run(req.params.id);
   logActivity(req, 'delete_api_monitor', 'api_monitor', req.params.id, monitor?.name);
@@ -6699,7 +6791,7 @@ app.delete('/api/api-monitors/:id', authMiddleware, (req, res) => {
 });
 
 // Check API monitor now
-app.post('/api/api-monitors/:id/check', authMiddleware, async (req, res) => {
+app.post('/api/api-monitors/:id/check', authMiddleware, csrfMiddleware, async (req, res) => {
   const monitor = db.prepare('SELECT * FROM api_monitors WHERE id = ?').get(req.params.id);
 
   if (!monitor) {
@@ -6789,7 +6881,7 @@ app.get('/api/backup', authMiddleware, (req, res) => {
 });
 
 // Import database backup
-app.post('/api/restore', authMiddleware, (req, res) => {
+app.post('/api/restore', authMiddleware, csrfMiddleware, (req, res) => {
   if (req.user?.role !== 'admin') {
     return res.status(403).json({ success: false, error: 'Admin only' });
   }
@@ -6906,7 +6998,7 @@ app.get('/api/export/uptime', authMiddleware, (req, res) => {
 // ==================== BULK IMPORT ====================
 
 // Bulk import devices from CSV
-app.post('/api/monitors/bulk-import', authMiddleware, (req, res) => {
+app.post('/api/monitors/bulk-import', authMiddleware, csrfMiddleware, (req, res) => {
   if (req.user.role !== 'admin') {
     return res.status(403).json({ success: false, error: 'Admin access required' });
   }
@@ -6962,7 +7054,7 @@ app.get('/api/device-templates', (req, res) => {
 });
 
 // Create device template
-app.post('/api/device-templates', authMiddleware, (req, res) => {
+app.post('/api/device-templates', authMiddleware, csrfMiddleware, (req, res) => {
   if (req.user.role !== 'admin') {
     return res.status(403).json({ success: false, error: 'Admin access required' });
   }
@@ -6978,7 +7070,7 @@ app.post('/api/device-templates', authMiddleware, (req, res) => {
 });
 
 // Delete device template
-app.delete('/api/device-templates/:id', authMiddleware, (req, res) => {
+app.delete('/api/device-templates/:id', authMiddleware, csrfMiddleware, (req, res) => {
   if (req.user.role !== 'admin') {
     return res.status(403).json({ success: false, error: 'Admin access required' });
   }
@@ -7000,7 +7092,7 @@ app.get('/api/saved-filters', authMiddleware, (req, res) => {
 });
 
 // Create saved filter
-app.post('/api/saved-filters', authMiddleware, (req, res) => {
+app.post('/api/saved-filters', authMiddleware, csrfMiddleware, (req, res) => {
   const { name, filter_config, is_global } = req.body;
 
   // Only admins can create global filters
@@ -7015,7 +7107,7 @@ app.post('/api/saved-filters', authMiddleware, (req, res) => {
 });
 
 // Delete saved filter
-app.delete('/api/saved-filters/:id', authMiddleware, (req, res) => {
+app.delete('/api/saved-filters/:id', authMiddleware, csrfMiddleware, (req, res) => {
   const filter = db.prepare('SELECT * FROM saved_filters WHERE id = ?').get(req.params.id);
 
   if (!filter) {
@@ -7046,7 +7138,7 @@ app.get('/api/floor-zones', (req, res) => {
 });
 
 // Create floor zone
-app.post('/api/floor-zones', authMiddleware, (req, res) => {
+app.post('/api/floor-zones', authMiddleware, csrfMiddleware, (req, res) => {
   if (req.user.role !== 'admin') {
     return res.status(403).json({ success: false, error: 'Admin access required' });
   }
@@ -7063,7 +7155,7 @@ app.post('/api/floor-zones', authMiddleware, (req, res) => {
 });
 
 // Update floor zone
-app.put('/api/floor-zones/:id', authMiddleware, (req, res) => {
+app.put('/api/floor-zones/:id', authMiddleware, csrfMiddleware, (req, res) => {
   if (req.user.role !== 'admin') {
     return res.status(403).json({ success: false, error: 'Admin access required' });
   }
@@ -7079,7 +7171,7 @@ app.put('/api/floor-zones/:id', authMiddleware, (req, res) => {
 });
 
 // Delete floor zone
-app.delete('/api/floor-zones/:id', authMiddleware, (req, res) => {
+app.delete('/api/floor-zones/:id', authMiddleware, csrfMiddleware, (req, res) => {
   if (req.user.role !== 'admin') {
     return res.status(403).json({ success: false, error: 'Admin access required' });
   }
@@ -7091,7 +7183,7 @@ app.delete('/api/floor-zones/:id', authMiddleware, (req, res) => {
 // ==================== DEVICE NOTES ====================
 
 // Update device notes
-app.patch('/api/monitors/:id/notes', authMiddleware, (req, res) => {
+app.patch('/api/monitors/:id/notes', authMiddleware, csrfMiddleware, (req, res) => {
   const { notes } = req.body;
 
   db.prepare('UPDATE monitors SET notes = ? WHERE id = ?').run(notes, req.params.id);
@@ -7101,7 +7193,7 @@ app.patch('/api/monitors/:id/notes', authMiddleware, (req, res) => {
 });
 
 // General update endpoint for monitor fields (floor, serial_number, etc.)
-app.patch('/api/monitors/:id', authMiddleware, (req, res) => {
+app.patch('/api/monitors/:id', authMiddleware, csrfMiddleware, (req, res) => {
   const { floor, serial_number } = req.body;
   const updates = [];
   const values = [];
@@ -7365,7 +7457,7 @@ app.post('/api/auto-discover/add', authMiddleware, (req, res) => {
 // ==================== BULK ACTIONS ====================
 
 // Bulk update monitors
-app.post('/api/monitors/bulk-action', authMiddleware, (req, res) => {
+app.post('/api/monitors/bulk-action', authMiddleware, csrfMiddleware, (req, res) => {
   if (req.user.role !== 'admin') {
     return res.status(403).json({ success: false, error: 'Admin access required' });
   }
@@ -7437,7 +7529,7 @@ app.get('/manifest.json', (req, res) => {
 // ==================== 2FA ENDPOINTS ====================
 
 // Generate 2FA secret for a user
-app.post('/api/2fa/setup', authMiddleware, (req, res) => {
+app.post('/api/2fa/setup', authMiddleware, csrfMiddleware, (req, res) => {
   try {
     const userId = req.user.id;
     const user = db.prepare('SELECT * FROM users WHERE id = ?').get(userId);
@@ -7468,7 +7560,7 @@ app.post('/api/2fa/setup', authMiddleware, (req, res) => {
 });
 
 // Verify and enable 2FA
-app.post('/api/2fa/verify', authMiddleware, (req, res) => {
+app.post('/api/2fa/verify', authMiddleware, csrfMiddleware, (req, res) => {
   try {
     const { code } = req.body;
     const userId = req.user.id;
@@ -7493,7 +7585,7 @@ app.post('/api/2fa/verify', authMiddleware, (req, res) => {
 });
 
 // Disable 2FA
-app.post('/api/2fa/disable', authMiddleware, (req, res) => {
+app.post('/api/2fa/disable', authMiddleware, csrfMiddleware, (req, res) => {
   try {
     const { code, password } = req.body;
     const userId = req.user.id;
@@ -7747,9 +7839,29 @@ const wss = new WebSocket.Server({ server });
 const wsClients = new Set();
 
 wss.on('connection', (ws, req) => {
-  // Authenticate WebSocket connection
-  const url = new URL(req.url, `http://${req.headers.host}`);
-  const token = url.searchParams.get('token');
+  // Try multiple auth methods in order of security preference
+  let token = null;
+
+  // Method 1: Sec-WebSocket-Protocol header (most secure for WS)
+  const protocols = req.headers['sec-websocket-protocol'];
+  if (protocols) {
+    // Format: "auth, <token>" - extract token
+    const parts = protocols.split(',').map(p => p.trim());
+    if (parts.length >= 2 && parts[0] === 'auth') {
+      token = parts[1];
+      // Echo back the protocol to complete handshake
+      ws.protocol = 'auth';
+    }
+  }
+
+  // Method 2: Query string (fallback for compatibility, log warning)
+  if (!token) {
+    const url = new URL(req.url, `http://${req.headers.host}`);
+    token = url.searchParams.get('token');
+    if (token) {
+      logger.warn('WebSocket using insecure query string auth - client should upgrade');
+    }
+  }
 
   if (!token) {
     ws.close(4001, 'Authentication required');
@@ -7853,6 +7965,10 @@ function runDatabaseCleanup() {
 
     // Clean expired sessions
     const sessionsDeleted = db.prepare('DELETE FROM sessions WHERE expires_at < ?').run(new Date().toISOString());
+
+    // Clean up expired pending logins
+    db.prepare("DELETE FROM pending_logins WHERE expires_at < datetime('now')").run();
+
 
     const totalDeleted = (heartbeatsDeleted.changes || 0) + (polyHeartbeatsDeleted.changes || 0) +
                          (printerStatusDeleted.changes || 0) + (activityDeleted.changes || 0) +

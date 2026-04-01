@@ -5866,7 +5866,7 @@
     async function fetchFloorPlans() {
       try {
         // First get the list of floor plans
-        const response = await fetch(`${API_URL}/api/floor-plans`);
+        const response = await authFetch(`${API_URL}/api/floor-plans`);
         if (response.ok) {
           const data = await response.json();
           floorPlans = {};
@@ -5874,7 +5874,7 @@
           // Fetch full data for each floor plan (including image_data)
           for (const plan of data.plans) {
             try {
-              const fullResponse = await fetch(`${API_URL}/api/floor-plans/${encodeURIComponent(plan.floor)}`);
+              const fullResponse = await authFetch(`${API_URL}/api/floor-plans/${encodeURIComponent(plan.floor)}`);
               if (fullResponse.ok) {
                 const fullData = await fullResponse.json();
                 floorPlans[plan.floor] = fullData.plan;
@@ -5903,7 +5903,7 @@
 
     async function fetchCustomDeviceTypes() {
       try {
-        const response = await fetch(`${API_URL}/api/device-types`);
+        const response = await authFetch(`${API_URL}/api/device-types`);
         if (response.ok) {
           const data = await response.json();
           customDeviceTypes = data.types || [];
@@ -5915,7 +5915,7 @@
 
     async function fetchRoomPositions() {
       try {
-        const response = await fetch(`${API_URL}/api/room-positions`);
+        const response = await authFetch(`${API_URL}/api/room-positions`);
         if (response.ok) {
           const data = await response.json();
           roomPositions = data.positions || {};
@@ -5938,7 +5938,7 @@
         // Fetch status for each printer in parallel
         const statusPromises = printerIds.map(async (id) => {
           try {
-            const response = await fetch(`${API_URL}/api/printers/${id}/status`);
+            const response = await authFetch(`${API_URL}/api/printers/${id}/status`);
             if (response.ok) {
               const data = await response.json();
               if (data.success && data.status) {
@@ -5959,7 +5959,7 @@
     // Fetch active threshold alerts from server (for once-per-incident toner alerts)
     async function fetchActiveThresholdAlerts() {
       try {
-        const response = await fetch(`${API_URL}/api/threshold-alerts/active-map`);
+        const response = await authFetch(`${API_URL}/api/threshold-alerts/active-map`);
         if (response.ok) {
           const data = await response.json();
           if (data.success) {
@@ -6253,7 +6253,7 @@
           const imageType = file.type.split('/')[1];
 
           try {
-            const response = await fetch(`${API_URL}/api/floor-plans/${encodeURIComponent(floor)}`, {
+            const response = await authFetch(`${API_URL}/api/floor-plans/${encodeURIComponent(floor)}`, {
               method: 'PUT',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({ image_data: base64, image_type: imageType })
@@ -6276,7 +6276,7 @@
       if (!confirm(`Delete floor plan for ${floor}?`)) return;
 
       try {
-        await fetch(`${API_URL}/api/floor-plans/${encodeURIComponent(floor)}`, { method: 'DELETE' });
+        await authFetch(`${API_URL}/api/floor-plans/${encodeURIComponent(floor)}`, { method: 'DELETE' });
         await fetchFloorPlans();
         renderAdmin();
       } catch (e) {
@@ -7501,19 +7501,19 @@
           const polyDeviceId = polyDeviceData.id;
 
           // Fetch uptime stats
-          const uptimeRes = await fetch(`${API_URL}/api/poly-devices/${polyDeviceId}/uptime?hours=24`);
+          const uptimeRes = await authFetch(`${API_URL}/api/poly-devices/${polyDeviceId}/uptime?hours=24`);
           const uptimeData = uptimeRes.ok ? await uptimeRes.json() : null;
 
           // Fetch history
-          const historyRes = await fetch(`${API_URL}/api/poly-devices/${polyDeviceId}/history?limit=50`);
+          const historyRes = await authFetch(`${API_URL}/api/poly-devices/${polyDeviceId}/history?limit=50`);
           const historyData = historyRes.ok ? await historyRes.json() : null;
 
           // Get 7 day uptime
-          const uptime7dRes = await fetch(`${API_URL}/api/poly-devices/${polyDeviceId}/uptime?hours=168`);
+          const uptime7dRes = await authFetch(`${API_URL}/api/poly-devices/${polyDeviceId}/uptime?hours=168`);
           const uptime7dData = uptime7dRes.ok ? await uptime7dRes.json() : null;
 
           // Get 30 day uptime
-          const uptime30dRes = await fetch(`${API_URL}/api/poly-devices/${polyDeviceId}/uptime?hours=720`);
+          const uptime30dRes = await authFetch(`${API_URL}/api/poly-devices/${polyDeviceId}/uptime?hours=720`);
           const uptime30dData = uptime30dRes.ok ? await uptime30dRes.json() : null;
 
           return {
@@ -7571,25 +7571,25 @@
         });
 
         // Fetch uptime stats
-        const uptimeRes = await fetch(`${API_URL}/api/monitors/${deviceId}/uptime?hours=24`);
+        const uptimeRes = await authFetch(`${API_URL}/api/monitors/${deviceId}/uptime?hours=24`);
         const uptimeData = uptimeRes.ok ? await uptimeRes.json() : null;
 
         // Fetch history
-        const historyRes = await fetch(`${API_URL}/api/monitors/${deviceId}/history?limit=50`);
+        const historyRes = await authFetch(`${API_URL}/api/monitors/${deviceId}/history?limit=50`);
         const historyData = historyRes.ok ? await historyRes.json() : null;
 
         // Get 7 day uptime
-        const uptime7dRes = await fetch(`${API_URL}/api/monitors/${deviceId}/uptime?hours=168`);
+        const uptime7dRes = await authFetch(`${API_URL}/api/monitors/${deviceId}/uptime?hours=168`);
         const uptime7dData = uptime7dRes.ok ? await uptime7dRes.json() : null;
 
         // Get 30 day uptime
-        const uptime30dRes = await fetch(`${API_URL}/api/monitors/${deviceId}/uptime?hours=720`);
+        const uptime30dRes = await authFetch(`${API_URL}/api/monitors/${deviceId}/uptime?hours=720`);
         const uptime30dData = uptime30dRes.ok ? await uptime30dRes.json() : null;
 
         // For printers, also fetch printer status which contains serial number from SNMP
         let printerSerial = null;
         if (monitor?.device_type === 'printers') {
-          const printerStatusRes = await fetch(`${API_URL}/api/printers/${deviceId}/status`);
+          const printerStatusRes = await authFetch(`${API_URL}/api/printers/${deviceId}/status`);
           if (printerStatusRes.ok) {
             const printerStatusData = await printerStatusRes.json();
             printerSerial = printerStatusData?.info?.serialNumber || null;
@@ -7648,7 +7648,7 @@
       // If not found in zoomOnlyRooms, try to fetch from all zoom rooms
       if (!roomData) {
         try {
-          const response = await fetch(`${API_URL}/api/zoom-rooms`);
+          const response = await authFetch(`${API_URL}/api/zoom-rooms`);
           if (response.ok) {
             const data = await response.json();
             roomData = data.rooms?.find(r => r.id === roomId);
@@ -7689,7 +7689,7 @@
       // Fetch uptime history if available
       let uptimeData = null;
       try {
-        const uptimeResponse = await fetch(`${API_URL}/api/zoom-rooms/${roomId}/history`);
+        const uptimeResponse = await authFetch(`${API_URL}/api/zoom-rooms/${roomId}/history`);
         if (uptimeResponse.ok) {
           uptimeData = await uptimeResponse.json();
         }
@@ -9772,7 +9772,7 @@
 
     async function fetchFloorHealth() {
       try {
-        const response = await fetch(`${API_URL}/api/floors/health`);
+        const response = await authFetch(`${API_URL}/api/floors/health`);
         if (response.ok) {
           const data = await response.json();
           if (data.success) {
@@ -9798,7 +9798,7 @@
 
     async function fetchAllTags() {
       try {
-        const response = await fetch(`${API_URL}/api/tags`);
+        const response = await authFetch(`${API_URL}/api/tags`);
         if (response.ok) {
           const data = await response.json();
           if (data.success) {
@@ -9904,7 +9904,7 @@
     // ==================== MEETING UTILIZATION ====================
     async function fetchRoomUtilization(roomId) {
       try {
-        const response = await fetch(`${API_URL}/api/zoom-rooms/${roomId}/utilization?days=7`);
+        const response = await authFetch(`${API_URL}/api/zoom-rooms/${roomId}/utilization?days=7`);
         if (response.ok) {
           return await response.json();
         }
@@ -12883,7 +12883,7 @@
     // ==================== DEVICE TEMPLATES ====================
     async function fetchDeviceTemplates() {
       try {
-        const response = await fetch(`${API_URL}/api/device-templates`);
+        const response = await authFetch(`${API_URL}/api/device-templates`);
         if (response.ok) {
           const data = await response.json();
           deviceTemplates = data.templates || [];
@@ -13040,7 +13040,7 @@
     // ==================== FLOOR ZONES ====================
     async function fetchFloorZones() {
       try {
-        const response = await fetch(`${API_URL}/api/floor-zones`);
+        const response = await authFetch(`${API_URL}/api/floor-zones`);
         if (response.ok) {
           const data = await response.json();
           floorZones = {};
@@ -13756,7 +13756,7 @@
         const data = await response.json();
         if (data.success) {
           // Refresh printer data
-          const statusResponse = await fetch(`${API_URL}/api/printers/${id}/status`);
+          const statusResponse = await authFetch(`${API_URL}/api/printers/${id}/status`);
           const statusData = await statusResponse.json();
           if (statusData.success && statusData.status) {
             printerStatusData[id] = statusData.status;
@@ -13884,7 +13884,7 @@
     // Toggle disabled state for a Poly device
     async function togglePolyDeviceDisabled(deviceId, disabled) {
       try {
-        const response = await fetch(`${API_URL}/api/poly-devices/${deviceId}/disable`, {
+        const response = await authFetch(`${API_URL}/api/poly-devices/${deviceId}/disable`, {
           method: 'PATCH',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ disabled })
@@ -14008,11 +14008,12 @@
       wsReconnecting = wsReconnectAttempts > 0;
       updateConnectionStatus();
 
-      const wsUrl = `${API_URL.replace('http', 'ws')}?token=${encodeURIComponent(connectingToken)}`;
+      const wsUrl = API_URL.replace('http', 'ws');
       console.log('WebSocket connecting with token:', connectingToken ? connectingToken.substring(0, 20) + '...' : 'NULL');
       console.log('localStorage token:', localStorage.getItem('authToken')?.substring(0, 20) + '...');
       try {
-        const newWs = new WebSocket(wsUrl);
+        // Pass token via Sec-WebSocket-Protocol header (more secure than query string)
+        const newWs = new WebSocket(wsUrl, ['auth', connectingToken]);
 
         newWs.onopen = () => {
           // Check if token changed while we were connecting

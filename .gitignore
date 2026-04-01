@@ -3,6 +3,13 @@ node_modules/
 
 # Environment variables (contains secrets)
 .env
+.env.local
+.env.*.local
+.env.development
+.env.production
+.env.staging
+*.env
+!.env.example
 
 # Database (contains collected data)
 *.db

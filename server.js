@@ -48,26 +48,60 @@ process.on('unhandledRejection', (reason, promise) => {
 // ==================== ENVIRONMENT VALIDATION ====================
 // Validate required and optional environment variables on startup
 const ENV_CONFIG = {
-  required: [], // No strictly required vars - app works with defaults
-  recommended: ['SLACK_WEBHOOK_URL', 'POLY_LENS_CLIENT_ID', 'ZOOM_ACCOUNT_ID'],
-  sensitive: ['SLACK_WEBHOOK_URL', 'SLACK_APPROVAL_WEBHOOK_URL', 'POLY_LENS_CLIENT_SECRET', 'ZOOM_CLIENT_SECRET', 'DEFAULT_ADMIN_PASSWORD']
+  // Variables that will cause startup failure if missing
+  required: [],
+  // Variables needed for full functionality (warnings only)
+  recommended: {
+    zoom: ['ZOOM_ACCOUNT_ID', 'ZOOM_CLIENT_ID', 'ZOOM_CLIENT_SECRET'],
+    poly: ['POLY_LENS_CLIENT_ID', 'POLY_LENS_CLIENT_SECRET'],
+    slack: ['SLACK_WEBHOOK_URL']
+  },
+  // Variables that must never appear in logs
+  sensitive: [
+    'ZOOM_CLIENT_SECRET',
+    'POLY_LENS_CLIENT_SECRET',
+    'SLACK_WEBHOOK_URL',
+    'SLACK_BOT_TOKEN',
+    'DEFAULT_ADMIN_PASSWORD'
+  ]
 };
 
-// Warn about missing recommended variables
-const missingRecommended = ENV_CONFIG.recommended.filter(key => !process.env[key]);
-if (missingRecommended.length > 0) {
-  // Note: logger not defined yet, using console directly for startup warnings
-  console.warn('[WARN] Missing recommended environment variables:', missingRecommended.join(', '));
-  console.warn('[WARN] Some features may not work properly');
+// Check required variables - fail fast if missing
+const missingRequired = ENV_CONFIG.required.filter(key => !process.env[key]);
+if (missingRequired.length > 0) {
+  console.error('[FATAL] Missing required environment variables:', missingRequired.join(', '));
+  console.error('[FATAL] Please set these in your .env file. See .env.example for reference.');
+  process.exit(1);
+}
+
+// Check recommended variables by feature group
+const featureStatus = {};
+for (const [feature, vars] of Object.entries(ENV_CONFIG.recommended)) {
+  const missing = vars.filter(key => !process.env[key]);
+  if (missing.length > 0) {
+    featureStatus[feature] = { enabled: false, missing };
+    console.warn(`[WARN] ${feature.toUpperCase()} integration disabled - missing: ${missing.join(', ')}`);
+  } else {
+    featureStatus[feature] = { enabled: true };
+    console.log(`[INFO] ${feature.toUpperCase()} integration enabled`);
+  }
 }
 
 // Validate sensitive variables aren't exposed in logs
-ENV_CONFIG.sensitive.forEach(key => {
-  if (process.env[key] && process.env.LOG_LEVEL === 'debug') {
-    // Note: logger not defined yet, using console directly for startup warnings
-    console.warn('[WARN] Sensitive variable', key, 'is set - ensure debug logging doesn\'t expose it');
+if (process.env.LOG_LEVEL === 'debug') {
+  const setSensitive = ENV_CONFIG.sensitive.filter(key => process.env[key]);
+  if (setSensitive.length > 0) {
+    console.warn('[WARN] Debug logging enabled with sensitive variables set');
+    console.warn('[WARN] Ensure these are not logged:', setSensitive.join(', '));
   }
-});
+}
+
+// Export feature status for conditional logic elsewhere
+const FEATURES = {
+  zoom: featureStatus.zoom?.enabled ?? false,
+  poly: featureStatus.poly?.enabled ?? false,
+  slack: featureStatus.slack?.enabled ?? false
+};
 
 // ==================== AUDIT LOGGING ====================
 // Comprehensive audit logging for security events
@@ -337,6 +371,11 @@ function invalidateCache(key) {
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ limit: '10mb', extended: true }));
 app.use(express.static(__dirname));
+
+// Root route - redirect to dashboard
+app.get('/', (req, res) => {
+  res.redirect('/dashboard.html');
+});
 
 // Configuration
 const PORT = process.env.PORT || 3002;

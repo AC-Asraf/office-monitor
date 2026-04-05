@@ -113,6 +113,8 @@
       line-height: 1.5;
       overflow-x: hidden;
       -webkit-font-smoothing: antialiased;
+      width: 100%;
+      max-width: 100vw;
     }
 
     /* ==================== ANIMATIONS ==================== */
@@ -349,6 +351,7 @@
       background: var(--bg-surface);
       border-bottom: 1px solid var(--border-subtle);
       flex-wrap: wrap;
+      flex-shrink: 0; /* Keep filters visible */
     }
 
     .filter-btn {
@@ -707,6 +710,8 @@
       min-height: 100vh;
       max-height: 100vh;
       overflow: hidden;
+      width: 100%;
+      max-width: 100vw;
     }
 
     /* ==================== HEADER ==================== */
@@ -717,14 +722,17 @@
       padding: var(--space-md) var(--space-lg);
       background: var(--bg-surface);
       border-bottom: 1px solid var(--border-subtle);
-      backdrop-filter: blur(12px);
+      position: relative;
       z-index: 100;
+      max-width: 100%;
+      overflow: visible;
     }
 
     .header-left {
       display: flex;
       align-items: center;
       gap: var(--space-lg);
+      flex-shrink: 0;
     }
 
     .logo {
@@ -839,6 +847,10 @@
       display: flex;
       align-items: center;
       gap: var(--space-md);
+      flex-shrink: 1;
+      min-width: 0;
+      overflow: hidden;
+      flex-wrap: nowrap;
     }
 
     .time-display {
@@ -944,19 +956,35 @@
     /* ==================== MAIN CONTENT ==================== */
     .main-content {
       display: grid;
-      grid-template-columns: 280px 1fr 320px;
+      grid-template-columns: 280px minmax(0, 1fr) 320px;
       gap: 0;
       overflow: hidden;
       height: 100%;
+      width: 100%;
+      max-width: 100vw;
     }
 
     /* Collapsible left panel */
     .main-content.left-collapsed {
-      grid-template-columns: 1fr 320px;
+      grid-template-columns: minmax(0, 1fr) 320px;
     }
 
     .main-content.left-collapsed .left-panel {
       display: none;
+    }
+
+    /* Collapsible right panel */
+    .main-content.right-collapsed {
+      grid-template-columns: 280px minmax(0, 1fr);
+    }
+
+    .main-content.right-collapsed .right-panel {
+      display: none;
+    }
+
+    /* Both panels collapsed */
+    .main-content.left-collapsed.right-collapsed {
+      grid-template-columns: minmax(0, 1fr);
     }
 
     .panel-toggle {
@@ -978,24 +1006,103 @@
       color: var(--text-primary);
     }
 
+    /* Collapse button inside panel headers */
+    .panel-collapse-btn {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      width: 28px;
+      height: 28px;
+      background: var(--bg-overlay);
+      border: 1px solid var(--border-subtle);
+      border-radius: var(--radius-sm);
+      color: var(--text-secondary);
+      font-size: 12px;
+      cursor: pointer;
+      transition: var(--transition-fast);
+      flex-shrink: 0;
+    }
+
+    .panel-collapse-btn:hover {
+      background: var(--bg-elevated);
+      color: var(--text-primary);
+      border-color: var(--border-default);
+    }
+
+    /* Expand buttons shown when panel is collapsed */
+    .panel-expand-btn {
+      position: absolute;
+      top: 50%;
+      transform: translateY(-50%);
+      z-index: 100;
+      display: none;
+      align-items: center;
+      justify-content: center;
+      width: 24px;
+      height: 48px;
+      background: var(--bg-elevated);
+      border: 1px solid var(--border-subtle);
+      color: var(--text-secondary);
+      font-size: 12px;
+      cursor: pointer;
+      transition: var(--transition-fast);
+    }
+
+    .panel-expand-btn:hover {
+      background: var(--bg-overlay);
+      color: var(--text-primary);
+    }
+
+    .panel-expand-btn-left {
+      left: 0;
+      border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
+      border-left: none;
+    }
+
+    .panel-expand-btn-right {
+      right: 0;
+      border-radius: var(--radius-sm) 0 0 var(--radius-sm);
+      border-right: none;
+    }
+
+    .main-content.left-collapsed .panel-expand-btn-left {
+      display: flex;
+    }
+
+    .main-content.right-collapsed .panel-expand-btn-right {
+      display: flex;
+    }
+
     @media (max-width: 1200px) {
       .main-content {
-        grid-template-columns: 1fr 280px;
+        grid-template-columns: minmax(0, 1fr) 280px;
+      }
+      .main-content.right-collapsed {
+        grid-template-columns: minmax(0, 1fr);
       }
       .left-panel { display: none; }
       .panel-toggle { display: none; }
+      .panel-expand-btn-left { display: none !important; }
     }
 
     @media (max-width: 1024px) {
       .main-content {
-        grid-template-columns: 1fr;
-        grid-template-rows: 1fr auto;
+        grid-template-columns: minmax(0, 1fr);
+        grid-template-rows: minmax(0, 1fr) auto;
+      }
+      .main-content.right-collapsed {
+        grid-template-rows: minmax(0, 1fr);
+      }
+      .main-content.right-collapsed .right-panel {
+        display: none;
       }
       .right-panel {
         max-height: 40vh;
         border-top: 1px solid var(--border-subtle);
         border-left: none;
       }
+      .panel-expand-btn { display: none !important; }
+      .panel-collapse-btn { display: none; }
     }
 
     /* ==================== LEFT PANEL ==================== */
@@ -1004,12 +1111,17 @@
       border-right: 1px solid var(--border-subtle);
       display: flex;
       flex-direction: column;
-      overflow: hidden;
+      overflow-y: auto;
+      overflow-x: hidden;
     }
 
     .panel-header {
       padding: var(--space-md);
       border-bottom: 1px solid var(--border-subtle);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: var(--space-sm);
     }
 
     .panel-title {
@@ -1018,12 +1130,14 @@
       color: var(--text-muted);
       text-transform: uppercase;
       letter-spacing: 0.05em;
+      flex: 1;
     }
 
     .floor-nav {
-      flex: 1;
+      flex: 1 0 auto; /* Don't shrink, grow to fill */
       overflow-y: auto;
       padding: var(--space-sm);
+      min-height: 120px; /* Ensure floors are always visible */
     }
 
     .floor-item {
@@ -1096,6 +1210,7 @@
     .quick-stats {
       padding: var(--space-md);
       border-top: 1px solid var(--border-subtle);
+      flex-shrink: 0; /* Keep stats visible */
     }
 
     .quick-stat-item {
@@ -1148,16 +1263,15 @@
     .map-container {
       position: relative;
       background: var(--bg-base);
-      overflow: hidden;
-      display: flex;
-      align-items: center;
-      justify-content: center;
+      overflow: visible;
+      min-width: 0; /* Allow shrinking in grid */
+      width: 100%;
+      height: 100%;
     }
 
     .floor-map {
-      position: relative;
-      width: 100%;
-      height: 100%;
+      position: absolute;
+      inset: 0;
       transform-origin: center center;
       will-change: transform;
       background-position: center;
@@ -1518,7 +1632,8 @@
       border-left: 1px solid var(--border-subtle);
       display: flex;
       flex-direction: column;
-      overflow: hidden;
+      overflow-y: auto;
+      overflow-x: hidden;
     }
 
     .device-list-header {
@@ -3945,6 +4060,9 @@
       border-radius: var(--radius-lg);
       padding: 16px;
       margin-bottom: 16px;
+      flex-shrink: 1;
+      min-height: 60px;
+      overflow: hidden;
     }
 
     .favorites-header {
@@ -4020,7 +4138,9 @@
       border-radius: var(--radius-lg);
       padding: 16px;
       margin-bottom: 16px;
-      max-height: 300px;
+      flex-shrink: 1;
+      min-height: 80px;
+      max-height: 200px;
       overflow: hidden;
       display: flex;
       flex-direction: column;
@@ -4619,7 +4739,7 @@
     }
 
     .compact-mode .main-content {
-      grid-template-columns: 200px 1fr 240px;
+      grid-template-columns: 200px minmax(0, 1fr) 240px;
     }
 
     .compact-mode .left-panel {
@@ -4697,6 +4817,330 @@
       background: var(--accent-blue);
       color: white;
       border-color: var(--accent-blue);
+    }
+
+    /* ==================== DISPLAY SIZE MODES ==================== */
+    /* Default is optimized for standard desktop monitors */
+
+    /* Size selector dropdown */
+    .size-selector {
+      position: relative;
+      display: inline-flex;
+      align-items: center;
+    }
+
+    .size-selector-btn {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      padding: 6px 10px;
+      background: var(--bg-elevated);
+      border: 1px solid var(--border-subtle);
+      border-radius: var(--radius-sm);
+      color: var(--text-secondary);
+      font-size: 11px;
+      cursor: pointer;
+      transition: var(--transition-fast);
+    }
+
+    .size-selector-btn:hover {
+      background: var(--bg-overlay);
+      color: var(--text-primary);
+    }
+
+    .size-selector-dropdown {
+      position: fixed;
+      min-width: 160px;
+      background: var(--bg-elevated);
+      border: 1px solid var(--border-default);
+      border-radius: var(--radius-md);
+      box-shadow: var(--shadow-lg);
+      z-index: 10000;
+      display: none;
+      overflow: hidden;
+    }
+
+    .size-selector-dropdown.open {
+      display: block;
+    }
+
+    .size-option {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 8px 12px;
+      font-size: 12px;
+      color: var(--text-secondary);
+      cursor: pointer;
+      transition: var(--transition-fast);
+    }
+
+    .size-option:hover {
+      background: var(--bg-overlay);
+      color: var(--text-primary);
+    }
+
+    .size-option.active {
+      background: var(--accent-blue);
+      color: white;
+    }
+
+    .size-option-label {
+      font-weight: 500;
+    }
+
+    .size-option-dim {
+      font-size: 10px;
+      opacity: 0.7;
+    }
+
+    /* iPad sizes (smaller UI for touch) */
+    .display-size-ipad {
+      --space-xs: 3px;
+      --space-sm: 6px;
+      --space-md: 10px;
+      --space-lg: 14px;
+      --space-xl: 20px;
+      --text-title: 1.1rem;
+      --text-large: 0.95rem;
+      --text-body: 0.875rem;
+      --text-small: 0.8rem;
+      --text-tiny: 0.7rem;
+    }
+
+    .display-size-ipad .main-content {
+      grid-template-columns: 220px minmax(0, 1fr) 260px;
+    }
+
+    .display-size-ipad .header {
+      padding: 8px 12px;
+    }
+
+    .display-size-ipad .header-left {
+      flex-shrink: 1;
+      min-width: 0;
+    }
+
+    .display-size-ipad .status-label {
+      display: none;
+    }
+
+    .display-size-ipad .status-metric {
+      padding: 4px 8px;
+      gap: 4px;
+    }
+
+    .display-size-ipad .health-bar-container {
+      min-width: 100px;
+    }
+
+    .display-size-ipad .header-right {
+      gap: 6px;
+    }
+
+    .display-size-ipad .header-right .global-search {
+      display: none;
+    }
+
+    .display-size-ipad .header-right .last-updated,
+    .display-size-ipad .header-right .time-display {
+      display: none;
+    }
+
+    .display-size-ipad .header-actions > .header-btn[onclick*="location.href"],
+    .display-size-ipad .header-actions > .header-btn[onclick*="toggleWidgetCustomize"],
+    .display-size-ipad .header-actions > .header-btn[onclick*="openCustomizeModal"] {
+      display: none;
+    }
+
+    .display-size-ipad .user-menu {
+      display: none;
+    }
+
+    .display-size-ipad .marker-dot {
+      width: 32px;
+      height: 32px;
+      font-size: 13px;
+    }
+
+    /* MacBook sizes (balanced for laptop screens) */
+    .display-size-macbook {
+      --space-xs: 3px;
+      --space-sm: 5px;
+      --space-md: 10px;
+      --space-lg: 14px;
+      --space-xl: 20px;
+      --text-title: 1.05rem;
+      --text-large: 0.9rem;
+      --text-body: 0.85rem;
+      --text-small: 0.775rem;
+      --text-tiny: 0.675rem;
+    }
+
+    .display-size-macbook .main-content {
+      grid-template-columns: 240px minmax(0, 1fr) 280px;
+    }
+
+    .display-size-macbook .header {
+      padding: 10px 16px;
+    }
+
+    .display-size-macbook .header-right {
+      gap: 8px;
+    }
+
+    .display-size-macbook .header-right .global-search {
+      margin-right: 8px;
+    }
+
+    .display-size-macbook .header-right .global-search .search-input {
+      width: 160px;
+    }
+
+    .display-size-macbook .header-right .last-updated {
+      display: none;
+    }
+
+    /* At MacBook size, hide nav buttons and user menu to fit header */
+    .display-size-macbook .header-actions > .header-btn[onclick*="location.href"] {
+      display: none;
+    }
+    .display-size-macbook .header-actions > .header-btn[onclick*="toggleWidgetCustomize"],
+    .display-size-macbook .header-actions > .header-btn[onclick*="openCustomizeModal"] {
+      display: none;
+    }
+    .display-size-macbook .user-menu {
+      display: none;
+    }
+
+    .display-size-macbook .marker-dot {
+      width: 30px;
+      height: 30px;
+      font-size: 12px;
+    }
+
+    /* 24" Monitor (standard desktop) */
+    .display-size-monitor-24 {
+      --space-xs: 4px;
+      --space-sm: 6px;
+      --space-md: 12px;
+      --space-lg: 16px;
+      --space-xl: 24px;
+      --text-title: 1.15rem;
+      --text-large: 0.95rem;
+      --text-body: 0.875rem;
+      --text-small: 0.8rem;
+      --text-tiny: 0.7rem;
+    }
+
+    .display-size-monitor-24 .main-content {
+      grid-template-columns: 260px minmax(0, 1fr) 300px;
+    }
+
+    .display-size-monitor-24 .marker-dot {
+      width: 34px;
+      height: 34px;
+      font-size: 14px;
+    }
+
+    /* 27" Monitor (larger desktop) */
+    .display-size-monitor-27 {
+      --space-xs: 4px;
+      --space-sm: 8px;
+      --space-md: 14px;
+      --space-lg: 20px;
+      --space-xl: 28px;
+      --text-title: 1.25rem;
+      --text-large: 1rem;
+      --text-body: 0.925rem;
+      --text-small: 0.85rem;
+      --text-tiny: 0.75rem;
+    }
+
+    .display-size-monitor-27 .main-content {
+      grid-template-columns: 280px minmax(0, 1fr) 320px;
+    }
+
+    .display-size-monitor-27 .marker-dot {
+      width: 38px;
+      height: 38px;
+      font-size: 15px;
+    }
+
+    /* 55" TV (wall display) */
+    .display-size-tv-55 {
+      --space-xs: 6px;
+      --space-sm: 10px;
+      --space-md: 18px;
+      --space-lg: 26px;
+      --space-xl: 36px;
+      --text-title: 1.5rem;
+      --text-large: 1.2rem;
+      --text-body: 1.1rem;
+      --text-small: 1rem;
+      --text-tiny: 0.9rem;
+    }
+
+    .display-size-tv-55 .header {
+      padding: 16px 24px;
+    }
+
+    .display-size-tv-55 .main-content {
+      grid-template-columns: 320px minmax(0, 1fr) 380px;
+    }
+
+    .display-size-tv-55 .marker-dot {
+      width: 48px;
+      height: 48px;
+      font-size: 18px;
+    }
+
+    .display-size-tv-55 .floor-item {
+      padding: 14px;
+    }
+
+    .display-size-tv-55 .device-item {
+      padding: 12px 14px;
+    }
+
+    /* 65" TV (large wall display) */
+    .display-size-tv-65 {
+      --space-xs: 8px;
+      --space-sm: 12px;
+      --space-md: 22px;
+      --space-lg: 32px;
+      --space-xl: 44px;
+      --text-title: 1.75rem;
+      --text-large: 1.4rem;
+      --text-body: 1.25rem;
+      --text-small: 1.15rem;
+      --text-tiny: 1rem;
+    }
+
+    .display-size-tv-65 .header {
+      padding: 20px 32px;
+    }
+
+    .display-size-tv-65 .main-content {
+      grid-template-columns: 380px minmax(0, 1fr) 440px;
+    }
+
+    .display-size-tv-65 .marker-dot {
+      width: 56px;
+      height: 56px;
+      font-size: 22px;
+    }
+
+    .display-size-tv-65 .floor-item {
+      padding: 18px;
+    }
+
+    .display-size-tv-65 .device-item {
+      padding: 16px 18px;
+    }
+
+    .display-size-tv-65 .status-metric {
+      padding: 10px 16px;
     }
 
     /* ==================== SPARKLINE ==================== */
@@ -5077,7 +5521,9 @@
     let activeFloor = "1st Floor";
     let floors = ['1st Floor', '2nd Floor', '3rd Floor', '5th Floor']; // Updated dynamically from data
     let leftPanelCollapsed = localStorage.getItem('leftPanelCollapsed') === 'true';
+    let rightPanelCollapsed = localStorage.getItem('rightPanelCollapsed') === 'true';
     let compactMode = localStorage.getItem('compactMode') === 'true';
+    let displaySize = localStorage.getItem('displaySize') || 'monitor-24'; // Default to 24" monitor
     let alertSoundsEnabled = localStorage.getItem('alertSoundsEnabled') === 'true';
     let previousDeviceStatuses = {}; // Track previous statuses for change detection
     let activeThresholdAlerts = {}; // Server-side toner alert state: { monitorId: [alert_types] }
@@ -9280,6 +9726,39 @@
                 <button class="compact-toggle ${compactMode ? 'active' : ''}" onclick="toggleCompactMode()" title="Compact mode (C)" aria-label="Toggle compact mode" aria-pressed="${compactMode}">
                   <span aria-hidden="true">${compactMode ? '▢' : '▣'}</span>
                 </button>
+                <div class="size-selector">
+                  <button class="size-selector-btn" onclick="toggleSizeSelector(event)" title="Display size">
+                    <span>📐</span>
+                    <span>${getDisplaySizeLabel(displaySize)}</span>
+                    <span>▾</span>
+                  </button>
+                  <div class="size-selector-dropdown" id="size-selector-dropdown">
+                    <div class="size-option ${displaySize === 'ipad' ? 'active' : ''}" onclick="setDisplaySize('ipad')">
+                      <span class="size-option-label">iPad</span>
+                      <span class="size-option-dim">1024×768</span>
+                    </div>
+                    <div class="size-option ${displaySize === 'macbook' ? 'active' : ''}" onclick="setDisplaySize('macbook')">
+                      <span class="size-option-label">MacBook</span>
+                      <span class="size-option-dim">1440×900</span>
+                    </div>
+                    <div class="size-option ${displaySize === 'monitor-24' ? 'active' : ''}" onclick="setDisplaySize('monitor-24')">
+                      <span class="size-option-label">24" Monitor</span>
+                      <span class="size-option-dim">1920×1080</span>
+                    </div>
+                    <div class="size-option ${displaySize === 'monitor-27' ? 'active' : ''}" onclick="setDisplaySize('monitor-27')">
+                      <span class="size-option-label">27" Monitor</span>
+                      <span class="size-option-dim">2560×1440</span>
+                    </div>
+                    <div class="size-option ${displaySize === 'tv-55' ? 'active' : ''}" onclick="setDisplaySize('tv-55')">
+                      <span class="size-option-label">55" TV</span>
+                      <span class="size-option-dim">3840×2160</span>
+                    </div>
+                    <div class="size-option ${displaySize === 'tv-65' ? 'active' : ''}" onclick="setDisplaySize('tv-65')">
+                      <span class="size-option-label">65" TV</span>
+                      <span class="size-option-dim">3840×2160</span>
+                    </div>
+                  </div>
+                </div>
                 <button class="compact-toggle ${alertSoundsEnabled ? 'active' : ''}" onclick="toggleAlertSounds()" title="Alert sounds" aria-label="Toggle alert sounds" aria-pressed="${alertSoundsEnabled}">
                   <span aria-hidden="true">${alertSoundsEnabled ? '🔔' : '🔕'}</span>
                 </button>
@@ -9347,12 +9826,13 @@
           <div class="mobile-overlay" onclick="closeMobileMenu()"></div>
 
           <!-- MAIN CONTENT - 3 Column Layout -->
-          <div class="main-content ${editMode ? 'edit-mode' : ''} ${leftPanelCollapsed ? 'left-collapsed' : ''}">
+          <div class="main-content ${editMode ? 'edit-mode' : ''} ${leftPanelCollapsed ? 'left-collapsed' : ''} ${rightPanelCollapsed ? 'right-collapsed' : ''}">
 
             <!-- LEFT PANEL - Floor Navigation -->
             <aside class="left-panel">
               <div class="panel-header">
                 <h2 class="panel-title">Floors</h2>
+                <button class="panel-collapse-btn" onclick="toggleLeftPanel()" title="Collapse panel (S)" aria-label="Collapse floors panel">◀</button>
               </div>
               <nav class="floor-nav">
                 ${floors.map(floor => {
@@ -9455,11 +9935,16 @@
                 <button class="map-control-btn" onclick="resetZoom()" title="Reset" aria-label="Reset view">⟲</button>
                 <button class="map-control-btn" onclick="toggleFullscreen()" title="Fullscreen" aria-label="Toggle fullscreen">⛶</button>
               </div>
+
+              <!-- Expand buttons (shown when panels are collapsed) -->
+              <button class="panel-expand-btn panel-expand-btn-left" onclick="toggleLeftPanel()" title="Expand floors panel (S)" aria-label="Expand floors panel">▶</button>
+              <button class="panel-expand-btn panel-expand-btn-right" onclick="toggleRightPanel()" title="Expand devices panel (D)" aria-label="Expand devices panel">◀</button>
             </main>
 
             <!-- RIGHT PANEL - Device List -->
             <aside class="right-panel">
               <div class="device-list-header">
+                <button class="panel-collapse-btn" onclick="toggleRightPanel()" title="Collapse panel (D)" aria-label="Collapse devices panel">▶</button>
                 <h2 class="device-list-title">${activeFloor} Devices</h2>
                 <div class="device-search">
                   <input type="text" placeholder="Search devices..." onkeyup="filterDevices(this.value)" aria-label="Search devices" role="searchbox">
@@ -9610,6 +10095,14 @@
       setTimeout(updateMarkersOverlay, 350);
     }
 
+    function toggleRightPanel() {
+      rightPanelCollapsed = !rightPanelCollapsed;
+      localStorage.setItem('rightPanelCollapsed', rightPanelCollapsed);
+      render();
+      // Update overlay after panel animation completes
+      setTimeout(updateMarkersOverlay, 350);
+    }
+
     function toggleCompactMode() {
       compactMode = !compactMode;
       localStorage.setItem('compactMode', compactMode);
@@ -9620,6 +10113,73 @@
     // Apply compact mode on load
     if (compactMode) {
       document.body.classList.add('compact-mode');
+    }
+
+    // Display size functions
+    function getDisplaySizeLabel(size) {
+      const labels = {
+        'ipad': 'iPad',
+        'macbook': 'MacBook',
+        'monitor-24': '24"',
+        'monitor-27': '27"',
+        'tv-55': '55" TV',
+        'tv-65': '65" TV'
+      };
+      return labels[size] || '24"';
+    }
+
+    function toggleSizeSelector(event) {
+      event.stopPropagation();
+      const dropdown = document.getElementById('size-selector-dropdown');
+      dropdown.classList.toggle('open');
+
+      // Position the fixed dropdown below the button
+      if (dropdown.classList.contains('open')) {
+        const btn = event.currentTarget;
+        const rect = btn.getBoundingClientRect();
+        dropdown.style.top = (rect.bottom + 4) + 'px';
+        dropdown.style.right = (window.innerWidth - rect.right) + 'px';
+        dropdown.style.left = 'auto';
+
+        setTimeout(() => {
+          document.addEventListener('click', closeSizeSelector, { once: true });
+        }, 0);
+      }
+    }
+
+    function closeSizeSelector() {
+      const dropdown = document.getElementById('size-selector-dropdown');
+      if (dropdown) {
+        dropdown.classList.remove('open');
+      }
+    }
+
+    function setDisplaySize(size) {
+      // Remove old size class
+      document.body.classList.remove(
+        'display-size-ipad',
+        'display-size-macbook',
+        'display-size-monitor-24',
+        'display-size-monitor-27',
+        'display-size-tv-55',
+        'display-size-tv-65'
+      );
+
+      // Apply new size class
+      displaySize = size;
+      localStorage.setItem('displaySize', size);
+      document.body.classList.add(`display-size-${size}`);
+
+      closeSizeSelector();
+      render();
+
+      // Update markers overlay after size change
+      setTimeout(updateMarkersOverlay, 100);
+    }
+
+    // Apply display size on load
+    if (displaySize && displaySize !== 'auto') {
+      document.body.classList.add(`display-size-${displaySize}`);
     }
 
     function toggleAlertSounds() {
@@ -10239,6 +10799,9 @@
           break;
         case 's': case 'S':
           if (!e.metaKey && !e.ctrlKey) toggleLeftPanel();
+          break;
+        case 'd': case 'D':
+          if (!e.metaKey && !e.ctrlKey) toggleRightPanel();
           break;
         case 'c': case 'C':
           if (!e.metaKey && !e.ctrlKey) toggleCompactMode();

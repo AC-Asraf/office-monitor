@@ -1,45 +1,38 @@
-# Dependencies
-node_modules/
 
-# Environment variables (contains secrets)
-.env
-.env.local
-.env.*.local
-.env.development
-.env.production
-.env.staging
-*.env
 !.env.example
-
+# Build artifacts
 # Database (contains collected data)
+# Dependencies
+# Environment variables (contains secrets)
+# IDE
+# Logs
+# OS files
+# PM2
+# Temp files
 *.db
 *.db-journal
-*.db-wal
 *.db-shm
-
-# Logs
-logs/
+*.db-wal
+*.env
 *.log
-npm-debug.log*
-
-# PM2
-.pm2/
-
-# OS files
-.DS_Store
-Thumbs.db
-
-# IDE
-.idea/
-.vscode/
-*.swp
 *.swo
-
-# Build artifacts
-dist/
+*.swp
+.DS_Store
+.env
+.env.*.local
+.env.development
+.env.local
+.env.production
+.env.staging
+.idea/
+.pm2/
+.vscode/
+Thumbs.db
 build/
-
-# Temp files
-tmp/
-temp/
 device_inventory.csv
+dist/
+logs/
+node_modules/
+npm-debug.log*
+temp/
+tmp/

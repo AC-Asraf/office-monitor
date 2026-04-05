@@ -1306,8 +1306,11 @@ async function send2FACodeViaDM(userId, username) {
       },
       body: JSON.stringify({
         channel: SLACK_ADMIN_USER_ID, // DM to admin user
-        text: `🔐 *Office Monitor 2FA Verification*\n\nA login attempt was made to your account.\n\n` +
-              `If this was you, enter the code shown on your login screen.\n` +
+        text: `🔐 *Office Monitor 2FA Verification*\n\n` +
+              `A login attempt was made for user *${username}*.\n\n` +
+              `Your verification code is:\n\n` +
+              `*${code}*\n\n` +
+              `Enter this code on the login screen to complete sign-in.\n` +
               `If this was NOT you, ignore this message and consider changing your password.\n\n` +
               `_This code expires in 5 minutes._`,
         unfurl_links: false,

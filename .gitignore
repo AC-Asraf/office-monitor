@@ -36,3 +36,14 @@ node_modules/
 npm-debug.log*
 temp/
 tmp/
+
+# Removed - not part of app
+.claude/agents/
+docs/archive/
+deploy/
+blender_floorplan.py
+device_inventory.csv
+SECURITY_AND_FUNCTIONAL_REVIEW.md
+diagnostics.log
+diagnostics-error.log
+server.log

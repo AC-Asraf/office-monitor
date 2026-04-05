@@ -1202,6 +1202,42 @@ function validatePassword(password) {
   return { valid: true };
 }
 
+// Webhook URL validation to prevent SSRF
+function isValidWebhookUrl(url) {
+  try {
+    const parsed = new URL(url);
+    // Only allow http and https
+    if (!['http:', 'https:'].includes(parsed.protocol)) {
+      return false;
+    }
+    const hostname = parsed.hostname.toLowerCase();
+    // Block localhost variants
+    if (hostname === 'localhost' || hostname === '127.0.0.1' || hostname === '::1') {
+      return false;
+    }
+    // Block private IP ranges
+    const ipv4Match = hostname.match(/^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/);
+    if (ipv4Match) {
+      const [, a, b, c, d] = ipv4Match.map(Number);
+      // 10.x.x.x
+      if (a === 10) return false;
+      // 172.16-31.x.x
+      if (a === 172 && b >= 16 && b <= 31) return false;
+      // 192.168.x.x
+      if (a === 192 && b === 168) return false;
+      // 169.254.x.x (link-local/AWS metadata)
+      if (a === 169 && b === 254) return false;
+      // 127.x.x.x
+      if (a === 127) return false;
+      // 0.x.x.x
+      if (a === 0) return false;
+    }
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 function createSession(userId) {
   const token = generateToken();
   const now = new Date().toISOString();
@@ -1435,8 +1471,8 @@ function rotateSessionIfNeeded(session) {
   rotationInProgress.set(sessionId, { newToken, timestamp: now });
 
   logger.info('TOKEN ROTATION:');
-  logger.info('  Old token:', oldToken.substring(0, 25) + '...');
-  logger.info('  New token:', newToken.substring(0, 25) + '...');
+  logger.info('  Old token: [ROTATED]');
+  logger.info('  New token: [GENERATED]');
   logger.info('  Session ID:', sessionId);
 
   // Update session with new token
@@ -1505,7 +1541,7 @@ function authMiddleware(req, res, next) {
   const token = req.headers.authorization?.replace('Bearer ', '');
 
   logger.info('AUTH MIDDLEWARE:', req.path);
-  logger.info('  Token received:', token ? token.substring(0, 25) + '...' : 'NULL');
+  logger.info('  Token received:', token ? '[PRESENT]' : '[NONE]');
 
   if (!token) {
     return res.status(401).json({ success: false, error: 'Authentication required' });
@@ -1541,13 +1577,13 @@ function authMiddleware(req, res, next) {
 
   // If using grace period token, tell client about the new token
   if (isGracePeriod && gracePeriodNewToken) {
-    logger.info('  Grace period token, sending X-New-Token:', gracePeriodNewToken.substring(0, 25) + '...');
+    logger.info('  Grace period token, sending X-New-Token: [PRESENT]');
     res.setHeader('X-New-Token', gracePeriodNewToken);
   } else {
     // Check if token should be rotated (only for non-grace-period requests)
     const newToken = rotateSessionIfNeeded(session);
     if (newToken) {
-      logger.info('  Token rotated, sending X-New-Token:', newToken.substring(0, 25) + '...');
+      logger.info('  Token rotated, sending X-New-Token: [PRESENT]');
       // Set header to inform client of new token
       res.setHeader('X-New-Token', newToken);
     } else {
@@ -1568,6 +1604,41 @@ function adminMiddleware(req, res, next) {
   if (req.user.role !== 'admin') {
     return res.status(403).json({ success: false, error: 'Admin access required' });
   }
+  next();
+}
+
+// Per-user API rate limiting
+const userRateLimits = new Map();
+const API_RATE_LIMIT = 100; // requests per minute
+const API_RATE_WINDOW = 60 * 1000; // 1 minute
+
+function apiRateLimitMiddleware(req, res, next) {
+  const userId = req.user?.id;
+  if (!userId) return next(); // Skip if no user (shouldn't happen after authMiddleware)
+
+  const key = `api:${userId}`;
+  const now = Date.now();
+  let record = userRateLimits.get(key);
+
+  if (!record || now > record.resetTime) {
+    record = { count: 1, resetTime: now + API_RATE_WINDOW };
+  } else if (record.count >= API_RATE_LIMIT) {
+    auditLog('API_RATE_LIMIT_EXCEEDED', { userId, ip: req.ip, path: req.path });
+    return res.status(429).json({ error: 'Rate limit exceeded. Try again in a minute.' });
+  } else {
+    record.count++;
+  }
+
+  userRateLimits.set(key, record);
+
+  // Cleanup old entries periodically
+  if (Math.random() < 0.01) { // 1% chance each request
+    const cutoff = now - API_RATE_WINDOW;
+    for (const [k, v] of userRateLimits) {
+      if (v.resetTime < cutoff) userRateLimits.delete(k);
+    }
+  }
+
   next();
 }
 
@@ -4164,6 +4235,8 @@ app.put('/api/users/:id', authMiddleware, csrfMiddleware, async (req, res) => {
   }
 
   try {
+    const targetUser = db.prepare('SELECT username FROM users WHERE id = ?').get(userId);
+
     if (password) {
       // Hash password before storing
       const hashedPassword = await bcrypt.hash(password, 10);
@@ -4171,6 +4244,17 @@ app.put('/api/users/:id', authMiddleware, csrfMiddleware, async (req, res) => {
     } else {
       db.prepare('UPDATE users SET role = ? WHERE id = ?').run(role, userId);
     }
+
+    auditLog('USER_UPDATED', {
+      targetUserId: userId,
+      targetUsername: targetUser?.username,
+      updatedBy: req.user.username,
+      userId: req.user.id,
+      roleChanged: !!role,
+      passwordChanged: !!password,
+      ip: req.ip
+    });
+
     res.json({ success: true });
   } catch (e) {
     logger.error('Failed to update user', e);
@@ -4320,6 +4404,16 @@ app.post('/api/zones', authMiddleware, csrfMiddleware, (req, res) => {
       INSERT INTO zones (floor, name, x, y, width, height, color)
       VALUES (?, ?, ?, ?, ?, ?, ?)
     `).run(floor, name, x, y, width, height, color || '#3B82F6');
+
+    auditLog('ZONE_CREATED', {
+      zoneId: result.lastInsertRowid,
+      name,
+      floor,
+      userId: req.user?.id,
+      username: req.user?.username,
+      ip: req.ip
+    });
+
     res.json({ success: true, id: result.lastInsertRowid });
   } catch (e) {
     res.status(500).json({ success: false, error: 'Failed to create zone' });
@@ -4334,6 +4428,15 @@ app.put('/api/zones/:id', authMiddleware, csrfMiddleware, (req, res) => {
       UPDATE zones SET name = ?, x = ?, y = ?, width = ?, height = ?, color = ?
       WHERE id = ?
     `).run(name, x, y, width, height, color, req.params.id);
+
+    auditLog('ZONE_UPDATED', {
+      zoneId: req.params.id,
+      name,
+      userId: req.user?.id,
+      username: req.user?.username,
+      ip: req.ip
+    });
+
     res.json({ success: true });
   } catch (e) {
     res.status(500).json({ success: false, error: 'Failed to update zone' });
@@ -4343,7 +4446,17 @@ app.put('/api/zones/:id', authMiddleware, csrfMiddleware, (req, res) => {
 // Delete zone
 app.delete('/api/zones/:id', authMiddleware, csrfMiddleware, (req, res) => {
   try {
+    const zone = db.prepare('SELECT * FROM zones WHERE id = ?').get(req.params.id);
     db.prepare('DELETE FROM zones WHERE id = ?').run(req.params.id);
+
+    auditLog('ZONE_DELETED', {
+      zoneId: req.params.id,
+      zoneName: zone?.name,
+      userId: req.user?.id,
+      username: req.user?.username,
+      ip: req.ip
+    });
+
     res.json({ success: true });
   } catch (e) {
     res.status(500).json({ success: false, error: 'Failed to delete zone' });
@@ -4433,6 +4546,15 @@ app.post('/api/integrations', authMiddleware, csrfMiddleware, (req, res) => {
     active ?? 1
   );
 
+  auditLog('INTEGRATION_CREATED', {
+    integrationId: result.lastInsertRowid,
+    name,
+    authType: auth_type || 'none',
+    userId: req.user?.id,
+    username: req.user?.username,
+    ip: req.ip
+  });
+
   res.json({ success: true, id: result.lastInsertRowid });
 });
 
@@ -4487,12 +4609,30 @@ app.put('/api/integrations/:id', authMiddleware, csrfMiddleware, (req, res) => {
     req.params.id
   );
 
+  auditLog('INTEGRATION_UPDATED', {
+    integrationId: req.params.id,
+    name,
+    userId: req.user?.id,
+    username: req.user?.username,
+    ip: req.ip
+  });
+
   res.json({ success: true });
 });
 
 // Delete API integration (admin only)
 app.delete('/api/integrations/:id', authMiddleware, csrfMiddleware, adminMiddleware, (req, res) => {
+  const integration = db.prepare('SELECT name FROM api_integrations WHERE id = ?').get(req.params.id);
   db.prepare('DELETE FROM api_integrations WHERE id = ?').run(req.params.id);
+
+  auditLog('INTEGRATION_DELETED', {
+    integrationId: req.params.id,
+    integrationName: integration?.name,
+    userId: req.user?.id,
+    username: req.user?.username,
+    ip: req.ip
+  });
+
   res.json({ success: true });
 });
 
@@ -5486,6 +5626,16 @@ app.post('/api/monitors', authMiddleware, csrfMiddleware, (req, res) => {
 
     const result = stmt.run(sanitizedName, monitorType, hostname, url, sanitizedFloor, sanitizedDeviceType);
 
+    auditLog('MONITOR_CREATED', {
+      monitorId: result.lastInsertRowid,
+      userId: req.user?.id,
+      username: req.user?.username,
+      name: sanitizedName,
+      type: monitorType,
+      floor: sanitizedFloor,
+      ip: req.ip
+    });
+
     res.json({ success: true, id: result.lastInsertRowid });
   } catch (e) {
     logger.error('Failed to create monitor:', e);
@@ -5495,9 +5645,10 @@ app.post('/api/monitors', authMiddleware, csrfMiddleware, (req, res) => {
 
 // Delete a monitor (admin only, or requires approval)
 app.delete('/api/monitors/:id', authMiddleware, csrfMiddleware, (req, res) => {
+  const monitor = db.prepare('SELECT * FROM monitors WHERE id = ?').get(req.params.id);
+
   if (req.user.role !== 'admin') {
     // Create pending change for approval
-    const monitor = db.prepare('SELECT * FROM monitors WHERE id = ?').get(req.params.id);
     createPendingChange(req.user.id, 'delete', 'monitor', parseInt(req.params.id), monitor);
     return res.json({ success: true, pending: true, message: 'Delete request submitted for admin approval' });
   }
@@ -5506,11 +5657,19 @@ app.delete('/api/monitors/:id', authMiddleware, csrfMiddleware, (req, res) => {
   db.prepare('DELETE FROM monitors WHERE id = ?').run(req.params.id);
   monitorStatus.delete(parseInt(req.params.id));
 
+  auditLog('MONITOR_DELETED', {
+    monitorId: req.params.id,
+    userId: req.user?.id,
+    username: req.user?.username,
+    monitorName: monitor?.name,
+    ip: req.ip
+  });
+
   res.json({ success: true });
 });
 
 // Get single monitor
-app.get('/api/monitors/:id', (req, res) => {
+app.get('/api/monitors/:id', authMiddleware, (req, res) => {
   const monitor = db.prepare('SELECT * FROM monitors WHERE id = ?').get(req.params.id);
   if (!monitor) {
     return res.status(404).json({ success: false, error: 'Monitor not found' });
@@ -5565,6 +5724,14 @@ app.put('/api/monitors/:id', authMiddleware, csrfMiddleware, (req, res) => {
     interval ?? monitor.interval,
     req.params.id
   );
+
+  auditLog('MONITOR_UPDATED', {
+    monitorId: req.params.id,
+    userId: req.user?.id,
+    username: req.user?.username,
+    changes: Object.keys(req.body),
+    ip: req.ip
+  });
 
   res.json({ success: true });
 });
@@ -5644,7 +5811,7 @@ app.patch('/api/monitors/:id/maintenance', authMiddleware, csrfMiddleware, (req,
 });
 
 // Get all devices in maintenance mode
-app.get('/api/monitors/maintenance', (req, res) => {
+app.get('/api/monitors/maintenance', authMiddleware, (req, res) => {
   const monitors = db.prepare(`
     SELECT id, name, floor, device_type, maintenance_note, maintenance_until
     FROM monitors WHERE maintenance = 1
@@ -5671,7 +5838,7 @@ app.patch('/api/monitors/:id/disable', authMiddleware, csrfMiddleware, (req, res
 });
 
 // Get all disabled devices
-app.get('/api/monitors/disabled', (req, res) => {
+app.get('/api/monitors/disabled', authMiddleware, (req, res) => {
   const monitors = db.prepare(`
     SELECT id, name, floor, device_type
     FROM monitors WHERE disabled = 1
@@ -5898,7 +6065,7 @@ app.get('/api/room-positions/:floor', authMiddleware, (req, res) => {
 });
 
 // Save room position (supports both regular and TV mode positions)
-app.patch('/api/room-positions/:roomId', authMiddleware, (req, res) => {
+app.patch('/api/room-positions/:roomId', authMiddleware, csrfMiddleware, (req, res) => {
   const { pos_x, pos_y, floor, tv_mode } = req.body;
   const roomId = req.params.roomId;
 
@@ -5984,6 +6151,18 @@ function updateSettings(req, res) {
     polyLensTokenExpiry = null;
   }
 
+  // Mask sensitive values for audit log
+  const auditChanges = Object.keys(updates).filter(key => allowedKeys.includes(key));
+  const hasSensitiveChanges = auditChanges.some(k => k.includes('secret') || k.includes('webhook') || k.includes('password'));
+
+  auditLog('SETTINGS_UPDATED', {
+    userId: req.user?.id,
+    username: req.user?.username,
+    changedKeys: auditChanges,
+    hasSensitiveChanges,
+    ip: req.ip
+  });
+
   res.json({ success: true });
 }
 
@@ -6039,7 +6218,7 @@ app.get('/api/floor-plans', authMiddleware, (req, res) => {
 });
 
 // Get specific floor plan
-app.get('/api/floor-plans/:floor', (req, res) => {
+app.get('/api/floor-plans/:floor', authMiddleware, (req, res) => {
   const plan = db.prepare('SELECT * FROM floor_plans WHERE floor = ?').get(req.params.floor);
 
   if (!plan) {
@@ -6112,12 +6291,27 @@ app.put('/api/floor-plans/:floor', authMiddleware, (req, res) => {
       updated_at = CURRENT_TIMESTAMP
   `).run(floor, image_data, image_type);
 
+  auditLog('FLOOR_PLAN_UPDATED', {
+    floor,
+    userId: req.user?.id,
+    username: req.user?.username,
+    imageType: image_type,
+    ip: req.ip
+  });
+
   logger.info(`Floor plan uploaded: ${floor} by ${req.user.username}`);
   res.json({ success: true });
 });
 
 // Delete floor plan
-app.delete('/api/floor-plans/:floor', (req, res) => {
+app.delete('/api/floor-plans/:floor', authMiddleware, csrfMiddleware, (req, res) => {
+  auditLog('FLOOR_PLAN_DELETED', {
+    floor: req.params.floor,
+    userId: req.user?.id,
+    username: req.user?.username,
+    ip: req.ip
+  });
+
   db.prepare('DELETE FROM floor_plans WHERE floor = ?').run(req.params.floor);
   res.json({ success: true });
 });
@@ -6263,7 +6457,7 @@ app.post('/api/monitors/:id/tags', authMiddleware, (req, res) => {
 });
 
 // Get tags for a monitor
-app.get('/api/monitors/:id/tags', (req, res) => {
+app.get('/api/monitors/:id/tags', authMiddleware, (req, res) => {
   const tags = db.prepare(`
     SELECT t.* FROM device_tags t
     JOIN monitor_tags mt ON t.id = mt.tag_id
@@ -6275,7 +6469,7 @@ app.get('/api/monitors/:id/tags', (req, res) => {
 // ==================== NOTIFICATION CENTER ====================
 
 // Get user notifications (for notification center UI)
-app.get('/api/user-notifications', (req, res) => {
+app.get('/api/user-notifications', authMiddleware, (req, res) => {
   const limit = Math.min(parseInt(req.query.limit) || 50, 100);
   const unreadOnly = req.query.unread === 'true';
 
@@ -6292,19 +6486,19 @@ app.get('/api/user-notifications', (req, res) => {
 });
 
 // Mark notification as read
-app.patch('/api/user-notifications/:id/read', (req, res) => {
+app.patch('/api/user-notifications/:id/read', authMiddleware, csrfMiddleware, (req, res) => {
   db.prepare('UPDATE user_notifications SET read_at = datetime("now") WHERE id = ?').run(req.params.id);
   res.json({ success: true });
 });
 
 // Mark all as read
-app.post('/api/user-notifications/read-all', (req, res) => {
+app.post('/api/user-notifications/read-all', authMiddleware, csrfMiddleware, (req, res) => {
   db.prepare('UPDATE user_notifications SET read_at = datetime("now") WHERE read_at IS NULL').run();
   res.json({ success: true });
 });
 
 // Dismiss notification
-app.delete('/api/user-notifications/:id', (req, res) => {
+app.delete('/api/user-notifications/:id', authMiddleware, csrfMiddleware, (req, res) => {
   db.prepare('UPDATE user_notifications SET dismissed_at = datetime("now") WHERE id = ?').run(req.params.id);
   res.json({ success: true });
 });
@@ -6470,6 +6664,10 @@ app.post('/api/webhooks', authMiddleware, csrfMiddleware, (req, res) => {
     return res.status(400).json({ success: false, error: 'Name and URL are required' });
   }
 
+  if (!isValidWebhookUrl(url)) {
+    return res.status(400).json({ success: false, error: 'Invalid webhook URL - private/internal addresses not allowed' });
+  }
+
   const result = db.prepare(`
     INSERT INTO webhooks (name, url, type, events, headers, enabled)
     VALUES (?, ?, ?, ?, ?, ?)
@@ -6482,6 +6680,10 @@ app.post('/api/webhooks', authMiddleware, csrfMiddleware, (req, res) => {
 // Update webhook
 app.put('/api/webhooks/:id', authMiddleware, csrfMiddleware, (req, res) => {
   const { name, url, type, events, headers, enabled } = req.body;
+
+  if (url && !isValidWebhookUrl(url)) {
+    return res.status(400).json({ success: false, error: 'Invalid webhook URL - private/internal addresses not allowed' });
+  }
 
   db.prepare(`
     UPDATE webhooks SET name = ?, url = ?, type = ?, events = ?, headers = ?, enabled = ?
@@ -6950,6 +7152,15 @@ app.post('/api/restore', authMiddleware, csrfMiddleware, (req, res) => {
       results.imported.tags = backup.device_tags.length;
     }
 
+    auditLog('BACKUP_RESTORED', {
+      userId: req.user?.id,
+      username: req.user?.username,
+      backupVersion: backup.version,
+      importedMonitors: results.imported.monitors || 0,
+      importedTags: results.imported.tags || 0,
+      ip: req.ip
+    });
+
     logActivity(req, 'restore_backup', 'system', null, null, results);
     res.json({ success: true, results });
   } catch (e) {
@@ -7079,6 +7290,14 @@ app.post('/api/monitors/bulk-import', authMiddleware, csrfMiddleware, (req, res)
     }
   });
 
+  auditLog('BULK_IMPORT', {
+    userId: req.user?.id,
+    username: req.user?.username,
+    imported,
+    failed,
+    ip: req.ip
+  });
+
   logActivity(req, 'bulk_import', 'monitors', null, null, `Imported ${imported} devices, ${failed} failed`);
 
   res.json({ success: true, imported, failed, errors });
@@ -7087,7 +7306,7 @@ app.post('/api/monitors/bulk-import', authMiddleware, csrfMiddleware, (req, res)
 // ==================== DEVICE TEMPLATES ====================
 
 // Get all device templates
-app.get('/api/device-templates', (req, res) => {
+app.get('/api/device-templates', authMiddleware, (req, res) => {
   const templates = db.prepare('SELECT * FROM device_templates ORDER BY name').all();
   res.json({ success: true, templates });
 });
@@ -7105,6 +7324,14 @@ app.post('/api/device-templates', authMiddleware, csrfMiddleware, (req, res) => 
     VALUES (?, ?, ?, ?, ?, ?, ?, ?)
   `).run(name, type || 'ping', device_type, default_interval || 30, icon, color, snmp_enabled ? 1 : 0, snmp_community || 'public');
 
+  auditLog('DEVICE_TEMPLATE_CREATED', {
+    templateId: result.lastInsertRowid,
+    name,
+    userId: req.user?.id,
+    username: req.user?.username,
+    ip: req.ip
+  });
+
   res.json({ success: true, id: result.lastInsertRowid });
 });
 
@@ -7114,7 +7341,17 @@ app.delete('/api/device-templates/:id', authMiddleware, csrfMiddleware, (req, re
     return res.status(403).json({ success: false, error: 'Admin access required' });
   }
 
+  const template = db.prepare('SELECT name FROM device_templates WHERE id = ?').get(req.params.id);
   db.prepare('DELETE FROM device_templates WHERE id = ?').run(req.params.id);
+
+  auditLog('DEVICE_TEMPLATE_DELETED', {
+    templateId: req.params.id,
+    templateName: template?.name,
+    userId: req.user?.id,
+    username: req.user?.username,
+    ip: req.ip
+  });
+
   res.json({ success: true });
 });
 
@@ -7189,6 +7426,15 @@ app.post('/api/floor-zones', authMiddleware, csrfMiddleware, (req, res) => {
     VALUES (?, ?, ?, ?, ?, ?)
   `).run(floor, name, color || '#3B82F6', opacity || 0.2, JSON.stringify(points), type || 'room');
 
+  auditLog('FLOOR_ZONE_CREATED', {
+    zoneId: result.lastInsertRowid,
+    name,
+    floor,
+    userId: req.user?.id,
+    username: req.user?.username,
+    ip: req.ip
+  });
+
   logActivity(req, 'create', 'floor_zone', result.lastInsertRowid, name);
   res.json({ success: true, id: result.lastInsertRowid });
 });
@@ -7206,6 +7452,14 @@ app.put('/api/floor-zones/:id', authMiddleware, csrfMiddleware, (req, res) => {
     WHERE id = ?
   `).run(name, color, opacity, JSON.stringify(points), type || 'room', req.params.id);
 
+  auditLog('FLOOR_ZONE_UPDATED', {
+    zoneId: req.params.id,
+    name,
+    userId: req.user?.id,
+    username: req.user?.username,
+    ip: req.ip
+  });
+
   res.json({ success: true });
 });
 
@@ -7215,7 +7469,17 @@ app.delete('/api/floor-zones/:id', authMiddleware, csrfMiddleware, (req, res) =>
     return res.status(403).json({ success: false, error: 'Admin access required' });
   }
 
+  const zone = db.prepare('SELECT name FROM floor_zones WHERE id = ?').get(req.params.id);
   db.prepare('DELETE FROM floor_zones WHERE id = ?').run(req.params.id);
+
+  auditLog('FLOOR_ZONE_DELETED', {
+    zoneId: req.params.id,
+    zoneName: zone?.name,
+    userId: req.user?.id,
+    username: req.user?.username,
+    ip: req.ip
+  });
+
   res.json({ success: true });
 });
 
@@ -7371,7 +7635,7 @@ function calculateHealthScores() {
 }
 
 // Get health scores
-app.get('/api/health-scores', (req, res) => {
+app.get('/api/health-scores', authMiddleware, (req, res) => {
   const scores = db.prepare(`
     SELECT id, name, floor, device_type, health_score, last_health_update
     FROM monitors WHERE active = 1
@@ -7556,6 +7820,15 @@ app.post('/api/monitors/bulk-action', authMiddleware, csrfMiddleware, (req, res)
       return res.status(400).json({ success: false, error: 'Unknown action' });
   }
 
+  auditLog('BULK_ACTION', {
+    action,
+    affectedCount: affected,
+    deviceIds: ids,
+    userId: req.user?.id,
+    username: req.user?.username,
+    ip: req.ip
+  });
+
   logActivity(req, `bulk_${action}`, 'monitors', null, null, `${affected} devices affected`);
   res.json({ success: true, affected });
 });
@@ -7612,6 +7885,13 @@ app.post('/api/2fa/verify', authMiddleware, csrfMiddleware, (req, res) => {
     // Verify the code
     if (verifyTOTP(user.totp_secret, code)) {
       db.prepare('UPDATE users SET totp_enabled = 1, totp_verified = 1 WHERE id = ?').run(userId);
+
+      auditLog('2FA_ENABLED', {
+        userId,
+        username: user.username,
+        ip: req.ip
+      });
+
       logActivity(req, 'enable_2fa', 'user', userId, user.username);
       res.json({ success: true, message: '2FA enabled successfully' });
     } else {
@@ -7645,6 +7925,13 @@ app.post('/api/2fa/disable', authMiddleware, csrfMiddleware, (req, res) => {
     }
 
     db.prepare('UPDATE users SET totp_enabled = 0, totp_secret = NULL, totp_verified = 0 WHERE id = ?').run(userId);
+
+    auditLog('2FA_DISABLED', {
+      userId,
+      username: user.username,
+      ip: req.ip
+    });
+
     logActivity(req, 'disable_2fa', 'user', userId, user.username);
     res.json({ success: true, message: '2FA disabled successfully' });
   } catch (error) {
@@ -7913,12 +8200,12 @@ wss.on('connection', (ws, req) => {
   if (!session) {
     ws.close(4002, 'Invalid or expired token');
     logger.info('WebSocket connection rejected: invalid token');
-    logger.info('  Token received:', token ? token.substring(0, 25) + '...' : 'NULL');
-    logger.info('  Grace period tokens:', Array.from(tokenGracePeriod.keys()).map(t => t.substring(0, 20) + '...'));
+    logger.info('  Token received:', token ? '[PRESENT]' : '[NONE]');
+    logger.info('  Grace period tokens count:', tokenGracePeriod.size);
     return;
   }
   if (isGracePeriod) {
-    logger.info('WebSocket using grace period token:', token.substring(0, 20) + '...');
+    logger.info('WebSocket using grace period token: [PRESENT]');
   }
 
   // Store user info on the WebSocket for potential future use

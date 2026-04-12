@@ -1,0 +1,686 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Office Infrastructure Monitor</title>
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    
+    body {
+      min-height: 100vh;
+      background: linear-gradient(135deg, #0F172A 0%, #1E293B 50%, #0F172A 100%);
+      font-family: 'IBM Plex Sans', -apple-system, sans-serif;
+      color: #F8FAFC;
+      padding: 24px;
+    }
+
+    @keyframes pulse {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.5; }
+    }
+    
+    @keyframes ping {
+      75%, 100% {
+        transform: translate(-50%, -50%) scale(2);
+        opacity: 0;
+      }
+    }
+
+    .header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 24px;
+      padding-bottom: 16px;
+      border-bottom: 1px solid rgba(148, 163, 184, 0.2);
+    }
+
+    .title {
+      font-size: 28px;
+      font-weight: 600;
+      background: linear-gradient(90deg, #60A5FA, #A78BFA);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+
+    .subtitle {
+      margin-top: 4px;
+      color: #94A3B8;
+      font-size: 14px;
+    }
+
+    .status-cards {
+      display: flex;
+      gap: 16px;
+    }
+
+    .status-card {
+      border-radius: 12px;
+      padding: 12px 20px;
+      text-align: center;
+    }
+
+    .status-card.online {
+      background: rgba(34, 197, 94, 0.15);
+      border: 1px solid rgba(34, 197, 94, 0.3);
+    }
+
+    .status-card.offline {
+      background: rgba(239, 68, 68, 0.15);
+      border: 1px solid rgba(239, 68, 68, 0.3);
+    }
+
+    .status-number {
+      font-size: 24px;
+      font-weight: 700;
+    }
+
+    .status-number.online { color: #22C55E; }
+    .status-number.offline { color: #EF4444; }
+
+    .status-label {
+      font-size: 12px;
+      color: #94A3B8;
+    }
+
+    .floor-tabs {
+      display: flex;
+      gap: 8px;
+      margin-bottom: 24px;
+    }
+
+    .floor-tab {
+      flex: 1;
+      padding: 16px 24px;
+      border: none;
+      border-radius: 12px;
+      cursor: pointer;
+      transition: all 0.2s ease;
+      background: rgba(30, 41, 59, 0.8);
+      color: #94A3B8;
+      font-size: 16px;
+      font-weight: 500;
+      font-family: inherit;
+    }
+
+    .floor-tab:hover {
+      background: rgba(51, 65, 85, 0.8);
+    }
+
+    .floor-tab.active {
+      background: linear-gradient(135deg, #3B82F6 0%, #2563EB 100%);
+      color: #FFFFFF;
+      box-shadow: 0 4px 20px rgba(59, 130, 246, 0.3);
+    }
+
+    .floor-tab-content {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+    }
+
+    .issue-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: #EF4444;
+      animation: pulse 2s infinite;
+    }
+
+    .floor-tab-count {
+      font-size: 12px;
+      margin-top: 4px;
+      opacity: 0.8;
+    }
+
+    .main-content {
+      display: flex;
+      gap: 24px;
+    }
+
+    .floor-plan-container {
+      flex: 1;
+      background: rgba(30, 41, 59, 0.6);
+      border-radius: 16px;
+      padding: 24px;
+      position: relative;
+      min-height: 500px;
+      border: 1px solid rgba(148, 163, 184, 0.1);
+    }
+
+    .floor-plan-placeholder {
+      position: absolute;
+      inset: 24px;
+      background: linear-gradient(180deg, rgba(51, 65, 85, 0.3) 0%, rgba(30, 41, 59, 0.5) 100%);
+      border-radius: 12px;
+      border: 2px dashed rgba(148, 163, 184, 0.2);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .placeholder-content {
+      text-align: center;
+      color: #64748B;
+    }
+
+    .placeholder-icon {
+      font-size: 48px;
+      margin-bottom: 12px;
+    }
+
+    .placeholder-title {
+      font-size: 18px;
+      font-weight: 500;
+    }
+
+    .placeholder-subtitle {
+      font-size: 14px;
+      margin-top: 4px;
+    }
+
+    .device-marker {
+      position: absolute;
+      transform: translate(-50%, -50%);
+      z-index: 10;
+      cursor: pointer;
+    }
+
+    .device-marker:hover {
+      z-index: 100;
+    }
+
+    .device-ping {
+      position: absolute;
+      width: 40px;
+      height: 40px;
+      border-radius: 50%;
+      opacity: 0.4;
+      animation: ping 1.5s cubic-bezier(0, 0, 0.2, 1) infinite;
+      transform: translate(-50%, -50%);
+      left: 50%;
+      top: 50%;
+    }
+
+    .device-dot {
+      width: 24px;
+      height: 24px;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 10px;
+      transition: all 0.2s ease;
+      border-width: 3px;
+      border-style: solid;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+    }
+
+    .device-marker:hover .device-dot {
+      width: 28px;
+      height: 28px;
+    }
+
+    .device-popup {
+      position: absolute;
+      bottom: 100%;
+      left: 50%;
+      transform: translateX(-50%);
+      margin-bottom: 12px;
+      background: linear-gradient(135deg, #1E293B 0%, #334155 100%);
+      border-radius: 12px;
+      padding: 16px;
+      min-width: 220px;
+      box-shadow: 0 10px 40px rgba(0,0,0,0.5);
+      border: 1px solid rgba(148, 163, 184, 0.2);
+      z-index: 1000;
+      display: none;
+    }
+
+    .device-marker:hover .device-popup {
+      display: block;
+    }
+
+    .popup-header {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-bottom: 12px;
+    }
+
+    .popup-icon {
+      font-size: 20px;
+    }
+
+    .popup-name {
+      font-weight: 600;
+      font-size: 14px;
+    }
+
+    .popup-details {
+      font-size: 13px;
+      color: #94A3B8;
+    }
+
+    .popup-row {
+      margin-bottom: 6px;
+    }
+
+    .popup-status {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .status-badge {
+      color: #FFF;
+      padding: 2px 8px;
+      border-radius: 4px;
+      font-size: 11px;
+      font-weight: 600;
+    }
+
+    .popup-arrow {
+      position: absolute;
+      bottom: -8px;
+      left: 50%;
+      transform: translateX(-50%);
+      width: 0;
+      height: 0;
+      border-left: 8px solid transparent;
+      border-right: 8px solid transparent;
+      border-top: 8px solid #334155;
+    }
+
+    .sidebar {
+      width: 320px;
+      background: rgba(30, 41, 59, 0.6);
+      border-radius: 16px;
+      padding: 20px;
+      border: 1px solid rgba(148, 163, 184, 0.1);
+      max-height: 600px;
+      overflow-y: auto;
+    }
+
+    .sidebar-title {
+      margin-bottom: 16px;
+      font-size: 16px;
+      color: #E2E8F0;
+    }
+
+    .device-category {
+      margin-bottom: 20px;
+    }
+
+    .category-header {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-bottom: 10px;
+      padding: 8px 12px;
+      border-radius: 8px;
+      border-left: 3px solid;
+    }
+
+    .category-header.ap { background: rgba(59, 130, 246, 0.13); border-color: #3B82F6; }
+    .category-header.printer { background: rgba(139, 92, 246, 0.13); border-color: #8B5CF6; }
+    .category-header.poly { background: rgba(245, 158, 11, 0.13); border-color: #F59E0B; }
+
+    .category-name {
+      font-weight: 600;
+      font-size: 14px;
+    }
+
+    .category-count {
+      margin-left: auto;
+      background: rgba(0,0,0,0.2);
+      padding: 2px 8px;
+      border-radius: 4px;
+      font-size: 12px;
+    }
+
+    .device-item {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 10px 12px;
+      margin-bottom: 4px;
+      background: rgba(51, 65, 85, 0.3);
+      border-radius: 8px;
+      cursor: pointer;
+      transition: all 0.2s ease;
+    }
+
+    .device-item:hover {
+      background: rgba(51, 65, 85, 0.5);
+    }
+
+    .device-item.down {
+      background: rgba(239, 68, 68, 0.1);
+    }
+
+    .device-status-dot {
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+    }
+
+    .device-status-dot.up { background: #22C55E; }
+    .device-status-dot.down { background: #EF4444; box-shadow: 0 0 8px #EF4444; }
+    .device-status-dot.maintenance { background: #F59E0B; }
+
+    .device-info {
+      flex: 1;
+      min-width: 0;
+    }
+
+    .device-name {
+      font-size: 13px;
+      font-weight: 500;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .device-ip {
+      font-size: 11px;
+      color: #64748B;
+    }
+
+    .legend {
+      display: flex;
+      justify-content: center;
+      gap: 32px;
+      margin-top: 24px;
+      padding: 16px;
+      background: rgba(30, 41, 59, 0.4);
+      border-radius: 12px;
+      flex-wrap: wrap;
+    }
+
+    .legend-item {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .legend-icon {
+      font-size: 16px;
+    }
+
+    .legend-dot {
+      width: 12px;
+      height: 12px;
+      border-radius: 50%;
+    }
+
+    .legend-text {
+      font-size: 14px;
+    }
+
+    .legend-text.ap { color: #3B82F6; }
+    .legend-text.printer { color: #8B5CF6; }
+    .legend-text.poly { color: #F59E0B; }
+    .legend-text.status { color: #94A3B8; font-size: 13px; }
+  </style>
+</head>
+<body>
+  <div id="app"></div>
+
+  <script>
+    // API Configuration
+    const API_URL = 'http://localhost:3002';
+
+    // Live device data from Uptime Kuma (will be populated by API)
+    let deviceData = {
+      "1st Floor": { accessPoints: [], printers: [], polyLens: [] },
+      "2nd Floor": { accessPoints: [], printers: [], polyLens: [] },
+      "3rd Floor": { accessPoints: [], printers: [], polyLens: [] },
+      "5th Floor": { accessPoints: [], printers: [], polyLens: [] }
+    };
+
+    let apiConnected = false;
+    let lastFetchError = null;
+
+    // Fetch live data from API
+    async function fetchDeviceData() {
+      try {
+        const response = await fetch(`${API_URL}/api/monitors/by-floor`);
+        if (!response.ok) throw new Error(`HTTP ${response.status}`);
+
+        const data = await response.json();
+        if (data.success && data.floors) {
+          deviceData = data.floors;
+          apiConnected = data.connected;
+          lastFetchError = null;
+        }
+      } catch (error) {
+        console.error('Failed to fetch device data:', error);
+        lastFetchError = error.message;
+        apiConnected = false;
+      }
+    }
+
+    const deviceTypes = {
+      accessPoints: { icon: "📡", label: "Access Points", color: "#3B82F6" },
+      printers: { icon: "🖨️", label: "Printers", color: "#8B5CF6" },
+      polyLens: { icon: "📹", label: "Zoom Rooms", color: "#F59E0B" }
+    };
+
+    const statusColors = {
+      up: { bg: "#22C55E", pulse: "#4ADE80", label: "Online" },
+      down: { bg: "#EF4444", pulse: "#F87171", label: "Offline" },
+      maintenance: { bg: "#F59E0B", pulse: "#FBBF24", label: "Maintenance" }
+    };
+
+    let activeFloor = "1st Floor";
+
+    function generatePositions(count, seed) {
+      const positions = [];
+      for (let i = 0; i < count; i++) {
+        const angle = (seed + i * 137.5) % 360;
+        const radius = 25 + ((seed * i) % 20);
+        positions.push({
+          x: 50 + radius * Math.cos(angle * Math.PI / 180) * 0.8,
+          y: 50 + radius * Math.sin(angle * Math.PI / 180) * 0.6
+        });
+      }
+      return positions;
+    }
+
+    function getStatusCounts(floorData) {
+      let up = 0, down = 0, maintenance = 0;
+      Object.values(floorData).forEach(category => {
+        category.forEach(device => {
+          if (device.status === 'up') up++;
+          else if (device.status === 'down') down++;
+          else maintenance++;
+        });
+      });
+      return { up, down, maintenance, total: up + down + maintenance };
+    }
+
+    function render() {
+      const floors = Object.keys(deviceData);
+      const currentFloorData = deviceData[activeFloor];
+      const currentCounts = getStatusCounts(currentFloorData);
+      const now = new Date().toLocaleTimeString();
+
+      let deviceMarkersHTML = '';
+      Object.entries(currentFloorData).forEach(([type, devices]) => {
+        const positions = generatePositions(devices.length, type.charCodeAt(0) * 7);
+        const typeInfo = deviceTypes[type];
+        
+        devices.forEach((device, idx) => {
+          const pos = positions[idx];
+          const status = statusColors[device.status];
+          
+          deviceMarkersHTML += `
+            <div class="device-marker" style="left: ${pos.x}%; top: ${pos.y}%;">
+              ${device.status === 'down' ? `<div class="device-ping" style="background: ${status.pulse};"></div>` : ''}
+              <div class="device-dot" style="background: ${status.bg}; border-color: ${typeInfo.color};">
+                ${typeInfo.icon.slice(0, 2)}
+              </div>
+              <div class="device-popup">
+                <div class="popup-header">
+                  <span class="popup-icon">${typeInfo.icon}</span>
+                  <span class="popup-name">${device.name}</span>
+                </div>
+                <div class="popup-details">
+                  <div class="popup-row"><strong>Type:</strong> ${typeInfo.label}</div>
+                  <div class="popup-row"><strong>IP:</strong> ${device.ip}</div>
+                  <div class="popup-status">
+                    <strong>Status:</strong>
+                    <span class="status-badge" style="background: ${status.bg};">${status.label}</span>
+                  </div>
+                </div>
+                <div class="popup-arrow"></div>
+              </div>
+            </div>
+          `;
+        });
+      });
+
+      let sidebarHTML = '';
+      Object.entries(currentFloorData).forEach(([type, devices]) => {
+        const typeInfo = deviceTypes[type];
+        const categoryClass = type === 'accessPoints' ? 'ap' : type === 'printers' ? 'printer' : 'poly';
+        
+        sidebarHTML += `
+          <div class="device-category">
+            <div class="category-header ${categoryClass}">
+              <span>${typeInfo.icon}</span>
+              <span class="category-name">${typeInfo.label}</span>
+              <span class="category-count">${devices.length}</span>
+            </div>
+            ${devices.map(device => {
+              const status = statusColors[device.status];
+              return `
+                <div class="device-item ${device.status === 'down' ? 'down' : ''}">
+                  <div class="device-status-dot ${device.status}"></div>
+                  <div class="device-info">
+                    <div class="device-name">${device.name}</div>
+                    <div class="device-ip">${device.ip}</div>
+                  </div>
+                </div>
+              `;
+            }).join('')}
+          </div>
+        `;
+      });
+
+      document.getElementById('app').innerHTML = `
+        <header class="header">
+          <div>
+            <h1 class="title">🏢 Office Infrastructure Monitor</h1>
+            <p class="subtitle">
+              ${apiConnected
+                ? '<span style="color: #22C55E;">● Live</span>'
+                : '<span style="color: #EF4444;">● Disconnected</span>'}
+              • Last updated: ${now}
+              ${lastFetchError ? `<span style="color: #F59E0B;"> • Error: ${lastFetchError}</span>` : ''}
+            </p>
+          </div>
+          <div class="status-cards">
+            <div class="status-card online">
+              <div class="status-number online">${currentCounts.up}</div>
+              <div class="status-label">Online</div>
+            </div>
+            <div class="status-card offline">
+              <div class="status-number offline">${currentCounts.down}</div>
+              <div class="status-label">Offline</div>
+            </div>
+          </div>
+        </header>
+
+        <div class="floor-tabs">
+          ${floors.map(floor => {
+            const counts = getStatusCounts(deviceData[floor]);
+            const isActive = floor === activeFloor;
+            const hasIssues = counts.down > 0;
+            
+            return `
+              <button class="floor-tab ${isActive ? 'active' : ''}" onclick="setFloor('${floor}')">
+                <div class="floor-tab-content">
+                  ${floor}
+                  ${hasIssues ? '<span class="issue-dot"></span>' : ''}
+                </div>
+                <div class="floor-tab-count">${counts.total} devices</div>
+              </button>
+            `;
+          }).join('')}
+        </div>
+
+        <div class="main-content">
+          <div class="floor-plan-container">
+            <div class="floor-plan-placeholder">
+              <div class="placeholder-content">
+                <div class="placeholder-icon">🗺️</div>
+                <div class="placeholder-title">${activeFloor} Blueprint</div>
+                <div class="placeholder-subtitle">Upload your PDF floor plan here</div>
+              </div>
+            </div>
+            ${deviceMarkersHTML}
+          </div>
+
+          <div class="sidebar">
+            <h3 class="sidebar-title">📋 Device List - ${activeFloor}</h3>
+            ${sidebarHTML}
+          </div>
+        </div>
+
+        <div class="legend">
+          <div class="legend-item">
+            <span class="legend-icon">📡</span>
+            <span class="legend-text ap">Access Points</span>
+          </div>
+          <div class="legend-item">
+            <span class="legend-icon">🖨️</span>
+            <span class="legend-text printer">Printers</span>
+          </div>
+          <div class="legend-item">
+            <span class="legend-icon">📹</span>
+            <span class="legend-text poly">Zoom Rooms</span>
+          </div>
+          <div style="margin-left: 24px; display: flex; gap: 16px;">
+            <div class="legend-item">
+              <div class="legend-dot" style="background: #22C55E;"></div>
+              <span class="legend-text status">Online</span>
+            </div>
+            <div class="legend-item">
+              <div class="legend-dot" style="background: #EF4444;"></div>
+              <span class="legend-text status">Offline</span>
+            </div>
+            <div class="legend-item">
+              <div class="legend-dot" style="background: #F59E0B;"></div>
+              <span class="legend-text status">Maintenance</span>
+            </div>
+          </div>
+        </div>
+      `;
+    }
+
+    function setFloor(floor) {
+      activeFloor = floor;
+      render();
+    }
+
+    // Initial fetch and render
+    async function init() {
+      await fetchDeviceData();
+      render();
+    }
+    init();
+
+    // Auto-refresh every 30 seconds
+    setInterval(async () => {
+      await fetchDeviceData();
+      render();
+    }, 30000);
+  </script>
+</body>
+</html>

@@ -137,6 +137,30 @@
     .btn-primary { background: var(--accent-blue); color: white; }
     .btn-secondary { background: var(--bg-elevated); color: var(--text-primary); border: 1px solid var(--border-default); }
 
+    /* Stats Bar */
+    .stats-bar {
+      display: flex;
+      gap: var(--space-xl);
+      padding: var(--space-md) var(--space-xl);
+      background: var(--bg-surface);
+      border-bottom: 1px solid var(--border-subtle);
+    }
+
+    .stat-item {
+      display: flex;
+      align-items: center;
+      gap: var(--space-sm);
+    }
+
+    .stat-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+    }
+
+    .stat-label { font-size: 13px; color: var(--text-secondary); }
+    .stat-value { font-size: 14px; font-weight: 600; }
+
     /* Topology Canvas */
     .topology-container {
       flex: 1;
@@ -157,7 +181,7 @@
       position: absolute;
       top: var(--space-lg);
       left: var(--space-lg);
-      background: var(--bg-glass, rgba(17, 24, 39, 0.9));
+      background: rgba(17, 24, 39, 0.92);
       backdrop-filter: blur(12px);
       border: 1px solid var(--border-default);
       border-radius: var(--radius-lg);
@@ -173,23 +197,35 @@
       margin-bottom: var(--space-sm);
     }
 
+    .legend-group { margin-bottom: var(--space-sm); }
+    .legend-group-label {
+      font-size: 10px;
+      color: var(--text-muted);
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      margin-bottom: 4px;
+    }
+
     .legend-item {
       display: flex;
       align-items: center;
       gap: var(--space-sm);
       margin-bottom: var(--space-xs);
       font-size: 13px;
+      color: var(--text-secondary);
     }
 
     .legend-dot {
       width: 12px;
       height: 12px;
       border-radius: 50%;
+      flex-shrink: 0;
     }
 
     .legend-line {
       width: 24px;
-      height: 2px;
+      height: 0;
+      flex-shrink: 0;
     }
 
     /* Zoom Controls */
@@ -225,8 +261,8 @@
       position: absolute;
       top: var(--space-lg);
       right: var(--space-lg);
-      width: 280px;
-      background: var(--bg-glass, rgba(17, 24, 39, 0.9));
+      width: 300px;
+      background: rgba(17, 24, 39, 0.92);
       backdrop-filter: blur(12px);
       border: 1px solid var(--border-default);
       border-radius: var(--radius-lg);
@@ -244,7 +280,7 @@
       border-bottom: 1px solid var(--border-subtle);
     }
 
-    .info-title { font-weight: 600; }
+    .info-title { font-weight: 600; font-size: 14px; }
     .info-close {
       background: none;
       border: none;
@@ -263,7 +299,7 @@
     }
 
     .info-label { color: var(--text-secondary); }
-    .info-value { font-weight: 500; }
+    .info-value { font-weight: 500; text-align: right; max-width: 170px; word-break: break-all; }
 
     .info-status {
       display: inline-flex;
@@ -275,46 +311,26 @@
       font-weight: 500;
     }
 
-    .info-status.online { background: rgba(16, 185, 129, 0.2); color: var(--status-online); }
-    .info-status.offline { background: rgba(239, 68, 68, 0.2); color: var(--status-offline); }
+    .info-status.managed { background: rgba(16, 185, 129, 0.2); color: var(--status-online); }
+    .info-status.unmanaged { background: rgba(107, 114, 128, 0.2); color: var(--text-muted); }
 
-    .info-actions {
-      display: flex;
-      gap: var(--space-sm);
+    .info-section-title {
+      font-size: 11px;
+      font-weight: 600;
+      color: var(--text-muted);
+      text-transform: uppercase;
       margin-top: var(--space-md);
-      padding-top: var(--space-md);
+      margin-bottom: var(--space-sm);
+      padding-top: var(--space-sm);
       border-top: 1px solid var(--border-subtle);
     }
 
-    .info-actions .btn { flex: 1; justify-content: center; }
-
-    /* Stats Bar */
-    .stats-bar {
-      display: flex;
-      gap: var(--space-xl);
-      padding: var(--space-md) var(--space-xl);
-      background: var(--bg-surface);
-      border-bottom: 1px solid var(--border-subtle);
+    .info-interface {
+      font-size: 12px;
+      color: var(--text-secondary);
+      padding: 3px 0;
+      font-family: 'SF Mono', 'Fira Code', monospace;
     }
-
-    .stat-item {
-      display: flex;
-      align-items: center;
-      gap: var(--space-sm);
-    }
-
-    .stat-dot {
-      width: 8px;
-      height: 8px;
-      border-radius: 50%;
-    }
-
-    .stat-dot.online { background: var(--status-online); }
-    .stat-dot.offline { background: var(--status-offline); }
-    .stat-dot.warning { background: var(--status-warning); }
-
-    .stat-label { font-size: 13px; color: var(--text-secondary); }
-    .stat-value { font-size: 14px; font-weight: 600; }
 
     /* Loading */
     .loading-overlay {
@@ -339,6 +355,22 @@
     }
 
     @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* Error state */
+    .error-message {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      text-align: center;
+      color: var(--text-secondary);
+      display: none;
+      z-index: 50;
+    }
+    .error-message.visible { display: block; }
+    .error-message .error-icon { font-size: 48px; margin-bottom: var(--space-md); }
+    .error-message .error-text { font-size: 16px; margin-bottom: var(--space-sm); }
+    .error-message .error-detail { font-size: 13px; color: var(--text-muted); }
   </style>
 </head>
 <body>
@@ -377,39 +409,48 @@
       <div class="page-header">
         <h1 class="page-title">Network Topology</h1>
         <div class="header-controls">
-          <select class="control-select" id="floor-filter" onchange="renderTopology()">
+          <select class="control-select" id="floor-filter">
             <option value="all">All Floors</option>
           </select>
-          <select class="control-select" id="layout-mode" onchange="changeLayout()">
-            <option value="hierarchical">Hierarchical</option>
-            <option value="radial">Radial</option>
-            <option value="force">Force-Directed</option>
-          </select>
-          <button class="btn btn-secondary" onclick="resetView()">⟲ Reset View</button>
-          <button class="btn btn-primary" onclick="refreshTopology()">🔄 Refresh</button>
+          <button class="btn btn-secondary" onclick="resetView()">Reset View</button>
+          <button class="btn btn-primary" onclick="refreshTopology()">Refresh</button>
         </div>
       </div>
 
       <!-- Stats Bar -->
       <div class="stats-bar">
         <div class="stat-item">
-          <span class="stat-dot online"></span>
-          <span class="stat-label">Online:</span>
-          <span class="stat-value" id="online-count">0</span>
+          <span class="stat-dot" style="background: var(--status-online);"></span>
+          <span class="stat-label">Switches:</span>
+          <span class="stat-value" id="switch-count">0</span>
         </div>
         <div class="stat-item">
-          <span class="stat-dot offline"></span>
-          <span class="stat-label">Offline:</span>
-          <span class="stat-value" id="offline-count">0</span>
+          <span class="stat-dot" style="background: var(--accent-blue);"></span>
+          <span class="stat-label">APs:</span>
+          <span class="stat-value" id="ap-count">0</span>
         </div>
         <div class="stat-item">
-          <span class="stat-dot warning"></span>
-          <span class="stat-label">Warning:</span>
-          <span class="stat-value" id="warning-count">0</span>
+          <span class="stat-dot" style="background: #F97316;"></span>
+          <span class="stat-label">Routers:</span>
+          <span class="stat-value" id="router-count">0</span>
         </div>
         <div class="stat-item">
-          <span class="stat-label">Total Devices:</span>
-          <span class="stat-value" id="total-count">0</span>
+          <span class="stat-dot" style="background: #F59E0B;"></span>
+          <span class="stat-label">Printers:</span>
+          <span class="stat-value" id="printer-count">0</span>
+        </div>
+        <div class="stat-item">
+          <span class="stat-dot" style="background: #8B5CF6;"></span>
+          <span class="stat-label">Poly:</span>
+          <span class="stat-value" id="poly-count">0</span>
+        </div>
+        <div class="stat-item">
+          <span class="stat-label">Links:</span>
+          <span class="stat-value" id="link-count">0</span>
+        </div>
+        <div class="stat-item">
+          <span class="stat-label">Updated:</span>
+          <span class="stat-value" id="last-updated">--</span>
         </div>
       </div>
 
@@ -420,100 +461,96 @@
           <div>Loading topology...</div>
         </div>
 
+        <div class="error-message" id="error-message">
+          <div class="error-icon">⚠️</div>
+          <div class="error-text">Failed to load topology</div>
+          <div class="error-detail" id="error-detail"></div>
+        </div>
+
         <canvas id="topology-canvas"></canvas>
 
         <!-- Legend -->
         <div class="topology-legend">
           <div class="legend-title">Legend</div>
-          <div class="legend-item">
-            <div class="legend-dot" style="background: var(--status-online);"></div>
-            <span>Online</span>
+          <div class="legend-group">
+            <div class="legend-group-label">Nodes</div>
+            <div class="legend-item">
+              <div class="legend-dot" style="background: #F97316;"></div>
+              <span>Router / Backbone</span>
+            </div>
+            <div class="legend-item">
+              <div class="legend-dot" style="background: #10B981;"></div>
+              <span>Managed Switch</span>
+            </div>
+            <div class="legend-item">
+              <div class="legend-dot" style="background: #3B82F6;"></div>
+              <span>Access Point</span>
+            </div>
+            <div class="legend-item">
+              <div class="legend-dot" style="background: #F59E0B;"></div>
+              <span>Printer</span>
+            </div>
+            <div class="legend-item">
+              <div class="legend-dot" style="background: #8B5CF6;"></div>
+              <span>Poly Device</span>
+            </div>
+            <div class="legend-item">
+              <div class="legend-dot" style="background: #6B7280;"></div>
+              <span>Unknown / Other</span>
+            </div>
           </div>
-          <div class="legend-item">
-            <div class="legend-dot" style="background: var(--status-offline);"></div>
-            <span>Offline</span>
-          </div>
-          <div class="legend-item">
-            <div class="legend-dot" style="background: var(--status-warning);"></div>
-            <span>Warning</span>
-          </div>
-          <div class="legend-item">
-            <div class="legend-dot" style="background: var(--accent-blue);"></div>
-            <span>Access Point</span>
-          </div>
-          <div class="legend-item">
-            <div class="legend-dot" style="background: var(--accent-purple);"></div>
-            <span>Printer</span>
-          </div>
-          <div class="legend-item">
-            <div class="legend-dot" style="background: #F59E0B;"></div>
-            <span>Zoom Room</span>
+          <div class="legend-group">
+            <div class="legend-group-label">Links</div>
+            <div class="legend-item">
+              <svg width="24" height="8"><line x1="0" y1="4" x2="24" y2="4" stroke="#F97316" stroke-width="3" stroke-dasharray="6,3"/></svg>
+              <span>SFP Uplink</span>
+            </div>
+            <div class="legend-item">
+              <svg width="24" height="8"><line x1="0" y1="4" x2="24" y2="4" stroke="#64748B" stroke-width="2"/></svg>
+              <span>Ethernet</span>
+            </div>
+            <div class="legend-item">
+              <svg width="24" height="8"><line x1="0" y1="4" x2="24" y2="4" stroke="#475569" stroke-width="1" stroke-dasharray="2,3"/></svg>
+              <span>VLAN / Bridge</span>
+            </div>
           </div>
         </div>
 
         <!-- Zoom Controls -->
         <div class="zoom-controls">
           <button class="zoom-btn" onclick="zoomIn()">+</button>
-          <button class="zoom-btn" onclick="zoomOut()">−</button>
-          <button class="zoom-btn" onclick="resetView()">⟲</button>
+          <button class="zoom-btn" onclick="zoomOut()">&minus;</button>
+          <button class="zoom-btn" onclick="resetView()">&#x27F2;</button>
         </div>
 
         <!-- Info Panel -->
         <div class="info-panel" id="info-panel">
           <div class="info-header">
-            <span class="info-title" id="info-name">Device Name</span>
+            <span class="info-title" id="info-name">Device</span>
             <button class="info-close" onclick="closeInfoPanel()">&times;</button>
           </div>
-          <div class="info-content">
-            <div class="info-row">
-              <span class="info-label">Status</span>
-              <span class="info-status online" id="info-status">● Online</span>
-            </div>
-            <div class="info-row">
-              <span class="info-label">IP Address</span>
-              <span class="info-value" id="info-ip">--</span>
-            </div>
-            <div class="info-row">
-              <span class="info-label">Type</span>
-              <span class="info-value" id="info-type">--</span>
-            </div>
-            <div class="info-row">
-              <span class="info-label">Floor</span>
-              <span class="info-value" id="info-floor">--</span>
-            </div>
-            <div class="info-row">
-              <span class="info-label">Response Time</span>
-              <span class="info-value" id="info-ping">--</span>
-            </div>
-            <div class="info-actions">
-              <button class="btn btn-secondary" onclick="pingSelectedDevice()">📡 Ping</button>
-              <button class="btn btn-primary" onclick="viewInDashboard()">📊 Details</button>
-            </div>
-          </div>
+          <div class="info-content" id="info-content"></div>
         </div>
       </div>
     </main>
   </div>
 
   <script>
+    // ==================== CONFIG ====================
     const API_URL = window.location.origin;
-    let authToken = localStorage.getItem('authToken');
+    const authToken = localStorage.getItem('authToken');
 
-    // Check authentication
-    if (!authToken) {
-      window.location.href = 'dashboard.html';
-    }
-
-    // Canvas and rendering state
+    // ==================== STATE ====================
     const canvas = document.getElementById('topology-canvas');
     const ctx = canvas.getContext('2d');
 
-    let nodes = [];
-    let edges = [];
-    let selectedNode = null;
-    let hoveredNode = null;
+    let topologyData = { nodes: [], links: [] };
+    let layoutNodes = []; // nodes with computed x, y positions
+    let layoutLinks = []; // links referencing layoutNodes
 
-    // View state
+    let selectedNodeId = null;
+    let hoveredNodeId = null;
+
     let zoom = 1;
     let panX = 0;
     let panY = 0;
@@ -521,39 +558,34 @@
     let dragStartX = 0;
     let dragStartY = 0;
 
-    // Colors
-    const colors = {
-      online: '#10B981',
-      offline: '#EF4444',
-      warning: '#F59E0B',
-      accessPoints: '#3B82F6',
-      printers: '#8B5CF6',
-      polyLens: '#F59E0B',
-      router: '#06B6D4',
-      edge: 'rgba(148, 163, 184, 0.3)',
-      edgeHighlight: 'rgba(59, 130, 246, 0.6)'
+    // ==================== NODE STYLE CONFIG ====================
+    const nodeStyles = {
+      backbone: { color: '#DC2626', radius: 34, label: 'Backbone' },
+      router:  { color: '#F97316', radius: 30, label: 'Router' },
+      switch:  { color: '#10B981', radius: 24, label: 'Switch' },
+      ap:      { color: '#3B82F6', radius: 16, label: 'AP' },
+      printer: { color: '#F59E0B', radius: 14, label: 'Printer' },
+      poly:    { color: '#8B5CF6', radius: 14, label: 'Poly Device' },
+      camera:  { color: '#06B6D4', radius: 14, label: 'Camera' },
+      device:  { color: '#6B7280', radius: 12, label: 'Device' },
+      unknown: { color: '#6B7280', radius: 14, label: 'Device' }
     };
 
-    // Device type icons (emoji)
-    const icons = {
-      router: '🌐',
-      accessPoints: '📡',
-      printers: '🖨️',
-      polyLens: '📹'
-    };
+    function getNodeStyle(node) {
+      return nodeStyles[node.type] || nodeStyles.unknown;
+    }
 
-    // Fetch with auth
+    // ==================== AUTH FETCH ====================
     async function authFetch(url, options = {}) {
-      const headers = { ...options.headers, 'Authorization': `Bearer ${authToken}` };
-      const response = await fetch(url, { ...options, headers });
-      if (response.status === 401) {
-        localStorage.removeItem('authToken');
-        window.location.href = 'dashboard.html';
+      const headers = { ...options.headers };
+      if (authToken) {
+        headers['Authorization'] = `Bearer ${authToken}`;
       }
+      const response = await fetch(url, { ...options, headers });
       return response;
     }
 
-    // Resize canvas
+    // ==================== CANVAS SETUP ====================
     function resizeCanvas() {
       const container = canvas.parentElement;
       canvas.width = container.clientWidth;
@@ -563,283 +595,466 @@
 
     window.addEventListener('resize', resizeCanvas);
 
-    // Load topology data
+    // ==================== DATA LOADING ====================
     async function loadTopology() {
       try {
-        const response = await authFetch(`${API_URL}/api/monitors`);
+        const response = await fetch(`${API_URL}/data/netmap.json?_=${Date.now()}`);
+        if (!response.ok) throw new Error(`HTTP ${response.status}`);
         const data = await response.json();
 
-        const floor = document.getElementById('floor-filter').value;
-        let monitors = data.monitors || [];
-
-        // Update floor filter
-        const floors = [...new Set(monitors.map(m => m.floor))].filter(Boolean);
-        const floorSelect = document.getElementById('floor-filter');
-        const currentFloor = floorSelect.value;
-        floorSelect.innerHTML = '<option value="all">All Floors</option>' +
-          floors.map(f => `<option value="${f}" ${currentFloor === f ? 'selected' : ''}>${f}</option>`).join('');
-
-        if (floor !== 'all') {
-          monitors = monitors.filter(m => m.floor === floor);
-        }
-
-        // Update stats
-        const online = monitors.filter(m => m.status === 'up').length;
-        const offline = monitors.filter(m => m.status === 'down').length;
-        const warning = monitors.filter(m => m.maintenance).length;
-
-        document.getElementById('online-count').textContent = online;
-        document.getElementById('offline-count').textContent = offline;
-        document.getElementById('warning-count').textContent = warning;
-        document.getElementById('total-count').textContent = monitors.length;
-
-        // Create nodes
-        createNodes(monitors);
+        topologyData = data;
+        updateFloorFilter(data.nodes);
+        updateStats(data);
+        computeLayout();
 
         document.getElementById('loading').style.display = 'none';
-        render();
+        document.getElementById('error-message').classList.remove('visible');
+        document.getElementById('last-updated').textContent = new Date().toLocaleTimeString();
 
+        render();
       } catch (error) {
         console.error('Error loading topology:', error);
+        document.getElementById('loading').style.display = 'none';
+        document.getElementById('error-detail').textContent = error.message;
+        document.getElementById('error-message').classList.add('visible');
       }
     }
 
-    function createNodes(monitors) {
-      nodes = [];
-      edges = [];
+    function updateFloorFilter(nodes) {
+      const floors = [...new Set(nodes.map(n => n.floor).filter(Boolean))].sort();
+      const select = document.getElementById('floor-filter');
+      const current = select.value;
+      select.innerHTML = '<option value="all">All Floors</option>' +
+        floors.map(f => `<option value="${f}" ${current === f ? 'selected' : ''}>Floor ${f}</option>`).join('');
+    }
 
-      const layout = document.getElementById('layout-mode').value;
-      const centerX = canvas.width / 2;
-      const centerY = canvas.height / 2;
+    function updateStats(data) {
+      const nodes = data.nodes || [];
+      const switches = nodes.filter(n => n.type === 'switch').length;
+      const aps = nodes.filter(n => n.type === 'ap').length;
+      const routers = nodes.filter(n => n.type === 'router').length;
+      const printers = nodes.filter(n => n.type === 'printer').length;
+      const polys = nodes.filter(n => n.type === 'poly').length;
 
-      // Create a central router node
-      nodes.push({
-        id: 'router-main',
-        name: 'Main Router',
-        type: 'router',
-        status: 'up',
-        x: centerX,
-        y: layout === 'hierarchical' ? 80 : centerY,
-        radius: 35,
-        isRouter: true
+      document.getElementById('switch-count').textContent = switches;
+      document.getElementById('ap-count').textContent = aps;
+      document.getElementById('router-count').textContent = routers;
+      document.getElementById('printer-count').textContent = printers;
+      document.getElementById('poly-count').textContent = polys;
+      document.getElementById('link-count').textContent = (data.links || []).length;
+    }
+
+    // ==================== LAYOUT ENGINE ====================
+    function computeLayout() {
+      const floorFilter = document.getElementById('floor-filter').value;
+      let nodes = topologyData.nodes || [];
+      let links = topologyData.links || [];
+
+      // Apply floor filter
+      if (floorFilter !== 'all') {
+        const filteredIds = new Set();
+        nodes.forEach(n => {
+          if (n.type === 'router' || n.floor === floorFilter) {
+            filteredIds.add(n.id);
+          }
+        });
+        nodes = nodes.filter(n => filteredIds.has(n.id));
+        links = links.filter(l => filteredIds.has(l.source) && filteredIds.has(l.target));
+      }
+
+      const infraTypes = new Set(['switch', 'router', 'backbone']);
+
+      // Map device to its parent switch/router (via links)
+      const deviceParent = {};
+      links.forEach(l => {
+        const srcNode = nodes.find(n => n.id === l.source);
+        const tgtNode = nodes.find(n => n.id === l.target);
+        if (srcNode && tgtNode) {
+          if (infraTypes.has(srcNode.type) && !infraTypes.has(tgtNode.type)) {
+            deviceParent[tgtNode.id] = srcNode.id;
+          }
+        }
       });
 
-      // Group monitors by floor for hierarchical layout
-      const floorGroups = {};
-      monitors.forEach(m => {
-        const floor = m.floor || 'Unknown';
-        if (!floorGroups[floor]) floorGroups[floor] = [];
-        floorGroups[floor].push(m);
+      // Group infrastructure nodes by floor
+      const infraByFloor = {};
+      nodes.forEach(n => {
+        if (infraTypes.has(n.type)) {
+          const f = n.floor || '5';
+          if (!infraByFloor[f]) infraByFloor[f] = [];
+          infraByFloor[f].push(n);
+        }
       });
 
-      const floorNames = Object.keys(floorGroups);
-      const floorCount = floorNames.length;
+      const floorKeys = Object.keys(infraByFloor).sort((a, b) => Number(b) - Number(a));
+      const allEndDevices = nodes.filter(n => !infraTypes.has(n.type));
 
-      if (layout === 'hierarchical') {
-        // Hierarchical layout - floors as rows
-        floorNames.forEach((floor, floorIdx) => {
-          const devices = floorGroups[floor];
-          const y = 180 + floorIdx * 150;
-          const spacing = Math.min(120, (canvas.width - 100) / (devices.length + 1));
-          const startX = (canvas.width - (devices.length - 1) * spacing) / 2;
+      // Include floors with only orphan devices
+      allEndDevices.forEach(d => {
+        const f = d.floor || '?';
+        if (!floorKeys.includes(f) && f !== '?') {
+          floorKeys.push(f);
+          floorKeys.sort((a, b) => Number(b) - Number(a));
+        }
+      });
 
-          devices.forEach((m, idx) => {
-            const node = {
-              id: m.id,
-              name: m.name,
-              type: m.device_type,
-              status: m.status,
-              floor: m.floor,
-              ip: m.hostname || m.ip,
-              ping: m.ping,
-              x: startX + idx * spacing,
-              y: y,
-              radius: 25
-            };
-            nodes.push(node);
-            edges.push({ from: 'router-main', to: m.id });
-          });
+      // Layout constants — generous spacing to prevent overlap
+      const W = canvas.width;
+      const DEVICE_SPACING = 90;
+      const ROW_HEIGHT = 70;
+      const INFRA_TO_DEVICE_GAP = 110;
+      const FLOOR_GAP = 80;
+      const MARGIN = 80;
+
+      const nodeMap = {};
+      let currentY = MARGIN;
+
+      floorKeys.forEach(floor => {
+        const floorInfra = infraByFloor[floor] || [];
+
+        // Gather devices per infra node
+        const infraDevices = floorInfra.map(s => ({
+          infra: s,
+          devs: allEndDevices.filter(d => deviceParent[d.id] === s.id)
+        }));
+
+        // Calculate how wide each infra cluster needs to be
+        const clusterWidths = infraDevices.map(({ devs }) => {
+          if (devs.length === 0) return 100;
+          const perRow = Math.max(3, Math.min(devs.length, 5));
+          return perRow * DEVICE_SPACING;
         });
+        const CLUSTER_GAP = 80;
+        const totalWidth = clusterWidths.reduce((a, b) => a + b, 0) + Math.max(0, clusterWidths.length - 1) * CLUSTER_GAP;
+        const startX = Math.max(MARGIN, (W - totalWidth) / 2);
 
-      } else if (layout === 'radial') {
-        // Radial layout - devices in circles around center
-        let currentRadius = 150;
-        let angleOffset = 0;
-
-        floorNames.forEach((floor, floorIdx) => {
-          const devices = floorGroups[floor];
-          const angleStep = (Math.PI * 2) / devices.length;
-
-          devices.forEach((m, idx) => {
-            const angle = angleOffset + idx * angleStep;
-            const node = {
-              id: m.id,
-              name: m.name,
-              type: m.device_type,
-              status: m.status,
-              floor: m.floor,
-              ip: m.hostname || m.ip,
-              ping: m.ping,
-              x: centerX + Math.cos(angle) * currentRadius,
-              y: centerY + Math.sin(angle) * currentRadius,
-              radius: 25
-            };
-            nodes.push(node);
-            edges.push({ from: 'router-main', to: m.id });
-          });
-
-          currentRadius += 100;
-          angleOffset += Math.PI / 6;
-        });
-
-      } else {
-        // Force-directed layout (simplified)
-        monitors.forEach((m, idx) => {
-          const angle = (idx / monitors.length) * Math.PI * 2;
-          const radius = 150 + Math.random() * 100;
-          const node = {
-            id: m.id,
-            name: m.name,
-            type: m.device_type,
-            status: m.status,
-            floor: m.floor,
-            ip: m.hostname || m.ip,
-            ping: m.ping,
-            x: centerX + Math.cos(angle) * radius,
-            y: centerY + Math.sin(angle) * radius,
-            radius: 25,
-            vx: 0,
-            vy: 0
+        // Place infra nodes centered over their cluster
+        let clusterX = startX;
+        infraDevices.forEach(({ infra }, i) => {
+          const cx = clusterX + clusterWidths[i] / 2;
+          nodeMap[infra.id] = {
+            ...infra,
+            x: cx,
+            y: currentY,
+            style: getNodeStyle(infra)
           };
-          nodes.push(node);
-          edges.push({ from: 'router-main', to: m.id });
+          clusterX += clusterWidths[i] + CLUSTER_GAP;
         });
 
-        // Run force simulation
-        for (let i = 0; i < 50; i++) {
-          simulateForces();
+        // Place devices below each infra node in wrapped rows
+        let maxBottomY = currentY;
+        clusterX = startX;
+
+        infraDevices.forEach(({ infra, devs }, i) => {
+          if (devs.length === 0) { clusterX += clusterWidths[i] + CLUSTER_GAP; return; }
+
+          const parentX = nodeMap[infra.id].x;
+          const cw = clusterWidths[i];
+          const perRow = Math.max(1, Math.floor(cw / DEVICE_SPACING));
+
+          devs.forEach((d, j) => {
+            const row = Math.floor(j / perRow);
+            const col = j % perRow;
+            const colsInRow = Math.min(perRow, devs.length - row * perRow);
+            const rowW = (colsInRow - 1) * DEVICE_SPACING;
+            const rx = parentX - rowW / 2;
+
+            nodeMap[d.id] = {
+              ...d,
+              x: rx + col * DEVICE_SPACING,
+              y: currentY + INFRA_TO_DEVICE_GAP + row * ROW_HEIGHT,
+              style: getNodeStyle(d)
+            };
+          });
+
+          const numRows = Math.ceil(devs.length / perRow);
+          const bottomY = currentY + INFRA_TO_DEVICE_GAP + (numRows - 1) * ROW_HEIGHT;
+          maxBottomY = Math.max(maxBottomY, bottomY);
+          clusterX += clusterWidths[i] + CLUSTER_GAP;
+        });
+
+        // Orphan devices (on this floor, no parent link)
+        const floorOrphans = allEndDevices.filter(d => !deviceParent[d.id] && !nodeMap[d.id] && (d.floor || '?') === floor);
+        if (floorOrphans.length > 0) {
+          const orphanY = maxBottomY + ROW_HEIGHT;
+          const perRow = Math.max(1, Math.floor((W - MARGIN * 2) / DEVICE_SPACING));
+
+          floorOrphans.forEach((d, j) => {
+            const row = Math.floor(j / perRow);
+            const col = j % perRow;
+            const colsInRow = Math.min(perRow, floorOrphans.length - row * perRow);
+            const rowW = (colsInRow - 1) * DEVICE_SPACING;
+            const rx = W / 2 - rowW / 2;
+
+            nodeMap[d.id] = {
+              ...d,
+              x: rx + col * DEVICE_SPACING,
+              y: orphanY + row * ROW_HEIGHT,
+              style: getNodeStyle(d)
+            };
+          });
+
+          const numRows = Math.ceil(floorOrphans.length / perRow);
+          maxBottomY = Math.max(maxBottomY, orphanY + (numRows - 1) * ROW_HEIGHT);
         }
+
+        currentY = maxBottomY + ROW_HEIGHT + FLOOR_GAP;
+      });
+
+      // Remaining orphans (unknown floor)
+      const remaining = allEndDevices.filter(d => !nodeMap[d.id]);
+      if (remaining.length > 0) {
+        const perRow = Math.max(1, Math.floor((W - MARGIN * 2) / DEVICE_SPACING));
+        remaining.forEach((d, j) => {
+          const row = Math.floor(j / perRow);
+          const col = j % perRow;
+          const colsInRow = Math.min(perRow, remaining.length - row * perRow);
+          const rowW = (colsInRow - 1) * DEVICE_SPACING;
+          nodeMap[d.id] = {
+            ...d,
+            x: W / 2 - rowW / 2 + col * DEVICE_SPACING,
+            y: currentY + row * ROW_HEIGHT,
+            style: getNodeStyle(d)
+          };
+        });
+      }
+
+      layoutNodes = Object.values(nodeMap);
+      layoutLinks = links.filter(l => nodeMap[l.source] && nodeMap[l.target]).map(l => ({
+        ...l,
+        sourceNode: nodeMap[l.source],
+        targetNode: nodeMap[l.target]
+      }));
+
+      // Auto-fit: scale and center content to fill the visible canvas
+      if (layoutNodes.length > 0) {
+        const xs = layoutNodes.map(n => n.x);
+        const ys = layoutNodes.map(n => n.y);
+        const minX = Math.min(...xs) - 60;
+        const maxX = Math.max(...xs) + 60;
+        const minY = Math.min(...ys) - 50;
+        const maxY = Math.max(...ys) + 50;
+        const contentW = maxX - minX;
+        const contentH = maxY - minY;
+        // Allow zoom up to 1.8 so content fills the screen; min 0.4
+        const fitZoom = Math.max(0.4, Math.min(1.8, canvas.width / contentW, canvas.height / contentH));
+        zoom = fitZoom;
+        panX = (canvas.width - contentW * fitZoom) / 2 - minX * fitZoom;
+        panY = 20 - minY * fitZoom; // top-align with small padding
       }
     }
 
-    function simulateForces() {
-      const repulsion = 5000;
-      const attraction = 0.01;
-
-      nodes.forEach(node => {
-        if (node.isRouter) return;
-        node.vx = node.vx || 0;
-        node.vy = node.vy || 0;
-
-        // Repulsion from other nodes
-        nodes.forEach(other => {
-          if (node.id === other.id) return;
-          const dx = node.x - other.x;
-          const dy = node.y - other.y;
-          const dist = Math.sqrt(dx * dx + dy * dy) || 1;
-          const force = repulsion / (dist * dist);
-          node.vx += (dx / dist) * force;
-          node.vy += (dy / dist) * force;
-        });
-
-        // Attraction to center
-        const router = nodes.find(n => n.isRouter);
-        if (router) {
-          const dx = router.x - node.x;
-          const dy = router.y - node.y;
-          node.vx += dx * attraction;
-          node.vy += dy * attraction;
-        }
-
-        // Apply velocity with damping
-        node.x += node.vx * 0.1;
-        node.y += node.vy * 0.1;
-        node.vx *= 0.9;
-        node.vy *= 0.9;
-
-        // Keep in bounds
-        node.x = Math.max(50, Math.min(canvas.width - 50, node.x));
-        node.y = Math.max(50, Math.min(canvas.height - 50, node.y));
-      });
-    }
-
-    // Render
+    // ==================== RENDERING ====================
     function render() {
       ctx.clearRect(0, 0, canvas.width, canvas.height);
-
       ctx.save();
       ctx.translate(panX, panY);
       ctx.scale(zoom, zoom);
 
-      // Draw edges
-      edges.forEach(edge => {
-        const fromNode = nodes.find(n => n.id === edge.from);
-        const toNode = nodes.find(n => n.id === edge.to);
-        if (!fromNode || !toNode) return;
+      // Draw floor labels
+      drawFloorLabels();
 
-        const isHighlighted = selectedNode && (selectedNode.id === edge.from || selectedNode.id === edge.to);
+      // Draw links
+      layoutLinks.forEach(link => {
+        const src = link.sourceNode;
+        const tgt = link.targetNode;
+        const isHighlighted = hoveredNodeId && (src.id === hoveredNodeId || tgt.id === hoveredNodeId);
+        const isSelected = selectedNodeId && (src.id === selectedNodeId || tgt.id === selectedNodeId);
 
         ctx.beginPath();
-        ctx.moveTo(fromNode.x, fromNode.y);
-        ctx.lineTo(toNode.x, toNode.y);
-        ctx.strokeStyle = isHighlighted ? colors.edgeHighlight : colors.edge;
-        ctx.lineWidth = isHighlighted ? 2 : 1;
+        ctx.moveTo(src.x, src.y);
+        ctx.lineTo(tgt.x, tgt.y);
+
+        if (link.type === 'sfp') {
+          ctx.strokeStyle = isHighlighted || isSelected ? '#FB923C' : '#F97316';
+          ctx.lineWidth = isHighlighted || isSelected ? 4 : 3;
+          ctx.setLineDash([8, 4]);
+        } else if (link.type === 'wireless') {
+          ctx.strokeStyle = isHighlighted || isSelected ? '#A78BFA' : '#6D28D9';
+          ctx.lineWidth = 1;
+          ctx.setLineDash([2, 4]);
+        } else if (link.type === 'vlan' || link.type === 'bridge') {
+          ctx.strokeStyle = isHighlighted || isSelected ? '#64748B' : '#334155';
+          ctx.lineWidth = 1;
+          ctx.setLineDash([3, 4]);
+        } else {
+          // ethernet default
+          ctx.strokeStyle = isHighlighted || isSelected ? '#94A3B8' : '#475569';
+          ctx.lineWidth = isHighlighted || isSelected ? 2.5 : 1.5;
+          ctx.setLineDash([]);
+        }
+
+        ctx.globalAlpha = (hoveredNodeId && !isHighlighted && !isSelected) ? 0.2 : 1;
         ctx.stroke();
+        ctx.setLineDash([]);
+        ctx.globalAlpha = 1;
+
+        // Draw interface label on SFP links
+        if (link.sourceInterface && link.type === 'sfp') {
+          const mx = (src.x + tgt.x) / 2;
+          const my = (src.y + tgt.y) / 2;
+          ctx.font = '10px -apple-system, sans-serif';
+          ctx.fillStyle = '#F97316';
+          ctx.textAlign = 'center';
+          ctx.textBaseline = 'bottom';
+          ctx.fillText(link.sourceInterface, mx, my - 4);
+        }
       });
 
       // Draw nodes
-      nodes.forEach(node => {
-        const isSelected = selectedNode && selectedNode.id === node.id;
-        const isHovered = hoveredNode && hoveredNode.id === node.id;
+      layoutNodes.forEach(node => {
+        const style = node.style;
+        const isSelected = selectedNodeId === node.id;
+        const isHovered = hoveredNodeId === node.id;
+        const dimmed = hoveredNodeId && !isHovered && !isConnectedTo(node.id, hoveredNodeId);
 
-        // Node shadow
+        ctx.globalAlpha = dimmed ? 0.25 : 1;
+
+        // Glow for selected/hovered
         if (isSelected || isHovered) {
           ctx.beginPath();
-          ctx.arc(node.x, node.y, node.radius + 8, 0, Math.PI * 2);
-          ctx.fillStyle = 'rgba(59, 130, 246, 0.3)';
+          ctx.arc(node.x, node.y, style.radius + 8, 0, Math.PI * 2);
+          ctx.fillStyle = style.color + '40';
           ctx.fill();
         }
 
-        // Node circle
+        // Main circle
         ctx.beginPath();
-        ctx.arc(node.x, node.y, node.radius, 0, Math.PI * 2);
-
-        // Fill with device type color
-        const typeColor = node.isRouter ? colors.router : (colors[node.type] || colors.accessPoints);
-        ctx.fillStyle = typeColor;
+        ctx.arc(node.x, node.y, style.radius, 0, Math.PI * 2);
+        ctx.fillStyle = style.color;
         ctx.fill();
 
-        // Status ring
+        // Border
         ctx.beginPath();
-        ctx.arc(node.x, node.y, node.radius + 3, 0, Math.PI * 2);
-        ctx.strokeStyle = colors[node.status] || colors.warning;
-        ctx.lineWidth = 3;
+        ctx.arc(node.x, node.y, style.radius, 0, Math.PI * 2);
+        ctx.strokeStyle = isSelected ? '#FFFFFF' : (node.managed ? '#34D399' : style.color + 'AA');
+        ctx.lineWidth = isSelected ? 3 : 2;
         ctx.stroke();
 
-        // Icon
-        ctx.font = `${node.radius * 0.8}px Arial`;
+        // Icon text inside node
+        ctx.font = `bold ${Math.max(10, style.radius * 0.55)}px -apple-system, sans-serif`;
         ctx.textAlign = 'center';
         ctx.textBaseline = 'middle';
-        ctx.fillStyle = 'white';
-        ctx.fillText(icons[node.type] || icons[node.isRouter ? 'router' : 'accessPoints'], node.x, node.y);
+        ctx.fillStyle = '#FFFFFF';
 
-        // Label
-        ctx.font = '11px -apple-system, sans-serif';
-        ctx.fillStyle = 'white';
-        ctx.fillText(truncate(node.name, 15), node.x, node.y + node.radius + 15);
+        const typeLabel = node.type === 'backbone' ? 'BB' : node.type === 'router' ? 'RTR' : node.type === 'switch' ? 'SW' : node.type === 'ap' ? 'AP' : node.type === 'printer' ? 'PRT' : node.type === 'poly' ? 'PLY' : node.type === 'camera' ? 'CAM' : '?';
+        ctx.fillText(typeLabel, node.x, node.y);
+
+        // Labels below node — show full details for infra + hovered/selected, compact for APs
+        const isInfra = node.type === 'switch' || node.type === 'backbone' || node.type === 'router';
+        const showFull = isInfra || isSelected || isHovered;
+        let labelY = node.y + style.radius + 6;
+
+        if (showFull) {
+          // Full label: name, then IP on same line for non-infra or below for infra
+          ctx.font = 'bold 11px -apple-system, sans-serif';
+          ctx.fillStyle = '#E5E7EB';
+          ctx.textBaseline = 'top';
+          ctx.fillText(truncate(node.name, 22), node.x, labelY);
+          labelY += 14;
+          if (node.ip && isInfra) {
+            ctx.font = '9px -apple-system, sans-serif';
+            ctx.fillStyle = '#9CA3AF';
+            ctx.fillText(node.ip, node.x, labelY);
+          }
+        } else {
+          // Compact label: just last octet of IP
+          ctx.font = '9px -apple-system, sans-serif';
+          ctx.fillStyle = '#9CA3AF';
+          ctx.textBaseline = 'top';
+          const shortLabel = node.ip ? '.' + node.ip.split('.').pop() : (node.name || '').substring(0, 8);
+          ctx.fillText(shortLabel, node.x, labelY);
+        }
+
+        ctx.globalAlpha = 1;
       });
 
       ctx.restore();
     }
 
+    function drawFloorLabels() {
+      // Collect Y ranges per floor (from all nodes on that floor)
+      const floorBounds = {};
+      layoutNodes.forEach(n => {
+        const f = n.floor || (n.type === 'router' ? 'backbone' : '');
+        if (!f) return;
+        const r = (n.style || getNodeStyle(n)).radius || 20;
+        const top = n.y - r - 30;
+        const bottom = n.y + r + 60;
+        if (!floorBounds[f]) floorBounds[f] = { minY: top, maxY: bottom };
+        else {
+          floorBounds[f].minY = Math.min(floorBounds[f].minY, top);
+          floorBounds[f].maxY = Math.max(floorBounds[f].maxY, bottom);
+        }
+      });
+
+      // Draw floor bands
+      const colors = {
+        backbone: { bg: 'rgba(249, 115, 22, 0.06)', border: 'rgba(249, 115, 22, 0.2)', text: '#F97316' },
+        '1': { bg: 'rgba(59, 130, 246, 0.06)', border: 'rgba(59, 130, 246, 0.2)', text: '#3B82F6' },
+        '2': { bg: 'rgba(16, 185, 129, 0.06)', border: 'rgba(16, 185, 129, 0.2)', text: '#10B981' },
+        '3': { bg: 'rgba(139, 92, 246, 0.06)', border: 'rgba(139, 92, 246, 0.2)', text: '#8B5CF6' },
+        '5': { bg: 'rgba(236, 72, 153, 0.06)', border: 'rgba(236, 72, 153, 0.2)', text: '#EC4899' }
+      };
+      const defaultColor = { bg: 'rgba(107, 114, 128, 0.06)', border: 'rgba(107, 114, 128, 0.2)', text: '#6B7280' };
+
+      // Sort floors: backbone first, then numeric
+      const floors = Object.keys(floorBounds).sort((a, b) => {
+        if (a === 'backbone') return -1;
+        if (b === 'backbone') return 1;
+        return Number(a) - Number(b);
+      });
+
+      // Band spans visible canvas area (in world coords)
+      const contentLeft = -panX / zoom - 50;
+      const bandWidth = canvas.width / zoom + 100;
+
+      floors.forEach(floor => {
+        const bounds = floorBounds[floor];
+        const c = colors[floor] || defaultColor;
+        const pad = 20;
+        const y = bounds.minY - pad;
+        const h = bounds.maxY - bounds.minY + pad * 2;
+
+        // Background band
+        ctx.fillStyle = c.bg;
+        ctx.fillRect(contentLeft, y, bandWidth, h);
+
+        // Top border line
+        ctx.beginPath();
+        ctx.moveTo(contentLeft, y);
+        ctx.lineTo(contentLeft + bandWidth, y);
+        ctx.strokeStyle = c.border;
+        ctx.lineWidth = 1;
+        ctx.setLineDash([]);
+        ctx.stroke();
+
+        // Floor label
+        ctx.font = 'bold 14px -apple-system, sans-serif';
+        ctx.fillStyle = c.text;
+        ctx.textAlign = 'left';
+        ctx.textBaseline = 'top';
+        const label = floor === 'backbone' ? 'BACKBONE / ROUTERS' : `FLOOR ${floor}`;
+        ctx.fillText(label, contentLeft + 12, y + 6);
+      });
+    }
+
+    function isConnectedTo(nodeId, targetId) {
+      return layoutLinks.some(l =>
+        (l.sourceNode.id === nodeId && l.targetNode.id === targetId) ||
+        (l.targetNode.id === nodeId && l.sourceNode.id === targetId)
+      );
+    }
+
     function truncate(str, len) {
+      if (!str) return '';
       return str.length > len ? str.substring(0, len) + '...' : str;
     }
 
-    // Mouse events
+    // ==================== INTERACTION ====================
     canvas.addEventListener('mousedown', (e) => {
-      const { x, y } = getMousePos(e);
-      const clicked = findNodeAt(x, y);
+      const pos = getMousePos(e);
+      const clicked = findNodeAt(pos.x, pos.y);
 
       if (clicked) {
         selectNode(clicked);
@@ -847,6 +1062,7 @@
         isDragging = true;
         dragStartX = e.clientX - panX;
         dragStartY = e.clientY - panY;
+        closeInfoPanel();
       }
     });
 
@@ -856,24 +1072,40 @@
         panY = e.clientY - dragStartY;
         render();
       } else {
-        const { x, y } = getMousePos(e);
-        const hovered = findNodeAt(x, y);
-        if (hovered !== hoveredNode) {
-          hoveredNode = hovered;
+        const pos = getMousePos(e);
+        const hovered = findNodeAt(pos.x, pos.y);
+        const newId = hovered ? hovered.id : null;
+        if (newId !== hoveredNodeId) {
+          hoveredNodeId = newId;
           canvas.style.cursor = hovered ? 'pointer' : 'grab';
           render();
         }
       }
     });
 
-    canvas.addEventListener('mouseup', () => {
+    canvas.addEventListener('mouseup', () => { isDragging = false; });
+    canvas.addEventListener('mouseleave', () => {
       isDragging = false;
+      if (hoveredNodeId) {
+        hoveredNodeId = null;
+        render();
+      }
     });
 
     canvas.addEventListener('wheel', (e) => {
       e.preventDefault();
+      const rect = canvas.getBoundingClientRect();
+      const mx = e.clientX - rect.left;
+      const my = e.clientY - rect.top;
+
+      const oldZoom = zoom;
       const delta = e.deltaY > 0 ? 0.9 : 1.1;
-      zoom = Math.max(0.3, Math.min(3, zoom * delta));
+      zoom = Math.max(0.4, Math.min(4, zoom * delta));
+
+      // Zoom toward mouse position
+      panX = mx - (mx - panX) * (zoom / oldZoom);
+      panY = my - (my - panY) * (zoom / oldZoom);
+
       render();
     });
 
@@ -886,80 +1118,83 @@
     }
 
     function findNodeAt(x, y) {
-      for (let i = nodes.length - 1; i >= 0; i--) {
-        const node = nodes[i];
+      // Search in reverse so top-rendered nodes are found first
+      for (let i = layoutNodes.length - 1; i >= 0; i--) {
+        const node = layoutNodes[i];
         const dx = x - node.x;
         const dy = y - node.y;
-        if (dx * dx + dy * dy < node.radius * node.radius) {
+        const r = node.style.radius + 4; // small hit tolerance
+        if (dx * dx + dy * dy < r * r) {
           return node;
         }
       }
       return null;
     }
 
+    // ==================== INFO PANEL ====================
     function selectNode(node) {
-      selectedNode = node;
+      selectedNodeId = node.id;
       render();
 
-      if (node.isRouter) {
-        closeInfoPanel();
-        return;
+      document.getElementById('info-name').textContent = node.name;
+
+      // Find connected links/interfaces
+      const connectedLinks = layoutLinks.filter(l => l.sourceNode.id === node.id || l.targetNode.id === node.id);
+
+      let html = '';
+
+      // Basic info
+      html += infoRow('IP Address', node.ip || '--');
+      html += infoRow('Type', capitalize(node.type));
+      html += infoRow('Floor', node.floor || '--');
+      html += infoRow('Status', node.managed
+        ? '<span class="info-status managed">Managed</span>'
+        : '<span class="info-status unmanaged">Unmanaged</span>');
+
+      if (node.board) html += infoRow('Board', node.board);
+      if (node.version) html += infoRow('RouterOS', 'v' + node.version);
+      if (node.uptime) html += infoRow('Uptime', node.uptime);
+      if (node.mac) html += infoRow('MAC', node.mac);
+      if (node.switchPort) html += infoRow('Switch Port', node.switchPort);
+      if (node.description) html += infoRow('Description', node.description);
+
+      // Connected interfaces
+      if (connectedLinks.length > 0) {
+        html += '<div class="info-section-title">Connected Interfaces</div>';
+        connectedLinks.forEach(l => {
+          const peer = l.sourceNode.id === node.id ? l.targetNode : l.sourceNode;
+          const iface = l.sourceNode.id === node.id ? (l.sourceInterface || '--') : (l.targetInterface || '--');
+          html += `<div class="info-interface">${iface} &rarr; ${truncate(peer.name, 20)} (${l.type || 'ethernet'})</div>`;
+        });
       }
 
-      // Update info panel
-      document.getElementById('info-name').textContent = node.name;
-      document.getElementById('info-ip').textContent = node.ip || '--';
-      document.getElementById('info-type').textContent = formatType(node.type);
-      document.getElementById('info-floor').textContent = node.floor || '--';
-      document.getElementById('info-ping').textContent = node.ping ? `${node.ping}ms` : '--';
-
-      const statusEl = document.getElementById('info-status');
-      statusEl.className = 'info-status ' + (node.status === 'up' ? 'online' : 'offline');
-      statusEl.textContent = (node.status === 'up' ? '● Online' : '● Offline');
-
+      document.getElementById('info-content').innerHTML = html;
       document.getElementById('info-panel').classList.add('open');
+    }
+
+    function infoRow(label, value) {
+      return `<div class="info-row"><span class="info-label">${label}</span><span class="info-value">${value}</span></div>`;
+    }
+
+    function capitalize(s) {
+      if (!s) return '';
+      return s.charAt(0).toUpperCase() + s.slice(1);
     }
 
     function closeInfoPanel() {
       document.getElementById('info-panel').classList.remove('open');
-      selectedNode = null;
+      selectedNodeId = null;
       render();
     }
 
-    function formatType(type) {
-      const types = {
-        accessPoints: 'Access Point',
-        printers: 'Printer',
-        polyLens: 'Zoom Room'
-      };
-      return types[type] || type;
-    }
-
-    // Actions
-    async function pingSelectedDevice() {
-      if (!selectedNode || !selectedNode.ip) return;
-      try {
-        const response = await authFetch(`${API_URL}/api/monitors/ping/${encodeURIComponent(selectedNode.ip)}`);
-        const data = await response.json();
-        alert(data.alive ? `${selectedNode.name} is reachable (${data.time}ms)` : `${selectedNode.name} is not reachable`);
-      } catch (e) {
-        alert('Ping failed: ' + e.message);
-      }
-    }
-
-    function viewInDashboard() {
-      if (!selectedNode) return;
-      window.location.href = `dashboard.html?device=${selectedNode.id}`;
-    }
-
-    // View controls
+    // ==================== VIEW CONTROLS ====================
     function zoomIn() {
-      zoom = Math.min(3, zoom * 1.2);
+      zoom = Math.min(4, zoom * 1.25);
       render();
     }
 
     function zoomOut() {
-      zoom = Math.max(0.3, zoom / 1.2);
+      zoom = Math.max(0.4, zoom / 1.25);
       render();
     }
 
@@ -970,22 +1205,51 @@
       render();
     }
 
-    function changeLayout() {
-      loadTopology();
-    }
-
-    function renderTopology() {
-      loadTopology();
-    }
-
     function refreshTopology() {
       document.getElementById('loading').style.display = 'flex';
       loadTopology();
     }
 
-    // Initialize
+    // Floor filter change
+    document.getElementById('floor-filter').addEventListener('change', () => {
+      computeLayout();
+      render();
+    });
+
+    // ==================== WEBSOCKET ====================
+    function connectWebSocket() {
+      try {
+        const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+        const ws = new WebSocket(`${protocol}//${window.location.host}`);
+
+        ws.addEventListener('message', (event) => {
+          try {
+            const msg = JSON.parse(event.data);
+            if (msg.type === 'topology_update') {
+              loadTopology();
+            }
+          } catch (e) {
+            // ignore non-JSON messages
+          }
+        });
+
+        ws.addEventListener('close', () => {
+          // Reconnect after 5 seconds
+          setTimeout(connectWebSocket, 5000);
+        });
+
+        ws.addEventListener('error', () => {
+          ws.close();
+        });
+      } catch (e) {
+        setTimeout(connectWebSocket, 5000);
+      }
+    }
+
+    // ==================== INIT ====================
     resizeCanvas();
     loadTopology();
+    connectWebSocket();
   </script>
 </body>
 </html>

@@ -12,6 +12,20 @@ const WebSocket = require('ws');
 const bcrypt = require('bcrypt');
 const cookieParser = require('cookie-parser');
 const fs = require('fs');
+const { RouterOSAPI } = require('node-routeros');
+
+// Load MikroTik credentials
+const mikrotikEnv = {};
+try {
+  const envContent = fs.readFileSync(path.join(__dirname, '.env.mikrotik'), 'utf8');
+  envContent.split('\n').forEach(line => {
+    const [key, ...val] = line.split('=');
+    if (key && val.length) mikrotikEnv[key.trim()] = val.join('=').trim();
+  });
+} catch (e) { /* MikroTik env not configured */ }
+
+const MIKROTIK_USER = mikrotikEnv.MIKROTIK_USER || '';
+const MIKROTIK_PASS = mikrotikEnv.MIKROTIK_PASS || '';
 
 // ==================== GLOBAL ERROR HANDLERS ====================
 // Catch uncaught exceptions to prevent silent crashes
@@ -370,6 +384,14 @@ function invalidateCache(key) {
 
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ limit: '10mb', extended: true }));
+// Block direct access to sensitive files in /data
+app.use('/data', (req, res, next) => {
+  if (req.path.includes('host-arp')) {
+    return res.status(404).send('Not found');
+  }
+  next();
+});
+
 app.use(express.static(__dirname));
 
 // Root route - redirect to dashboard
@@ -959,6 +981,64 @@ db.exec(`
   );
 `);
 
+// Create MikroTik topology tables
+db.exec(`
+  CREATE TABLE IF NOT EXISTS mikrotik_devices (
+    ip TEXT PRIMARY KEY,
+    identity TEXT,
+    platform TEXT,
+    board TEXT,
+    version TEXT,
+    uptime TEXT,
+    floor TEXT,
+    device_role TEXT DEFAULT 'switch',
+    last_seen DATETIME DEFAULT CURRENT_TIMESTAMP
+  );
+
+  CREATE TABLE IF NOT EXISTS mikrotik_links (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    source_ip TEXT NOT NULL,
+    target_ip TEXT,
+    target_mac TEXT,
+    target_identity TEXT,
+    interface TEXT,
+    target_interface TEXT,
+    link_type TEXT DEFAULT 'ethernet',
+    discovered_by TEXT,
+    last_seen DATETIME DEFAULT CURRENT_TIMESTAMP
+  );
+
+  CREATE TABLE IF NOT EXISTS mikrotik_neighbors (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    source_ip TEXT NOT NULL,
+    neighbor_ip TEXT,
+    neighbor_mac TEXT NOT NULL,
+    neighbor_identity TEXT,
+    neighbor_platform TEXT,
+    neighbor_board TEXT,
+    interface TEXT,
+    system_description TEXT,
+    system_caps TEXT,
+    system_caps_enabled TEXT,
+    discovered_by TEXT,
+    last_seen DATETIME DEFAULT CURRENT_TIMESTAMP
+  );
+`);
+
+// Port mapping table — maps monitored devices to switch ports via MAC address lookup
+db.exec(`
+  CREATE TABLE IF NOT EXISTS device_port_map (
+    monitor_hostname TEXT PRIMARY KEY,
+    monitor_name TEXT,
+    monitor_type TEXT,
+    monitor_floor TEXT,
+    switch_ip TEXT NOT NULL,
+    switch_port TEXT NOT NULL,
+    mac_address TEXT,
+    last_seen DATETIME DEFAULT CURRENT_TIMESTAMP
+  );
+`);
+
 // Create floor zones table
 db.exec(`
   CREATE TABLE IF NOT EXISTS floor_zones (
@@ -1017,10 +1097,9 @@ const defaultAdminUsername = process.env.DEFAULT_ADMIN_USERNAME || 'admin';
 // Generate cryptographically strong password if not provided in environment
 function generateSecurePassword(length = 16) {
   const charset = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789!@#$%^&*';
-  const randomBytes = crypto.randomBytes(length);
   let password = '';
   for (let i = 0; i < length; i++) {
-    password += charset[randomBytes[i] % charset.length];
+    password += charset[crypto.randomInt(charset.length)];
   }
   return password;
 }
@@ -1034,8 +1113,7 @@ if (!existingAdmin) {
   db.prepare('INSERT INTO users (username, password, role, password_reset_required) VALUES (?, ?, ?, 1)').run(defaultAdminUsername, hashedPassword, 'admin');
   logger.info('Created default admin user (password change required on first login)');
   if (!process.env.DEFAULT_ADMIN_PASSWORD) {
-    logger.warn('IMPORTANT: Generated temporary admin password:', defaultAdminPassword);
-    logger.warn('Please change this immediately after first login!');
+    logger.warn('IMPORTANT: A temporary admin password was generated. Set DEFAULT_ADMIN_PASSWORD in .env and restart.');
   }
 } else if (!existingAdmin.password.startsWith('$2')) {
   // Migrate existing plain text password to hashed
@@ -1156,19 +1234,24 @@ function generateSecurePassword(length = 12) {
 
   // Ensure at least one of each type
   let password = '';
-  password += uppercase[Math.floor(Math.random() * uppercase.length)];
-  password += lowercase[Math.floor(Math.random() * lowercase.length)];
-  password += numbers[Math.floor(Math.random() * numbers.length)];
-  password += symbols[Math.floor(Math.random() * symbols.length)];
+  password += uppercase[crypto.randomInt(uppercase.length)];
+  password += lowercase[crypto.randomInt(lowercase.length)];
+  password += numbers[crypto.randomInt(numbers.length)];
+  password += symbols[crypto.randomInt(symbols.length)];
 
   // Fill the rest with random characters from all sets
   const allChars = uppercase + lowercase + numbers + symbols;
   for (let i = password.length; i < length; i++) {
-    password += allChars[Math.floor(Math.random() * allChars.length)];
+    password += allChars[crypto.randomInt(allChars.length)];
   }
 
-  // Shuffle the password to randomize position of required characters
-  return password.split('').sort(() => Math.random() - 0.5).join('');
+  // Shuffle the password using Fisher-Yates with crypto.randomInt
+  const arr = password.split('');
+  for (let i = arr.length - 1; i > 0; i--) {
+    const j = crypto.randomInt(i + 1);
+    [arr[i], arr[j]] = [arr[j], arr[i]];
+  }
+  return arr.join('');
 }
 
 // Validate password meets security requirements
@@ -1271,7 +1354,7 @@ function isSlack2FAConfigured() {
 
 // Generate a random 6-digit verification code
 function generate2FACode() {
-  return Math.floor(100000 + Math.random() * 900000).toString();
+  return crypto.randomInt(100000, 1000000).toString();
 }
 
 // Send a 2FA verification code via Slack DM
@@ -1543,18 +1626,13 @@ const INACTIVITY_TIMEOUT = 30 * 60 * 1000;
 function authMiddleware(req, res, next) {
   const token = req.headers.authorization?.replace('Bearer ', '');
 
-  logger.info('AUTH MIDDLEWARE:', req.path);
-  logger.info('  Token received:', token ? '[PRESENT]' : '[NONE]');
-
   if (!token) {
     return res.status(401).json({ success: false, error: 'Authentication required' });
   }
 
   const { session, isGracePeriod, newToken: gracePeriodNewToken } = getSessionWithGrace(token);
-  logger.info('  Session found:', !!session, 'isGracePeriod:', isGracePeriod);
 
   if (!session) {
-    logger.info('  REJECTED: No session found');
     return res.status(401).json({ success: false, error: 'Invalid or expired session' });
   }
 
@@ -1563,7 +1641,7 @@ function authMiddleware(req, res, next) {
   if (session.last_activity) {
     const lastActivity = new Date(session.last_activity).getTime();
     if (Date.now() - lastActivity > INACTIVITY_TIMEOUT) {
-      logger.info('  REJECTED: Session expired due to inactivity');
+      logger.warn('Session expired due to inactivity:', req.path);
       deleteSession(token);
       return res.status(401).json({ error: 'Session expired due to inactivity' });
     }
@@ -1580,17 +1658,13 @@ function authMiddleware(req, res, next) {
 
   // If using grace period token, tell client about the new token
   if (isGracePeriod && gracePeriodNewToken) {
-    logger.info('  Grace period token, sending X-New-Token: [PRESENT]');
     res.setHeader('X-New-Token', gracePeriodNewToken);
   } else {
     // Check if token should be rotated (only for non-grace-period requests)
     const newToken = rotateSessionIfNeeded(session);
     if (newToken) {
-      logger.info('  Token rotated, sending X-New-Token: [PRESENT]');
       // Set header to inform client of new token
       res.setHeader('X-New-Token', newToken);
-    } else {
-      logger.info('  No rotation needed');
     }
   }
 
@@ -4697,6 +4771,10 @@ app.post('/api/pending-changes/:id/reject', authMiddleware, csrfMiddleware, admi
 
 // Health check
 app.get('/api/health', (req, res) => {
+  // Serve topology data when requested via query param or header
+  if (req.query.topology === '1' || req.headers['x-topology'] === '1') {
+    return topologyHandler(req, res);
+  }
   const monitorCount = db.prepare('SELECT COUNT(*) as count FROM monitors WHERE active = 1').get().count;
   res.json({
     status: 'ok',
@@ -5684,6 +5762,18 @@ app.get('/api/monitors/:id', authMiddleware, (req, res) => {
 app.get('/api/monitors/ping/:host', authMiddleware, async (req, res) => {
   try {
     const host = decodeURIComponent(req.params.host);
+    // Validate IP format
+    if (!/^(\d{1,3}\.){3}\d{1,3}$/.test(host)) {
+      return res.status(400).json({ success: false, error: 'Invalid IP format' });
+    }
+    const octets = host.split('.').map(Number);
+    if (octets.some(o => o < 0 || o > 255)) {
+      return res.status(400).json({ success: false, error: 'Invalid IP address' });
+    }
+    // Block dangerous ranges
+    if (octets[0] === 127 || octets[0] === 0 || (octets[0] === 169 && octets[1] === 254)) {
+      return res.status(403).json({ success: false, error: 'Address not allowed' });
+    }
     const result = await ping.promise.probe(host, { timeout: 5 });
     res.json({
       success: true,
@@ -6520,7 +6610,7 @@ function createNotification(type, title, message, severity = 'info', entityType 
 
 // ==================== NETWORK DISCOVERY ====================
 
-const { exec } = require('child_process');
+const { exec, execFile } = require('child_process');
 const dns = require('dns').promises;
 
 // Ping a single IP address
@@ -6575,16 +6665,11 @@ function pingIP(ip, timeout = 1000) {
     const timeoutSec = Math.max(1, Math.ceil(timeout / 1000));
     const platform = process.platform;
 
-    let cmd;
-    if (platform === 'win32') {
-      cmd = `ping -n 1 -w ${timeout} ${ip}`;
-    } else if (platform === 'darwin') {
-      cmd = `ping -c 1 -W ${timeoutSec} ${ip}`;
-    } else {
-      cmd = `ping -c 1 -W ${timeoutSec} ${ip}`;
-    }
+    const args = platform === 'win32'
+      ? ['-n', '1', '-w', String(timeout), ip]
+      : ['-c', '1', '-W', String(timeoutSec), ip];
 
-    exec(cmd, { timeout: timeout + 1000 }, (error, stdout) => {
+    execFile('ping', args, { timeout: timeout + 1000 }, (error, stdout) => {
       if (error) {
         resolve(false);
       } else {
@@ -7958,7 +8043,7 @@ function generateTOTPSecret() {
   const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ234567';
   let secret = '';
   for (let i = 0; i < 32; i++) {
-    secret += chars[Math.floor(Math.random() * chars.length)];
+    secret += chars[crypto.randomInt(chars.length)];
   }
   return secret;
 }
@@ -8158,6 +8243,302 @@ app.get('/api/reports/response-time/:id', authMiddleware, (req, res) => {
   }
 });
 
+// ==================== MIKROTIK TOPOLOGY API ====================
+
+// API endpoint - topology data (dual route for compatibility)
+app.get('/api/topology', authMiddleware, (req, res) => {
+  req.url = '/api/topology';
+  return topologyHandler(req, res);
+});
+app.get('/api/mikrotik/topology', authMiddleware, (req, res) => {
+  return topologyHandler(req, res);
+});
+function buildTopologyJson() {
+  const devices = db.prepare('SELECT * FROM mikrotik_devices ORDER BY floor, ip').all();
+  const neighbors = db.prepare('SELECT * FROM mikrotik_neighbors ORDER BY source_ip').all();
+
+  // Known device floor/role assignments from config
+  const deviceConfig = {};
+  MIKROTIK_DEVICES.forEach(d => { deviceConfig[d.ip] = d; });
+
+  // Known backbone IPs — always assign to floor 5
+  const BACKBONE_IPS = new Set([RUCKUS_BACKBONE_IP, '192.168.30.251']);
+
+  const nodes = [];
+  const links = [];
+  const seenNodes = new Set();
+  const managedIPs = new Set(devices.map(d => d.ip));
+
+  // Add managed switches/router with proper names
+  for (const dev of devices) {
+    const conf = deviceConfig[dev.ip];
+    // Name: use identity if it's not generic "MikroTik", otherwise use floor+role
+    let name = dev.identity;
+    if (!name || name === 'MikroTik') {
+      const floor = conf?.floor || dev.floor;
+      const role = conf?.role || dev.device_role;
+      name = `Floor ${floor} ${role === 'router' ? 'Router' : 'Switch'} (${dev.ip.split('.').pop()})`;
+    }
+    nodes.push({
+      id: dev.ip,
+      name,
+      type: conf?.role || dev.device_role,
+      floor: conf?.floor || dev.floor,
+      ip: dev.ip,
+      board: dev.board,
+      version: dev.version,
+      uptime: dev.uptime,
+      platform: dev.platform,
+      managed: true,
+      lastSeen: dev.last_seen
+    });
+    seenNodes.add(dev.ip);
+  }
+
+  // Process LLDP neighbors — only keep physical connections (not VLAN/bridge discovery)
+  for (const n of neighbors) {
+    const neighborIP = n.neighbor_ip;
+    const neighborMAC = n.neighbor_mac;
+    const iface = n.interface || '';
+
+    // Skip VLAN/bridge neighbor discoveries — these are L2 management plane, not physical links
+    if (iface.startsWith('bridge') && !iface.includes(',')) continue;
+
+    // Determine device type from system caps
+    let deviceType = 'unknown';
+    const caps = (n.system_caps_enabled || n.system_caps || '').toLowerCase();
+    const isAP = caps.includes('wlan-ap') || (n.system_description || '').toLowerCase().includes('ruckus');
+    if (isAP) deviceType = 'ap';
+    else if ((n.neighbor_identity || '').toLowerCase().includes('axis') || (n.system_description || '').toLowerCase().includes('axis')) continue; // Skip cameras
+    else if (n.neighbor_platform === 'MikroTik' || (caps.includes('bridge') && caps.includes('router'))) deviceType = 'switch';
+
+    // Skip 192.168.88.x addresses — these are VLAN management IPs on existing switches, not separate devices
+    if (neighborIP && neighborIP.startsWith('192.168.88.')) continue;
+    // Skip 192.168.32.x addresses — these are VLAN interface IPs on managed switches (e.g. 192.168.32.240 is a duplicate of 192.168.30.240)
+    if (neighborIP && neighborIP.startsWith('192.168.32.')) continue;
+
+    const nodeId = neighborIP || neighborMAC;
+    if (!nodeId) continue;
+
+    // Add unmanaged neighbor as a node
+    if (!seenNodes.has(nodeId) && !managedIPs.has(nodeId)) {
+      const sourceDevice = devices.find(d => d.ip === n.source_ip);
+      let floor = '';
+      // Backbone gets assigned to floor 5
+      if (BACKBONE_IPS.has(nodeId) || (n.neighbor_identity || '').toLowerCase().includes('backbone')) {
+        floor = '5';
+        deviceType = 'backbone';
+      } else {
+        floor = sourceDevice?.floor || '';
+      }
+
+      let name = n.neighbor_identity || nodeId;
+      if (name === 'MikroTik' && neighborIP) {
+        name = `Switch (${neighborIP.split('.').pop()})`;
+      }
+
+      const physIface = iface.split(',')[0]; // "ether21,bridge" -> "ether21"
+      nodes.push({
+        id: nodeId,
+        name,
+        type: deviceType,
+        floor,
+        ip: neighborIP || '',
+        mac: neighborMAC,
+        board: n.neighbor_board || '',
+        platform: n.neighbor_platform || '',
+        description: n.system_description || '',
+        managed: false,
+        switchPort: physIface || '',
+        connectedTo: n.source_ip,
+        lastSeen: n.last_seen
+      });
+      seenNodes.add(nodeId);
+    }
+
+    // Create link — only for physical port connections
+    const targetId = managedIPs.has(neighborIP) ? neighborIP : nodeId;
+    if (targetId && targetId !== n.source_ip) {
+      let linkType = 'ethernet';
+      const physIface = iface.split(',')[0]; // "ether21,bridge" -> "ether21"
+      if (physIface.includes('sfp')) linkType = 'sfp';
+
+      const linkKey = [n.source_ip, targetId].sort().join('-');
+      if (!links.find(l => [l.source, l.target].sort().join('-') === linkKey)) {
+        links.push({
+          source: n.source_ip,
+          target: targetId,
+          sourceInterface: physIface,
+          targetInterface: n.target_interface || '',
+          type: linkType,
+          discoveredBy: n.discovered_by || ''
+        });
+      }
+    }
+  }
+
+  // Supplement with APs from monitors table not discovered via LLDP
+  const monitorAPs = db.prepare("SELECT name, hostname, floor FROM monitors WHERE device_type = 'accessPoints' AND active = 1 AND hostname IS NOT NULL").all();
+  monitorAPs.forEach(ap => {
+    if (!ap.hostname || seenNodes.has(ap.hostname)) return;
+    const floorMatch = (ap.floor || '').match(/(\d+)/);
+    const floor = floorMatch ? floorMatch[1] : '';
+    nodes.push({
+      id: ap.hostname,
+      name: ap.name,
+      type: 'ap',
+      floor,
+      ip: ap.hostname,
+      board: '',
+      platform: 'Ruckus',
+      description: '',
+      managed: false,
+      fromMonitors: true,
+      lastSeen: null
+    });
+    seenNodes.add(ap.hostname);
+  });
+
+  // Normalize floor names: "1st Floor" -> "1", etc.
+  nodes.forEach(n => {
+    const m = (n.floor || '').match(/(\d+)/);
+    if (m) n.floor = m[1];
+  });
+
+  // Add port-mapped monitors (printers, Poly devices, etc.) from device_port_map
+  const portMappedDevices = db.prepare('SELECT * FROM device_port_map').all();
+  for (const pm of portMappedDevices) {
+    const nodeId = pm.monitor_hostname;
+    if (!nodeId || seenNodes.has(nodeId)) continue;
+
+    // Map monitor_type to topology node type
+    const typeMap = { printers: 'printer', polyLens: 'poly', accessPoints: 'ap' };
+    const deviceType = typeMap[pm.monitor_type] || 'device';
+
+    // Normalize floor: strip "st Floor", "nd Floor", "rd Floor", "th Floor"
+    const floorMatch = (pm.monitor_floor || '').match(/(\d+)/);
+    const floor = floorMatch ? floorMatch[1] : '';
+
+    nodes.push({
+      id: nodeId,
+      name: pm.monitor_name || nodeId,
+      type: deviceType,
+      floor,
+      ip: nodeId,
+      mac: pm.mac_address || '',
+      managed: false,
+      switchPort: pm.switch_port,
+      fromPortMap: true,
+      lastSeen: pm.last_seen
+    });
+    seenNodes.add(nodeId);
+
+    // Add link from switch to this device
+    if (pm.switch_ip) {
+      links.push({
+        source: pm.switch_ip,
+        target: nodeId,
+        sourceInterface: pm.switch_port || '',
+        targetInterface: '',
+        type: 'ethernet',
+        discoveredBy: 'port_map'
+      });
+    }
+  }
+
+  // Add remaining monitors that weren't discovered via LLDP or port map
+  // These are typically Wi-Fi devices (Poly, some printers) — show them grouped by floor
+  try {
+    const allMonitors = db.prepare('SELECT hostname, name, device_type, type, floor FROM monitors WHERE active = 1').all();
+    for (const m of allMonitors) {
+      if (seenNodes.has(m.hostname)) continue;
+
+      const typeMap = { printers: 'printer', polyLens: 'poly', accessPoints: 'ap' };
+      const deviceType = typeMap[m.device_type || m.type] || 'device';
+      const floorMatch = (m.floor || '').match(/(\d+)/);
+      const floor = floorMatch ? floorMatch[1] : '';
+
+      nodes.push({
+        id: m.hostname,
+        name: m.name || m.hostname,
+        type: deviceType,
+        floor,
+        ip: m.hostname,
+        managed: false,
+        fromMonitors: true
+      });
+      seenNodes.add(m.hostname);
+
+      // Link to any switch on the same floor (best guess for wireless devices)
+      const floorSwitch = nodes.find(n => (n.type === 'switch') && n.floor === floor);
+      if (floorSwitch) {
+        links.push({
+          source: floorSwitch.id,
+          target: m.hostname,
+          sourceInterface: 'wireless',
+          targetInterface: '',
+          type: 'wireless',
+          discoveredBy: 'monitor_db'
+        });
+      }
+    }
+  } catch (e) {
+    // monitors table query failed — skip
+  }
+
+  // Enrich nodes with switchPort and connectedTo from link data
+  const nodeById = {};
+  nodes.forEach(n => { nodeById[n.id] = n; });
+  const infraTypes2 = new Set(['switch', 'router', 'backbone']);
+  for (const l of links) {
+    const src = nodeById[l.source];
+    const tgt = nodeById[l.target];
+    if (!src || !tgt) continue;
+    // If source is infra and target is end device, set switchPort on target
+    if (infraTypes2.has(src.type) && !infraTypes2.has(tgt.type) && l.sourceInterface) {
+      if (!tgt.switchPort || tgt.switchPort === 'wireless') {
+        tgt.switchPort = l.sourceInterface;
+        tgt.connectedTo = src.ip || src.id;
+      }
+    }
+  }
+
+  return { nodes, links, lastUpdate: new Date().toISOString() };
+}
+
+function topologyHandler(req, res) {
+  try {
+    res.json(buildTopologyJson());
+  } catch (err) {
+    logger.error('Error fetching topology:', err.message);
+    res.status(500).json({ error: 'Failed to fetch topology data' });
+  }
+}
+
+// API endpoint - force refresh topology
+app.post('/api/mikrotik/topology/refresh', authMiddleware, csrfMiddleware, async (req, res) => {
+  try {
+    await fetchMikroTikTopology();
+    res.json({ success: true, message: 'Topology refreshed' });
+  } catch (err) {
+    logger.error('Error refreshing topology:', err.message);
+    res.status(500).json({ error: 'Failed to refresh topology' });
+  }
+});
+
+// API endpoint - update device config (floor, role)
+app.put('/api/mikrotik/devices/:ip', authMiddleware, csrfMiddleware, (req, res) => {
+  const { floor, device_role } = req.body;
+  const ip = req.params.ip;
+  try {
+    db.prepare('UPDATE mikrotik_devices SET floor = COALESCE(?, floor), device_role = COALESCE(?, device_role) WHERE ip = ?')
+      .run(floor || null, device_role || null, ip);
+    res.json({ success: true });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // ==================== WEBSOCKET SERVER ====================
 
 // Create HTTP server and WebSocket server
@@ -8314,6 +8695,394 @@ function runDatabaseCleanup() {
 // Run cleanup on startup and every 6 hours
 runDatabaseCleanup();
 setInterval(runDatabaseCleanup, 6 * 60 * 60 * 1000);
+
+// ==================== MIKROTIK TOPOLOGY ====================
+
+const MIKROTIK_DEVICES = [
+  { ip: '192.168.30.239', floor: '1', role: 'switch' },
+  { ip: '192.168.30.246', floor: '1', role: 'switch' },
+  { ip: '192.168.30.247', floor: '1', role: 'switch' },
+  { ip: '192.168.30.243', floor: '2', role: 'switch' },
+  { ip: '192.168.30.245', floor: '2', role: 'switch' },
+  { ip: '192.168.30.240', floor: '3', role: 'switch' },
+  { ip: '192.168.30.242', floor: '3', role: 'switch' }
+];
+
+// Ruckus backbone switch (SNMP)
+const ruckusEnv = {};
+try {
+  const envContent = fs.readFileSync(path.join(__dirname, '.env.mikrotik-router'), 'utf8');
+  envContent.split('\n').forEach(line => {
+    const [key, ...val] = line.split('=');
+    if (key && val.length) ruckusEnv[key.trim()] = val.join('=').trim();
+  });
+} catch (e) { /* Ruckus env not configured */ }
+const RUCKUS_SNMP_COMMUNITY = ruckusEnv.RUCKUS_SNMP_COMMUNITY || '';
+const RUCKUS_BACKBONE_IP = ruckusEnv.RUCKUS_BACKBONE_IP || '192.168.30.250';
+
+// All SNMP-polled backbone/infrastructure devices on Floor 5
+const SNMP_DEVICES = [
+  { ip: '192.168.30.250', floor: '5', role: 'backbone' },
+  { ip: '192.168.30.251', floor: '5', role: 'backbone' }
+];
+
+async function queryMikroTikDevice(ip) {
+  if (!MIKROTIK_USER) return null;
+  const conn = new RouterOSAPI({ host: ip, user: MIKROTIK_USER, password: MIKROTIK_PASS, timeout: 10 });
+  try {
+    await conn.connect();
+    const [identity] = await conn.write('/system/identity/print');
+    const [resource] = await conn.write('/system/resource/print');
+    const neighbors = await conn.write('/ip/neighbor/print');
+    conn.close();
+    return {
+      ip,
+      identity: identity?.name || 'Unknown',
+      platform: resource?.platform || 'MikroTik',
+      board: resource?.['board-name'] || '',
+      version: resource?.version || '',
+      uptime: resource?.uptime || '',
+      neighbors
+    };
+  } catch (err) {
+    logger.warn(`MikroTik query failed for ${ip}: ${err.message}`);
+    try { conn.close(); } catch (e) {}
+    return null;
+  }
+}
+
+// Query SNMP device via LLDP
+async function querySnmpDevice(ip) {
+  if (!RUCKUS_SNMP_COMMUNITY) return null;
+  return new Promise((resolve) => {
+    const session = snmp.createSession(ip, RUCKUS_SNMP_COMMUNITY, { timeout: 10000 });
+    const data = { sysName: '', sysDescr: '', neighbors: [] };
+    const names = {}, descs = {};
+
+    // Get system info
+    session.get(['1.3.6.1.2.1.1.1.0', '1.3.6.1.2.1.1.5.0'], (err, varbinds) => {
+      if (err) {
+        logger.warn(`SNMP query failed for ${ip}: ${err.message}`);
+        session.close();
+        return resolve(null);
+      }
+      data.sysDescr = varbinds[0]?.value?.toString() || '';
+      data.sysName = varbinds[1]?.value?.toString() || '';
+
+      // Walk LLDP remote system names
+      session.subtree('1.0.8802.1.1.2.1.4.1.1.9', (varbinds) => {
+        varbinds.forEach(v => { names[v.oid] = v.value.toString(); });
+      }, () => {
+        // Walk LLDP remote system descriptions
+        session.subtree('1.0.8802.1.1.2.1.4.1.1.10', (varbinds) => {
+          varbinds.forEach(v => { descs[v.oid] = v.value.toString(); });
+        }, () => {
+          // Build neighbor list from LLDP data
+          Object.keys(names).forEach(oid => {
+            const name = names[oid];
+            // Find matching description OID (same index suffix)
+            const suffix = oid.replace('1.0.8802.1.1.2.1.4.1.1.9', '');
+            const descOid = '1.0.8802.1.1.2.1.4.1.1.10' + suffix;
+            const desc = descs[descOid] || '';
+            data.neighbors.push({ identity: name, description: desc });
+          });
+          session.close();
+          resolve(data);
+        });
+      });
+    });
+  });
+}
+
+async function fetchMikroTikTopology() {
+  if (!MIKROTIK_USER && !RUCKUS_SNMP_COMMUNITY) return;
+  logger.info('Fetching network topology...');
+
+  const updateDevice = db.prepare(`
+    INSERT OR REPLACE INTO mikrotik_devices (ip, identity, platform, board, version, uptime, floor, device_role, last_seen)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))
+  `);
+
+  const clearNeighbors = db.prepare('DELETE FROM mikrotik_neighbors WHERE source_ip = ?');
+  const insertNeighbor = db.prepare(`
+    INSERT INTO mikrotik_neighbors (source_ip, neighbor_ip, neighbor_mac, neighbor_identity, neighbor_platform, neighbor_board, interface, system_description, system_caps, system_caps_enabled, discovered_by, last_seen)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))
+  `);
+
+  const results = await Promise.allSettled(
+    MIKROTIK_DEVICES.map(dev => queryMikroTikDevice(dev.ip))
+  );
+
+  const topology = db.transaction(() => {
+    results.forEach((result, idx) => {
+      const dev = MIKROTIK_DEVICES[idx];
+      if (result.status === 'fulfilled' && result.value) {
+        const data = result.value;
+        updateDevice.run(data.ip, data.identity, data.platform, data.board, data.version, data.uptime, dev.floor, dev.role);
+
+        clearNeighbors.run(data.ip);
+        for (const n of data.neighbors) {
+          insertNeighbor.run(
+            data.ip,
+            n.address || n.address4 || null,
+            n['mac-address'] || '',
+            n.identity || '',
+            n.platform || '',
+            n.board || '',
+            n.interface ? n.interface.split(',')[0] : '',
+            n['system-description'] || '',
+            n['system-caps'] || '',
+            n['system-caps-enabled'] || '',
+            n['discovered-by'] || ''
+          );
+        }
+      }
+    });
+  });
+
+  topology();
+
+  // Query all SNMP backbone devices
+  if (RUCKUS_SNMP_COMMUNITY) {
+    const snmpResults = await Promise.allSettled(
+      SNMP_DEVICES.map(dev => querySnmpDevice(dev.ip))
+    );
+
+    snmpResults.forEach((result, idx) => {
+      const dev = SNMP_DEVICES[idx];
+      if (result.status !== 'fulfilled' || !result.value) {
+        if (result.reason) logger.warn(`SNMP query error for ${dev.ip}: ${result.reason}`);
+        return;
+      }
+      const data = result.value;
+
+      // Extract board info from sysDescr
+      const boardMatch = data.sysDescr.match(/(ICX\S+)/);
+      const board = boardMatch ? boardMatch[1] : 'ICX';
+      const versionMatch = data.sysDescr.match(/Version\s+(\S+)/);
+      const version = versionMatch ? versionMatch[1] : '';
+
+      updateDevice.run(dev.ip, data.sysName, 'Brocade/Ruckus', board, version, '', dev.floor, dev.role);
+
+      clearNeighbors.run(dev.ip);
+      for (const n of data.neighbors) {
+        let caps = '';
+        if (n.description.toLowerCase().includes('ruckus') && n.description.toLowerCase().includes('ap')) caps = 'wlan-ap';
+        else if (n.description.toLowerCase().includes('mikrotik')) caps = 'bridge,router';
+        else if (n.description.toLowerCase().includes('axis')) caps = 'bridge';
+
+        insertNeighbor.run(
+          dev.ip,
+          null,
+          '',
+          n.identity,
+          '',
+          '',
+          '',
+          n.description,
+          caps,
+          caps,
+          'lldp'
+        );
+      }
+      logger.info(`SNMP backbone ${dev.ip}: ${data.sysName}, ${data.neighbors.length} LLDP neighbors`);
+    });
+  }
+
+  // Query bridge MAC tables to map monitored devices to switch ports
+  try {
+    const monitors = db.prepare('SELECT hostname, name, type, device_type, floor FROM monitors WHERE active = 1').all();
+    const monitorIPs = new Set(monitors.map(m => m.hostname));
+
+    // Known trunk/uplink ports per switch (ether47/48 are daisy-chain, sfp-sfpplus1 is backbone uplink)
+    const TRUNK_PORTS = new Set(['ether47', 'ether48', 'sfp-sfpplus1', 'sfp-sfpplus2', 'sfp-sfpplus3', 'sfp-sfpplus4']);
+
+    // Step 1: Get all bridge MAC tables from switches
+    const macResults = await Promise.allSettled(
+      MIKROTIK_DEVICES.map(async (dev) => {
+        const conn = new RouterOSAPI({ host: dev.ip, user: MIKROTIK_USER, password: MIKROTIK_PASS, timeout: 10 });
+        try {
+          await conn.connect();
+          const hosts = await conn.write('/interface/bridge/host/print');
+          const arp = await conn.write('/ip/arp/print');
+          conn.close();
+          return { ip: dev.ip, floor: dev.floor, hosts, arp };
+        } catch (e) {
+          try { conn.close(); } catch (_) {}
+          return { ip: dev.ip, floor: dev.floor, hosts: [], arp: [] };
+        }
+      })
+    );
+
+    // Step 2: Build MAC-to-port map (only non-trunk direct connections)
+    // For each MAC, prefer the switch where it's on a non-trunk port
+    const macToPort = {}; // mac -> { switchIp, port, floor }
+    for (const r of macResults) {
+      if (r.status !== 'fulfilled' || !r.value) continue;
+      const { ip: switchIp, floor, hosts } = r.value;
+      for (const h of hosts) {
+        const mac = (h['mac-address'] || '').toLowerCase();
+        const port = h['on-interface'] || '';
+        if (!mac || !port || h.local === true || h.local === 'true') continue;
+        if (TRUNK_PORTS.has(port)) continue; // skip trunk ports
+        if (!port.startsWith('ether') && !port.startsWith('sfp')) continue;
+        // Prefer non-trunk over any existing trunk mapping
+        if (!macToPort[mac] || TRUNK_PORTS.has(macToPort[mac].port)) {
+          macToPort[mac] = { switchIp, port, floor };
+        }
+      }
+    }
+
+    // Step 2b: Query SNMP backbone switches MAC tables (Q-BRIDGE-MIB)
+    if (RUCKUS_SNMP_COMMUNITY) {
+      // Known uplink port indices on Brocade (SFP ports to floor switches)
+      const BACKBONE_TRUNK_PORTS = new Set([69, 70, 71, 72]);
+
+      const snmpMACResults = await Promise.allSettled(
+        SNMP_DEVICES.map(dev => new Promise((resolve) => {
+          const session = snmp.createSession(dev.ip, RUCKUS_SNMP_COMMUNITY, { timeout: 10000 });
+          const entries = [];
+          session.subtree('1.3.6.1.2.1.17.7.1.2.2.1.2', (varbinds) => {
+            for (const v of varbinds) {
+              const parts = v.oid.split('.');
+              const macParts = parts.slice(-6);
+              const mac = macParts.map(p => parseInt(p).toString(16).padStart(2, '0')).join(':').toLowerCase();
+              const portIdx = parseInt(v.value);
+              if (!isNaN(portIdx)) entries.push({ mac, portIdx });
+            }
+          }, () => {
+            session.close();
+            resolve({ ip: dev.ip, floor: dev.floor, entries });
+          });
+        }))
+      );
+
+      for (const r of snmpMACResults) {
+        if (r.status !== 'fulfilled' || !r.value) continue;
+        const { ip: switchIp, floor, entries } = r.value;
+        for (const { mac, portIdx } of entries) {
+          if (BACKBONE_TRUNK_PORTS.has(portIdx)) continue; // skip uplinks to floor switches
+          const port = `port-${portIdx}`;
+          if (!macToPort[mac] || TRUNK_PORTS.has(macToPort[mac].port)) {
+            macToPort[mac] = { switchIp, port, floor };
+          }
+        }
+      }
+    }
+
+    // Step 3: Build IP-to-MAC from multiple sources
+    const ipToMAC = {};
+
+    // 3a: Switch ARP tables (limited — switches aren't gateways for most VLANs)
+    for (const r of macResults) {
+      if (r.status !== 'fulfilled' || !r.value) continue;
+      for (const a of r.value.arp) {
+        if (a.address && a['mac-address']) {
+          ipToMAC[a.address] = a['mac-address'].toLowerCase();
+        }
+      }
+    }
+
+    // 3b: LLDP neighbor IPs (covers APs)
+    const neighborRows = db.prepare("SELECT neighbor_ip, neighbor_mac FROM mikrotik_neighbors WHERE neighbor_ip IS NOT NULL AND neighbor_mac != ''").all();
+    for (const n of neighborRows) {
+      if (!ipToMAC[n.neighbor_ip]) {
+        ipToMAC[n.neighbor_ip] = n.neighbor_mac.toLowerCase();
+      }
+    }
+
+    // 3c: SNMP ifPhysAddress for printers (they respond to SNMP)
+    const printerMonitors = monitors.filter(m => (m.device_type || m.type) === 'printers');
+    const printerMACResults = await Promise.allSettled(
+      printerMonitors.map(m => new Promise((resolve) => {
+        const session = snmp.createSession(m.hostname, 'public', { timeout: 5000 });
+        session.get(['1.3.6.1.2.1.2.2.1.6.1'], (err, varbinds) => {
+          if (!err && varbinds[0]?.value?.length >= 6) {
+            const mac = Array.from(varbinds[0].value).map(b => b.toString(16).padStart(2, '0')).join(':');
+            resolve({ ip: m.hostname, mac });
+          } else {
+            resolve(null);
+          }
+          session.close();
+        });
+      }))
+    );
+    for (const r of printerMACResults) {
+      if (r.status === 'fulfilled' && r.value) {
+        ipToMAC[r.value.ip] = r.value.mac.toLowerCase();
+      }
+    }
+
+    // 3d: Host ARP table (mounted file, covers Poly devices on VLANs the host can reach)
+    try {
+      const arpFile = fs.readFileSync(path.join(__dirname, 'data', 'host-arp.txt'), 'utf8');
+      for (const line of arpFile.split('\n')) {
+        // Format: "? (192.168.24.66) at 0:e0:db:7e:22:70 on en0 ..."
+        const match = line.match(/\((\d+\.\d+\.\d+\.\d+)\)\s+at\s+([0-9a-f:]+)/i);
+        if (match && match[2] !== '(incomplete)') {
+          // Normalize MAC — macOS ARP uses short form (0:e0:db) not (00:e0:db)
+          const mac = match[2].split(':').map(p => p.padStart(2, '0')).join(':').toLowerCase();
+          if (!ipToMAC[match[1]]) {
+            ipToMAC[match[1]] = mac;
+          }
+        }
+      }
+    } catch (e) {
+      // host-arp.txt not available — skip
+    }
+
+    // Step 5: Match monitors to switch ports
+    const upsertPortMap = db.prepare(`
+      INSERT OR REPLACE INTO device_port_map (monitor_hostname, monitor_name, monitor_type, monitor_floor, switch_ip, switch_port, mac_address, last_seen)
+      VALUES (?, ?, ?, ?, ?, ?, ?, datetime('now'))
+    `);
+    db.prepare('DELETE FROM device_port_map').run(); // refresh all
+
+    let portMapCount = 0;
+    for (const m of monitors) {
+      const mac = ipToMAC[m.hostname];
+      if (!mac) continue;
+      const portInfo = macToPort[mac];
+      if (!portInfo) continue;
+      upsertPortMap.run(m.hostname, m.name, m.device_type || m.type, m.floor, portInfo.switchIp, portInfo.port, mac);
+      portMapCount++;
+    }
+    logger.info(`Port mapping: ${portMapCount} monitors mapped to switch ports`);
+  } catch (e) {
+    logger.warn(`Port mapping error: ${e.message}`);
+  }
+
+  const deviceCount = db.prepare('SELECT COUNT(*) as count FROM mikrotik_devices').get().count;
+  const neighborCount = db.prepare('SELECT COUNT(*) as count FROM mikrotik_neighbors').get().count;
+  const portMapCount = db.prepare('SELECT COUNT(*) as count FROM device_port_map').get().count;
+  logger.info(`Topology updated: ${deviceCount} devices, ${neighborCount} neighbors, ${portMapCount} port mappings`);
+
+  // Write topology as static JSON file (workaround for proxy caching)
+  try {
+    const topoJson = buildTopologyJson();
+    fs.writeFileSync(path.join(__dirname, 'data', 'netmap.json'), JSON.stringify(topoJson));
+  } catch (e) {
+    logger.warn('Failed to write topology JSON file:', e.message);
+  }
+
+  // Broadcast update via WebSocket
+  if (wss) {
+    wss.clients.forEach(client => {
+      if (client.readyState === WebSocket.OPEN) {
+        client.send(JSON.stringify({ type: 'topology_update' }));
+      }
+    });
+  }
+}
+
+// Initial topology fetch (delayed to allow other services to start)
+if (MIKROTIK_USER || RUCKUS_SNMP_COMMUNITY) {
+  setTimeout(fetchMikroTikTopology, 5000);
+  setInterval(fetchMikroTikTopology, 5 * 60 * 1000);
+  logger.info(`Topology polling: MikroTik=${MIKROTIK_USER ? 'Yes' : 'No'}, Ruckus SNMP=${RUCKUS_SNMP_COMMUNITY ? 'Yes' : 'No'}`);
+} else {
+  logger.info('Topology polling: Not configured');
+}
 
 // Start server
 server.listen(PORT, () => {

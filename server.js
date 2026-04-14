@@ -189,8 +189,7 @@ const logger = {
 // CORS configuration - restrict to specific origins
 const allowedOrigins = process.env.ALLOWED_ORIGINS?.split(',') || [
   'http://localhost:3002',
-  'http://127.0.0.1:3002',
-  'http://192.168.31.236:3002' // Local network access
+  'http://127.0.0.1:3002'
 ];
 app.use(cors({
   origin: function(origin, callback) {
@@ -414,16 +413,6 @@ const ZOOM_CLIENT_ID = process.env.ZOOM_CLIENT_ID;
 const ZOOM_CLIENT_SECRET = process.env.ZOOM_CLIENT_SECRET;
 const ZOOM_AUTH_URL = 'https://zoom.us/oauth/token';
 const ZOOM_API_URL = 'https://api.zoom.us/v2';
-
-// Brivo Access Control Configuration
-const BRIVO_CLIENT_ID = process.env.BRIVO_CLIENT_ID;
-const BRIVO_CLIENT_SECRET = process.env.BRIVO_CLIENT_SECRET;
-const BRIVO_USERNAME = process.env.BRIVO_USERNAME;
-const BRIVO_PASSWORD = process.env.BRIVO_PASSWORD;
-const BRIVO_API_KEY = process.env.BRIVO_API_KEY;
-const BRIVO_AUTH_URL = 'https://auth.brivo.com/oauth/token';
-const BRIVO_API_URL = 'https://api.brivo.com/v1/api';
-const BRIVO_SITE_FILTER = process.env.BRIVO_SITE_FILTER || 'Outbrain Israel';
 
 // ==================== DATABASE SETUP ====================
 
@@ -3167,238 +3156,6 @@ function getZoomOnlyRooms() {
   });
 }
 
-// ==================== BRIVO ACCESS CONTROL INTEGRATION ====================
-
-let brivoToken = null;
-let brivoTokenExpiry = null;
-let brivoRefreshToken = null;
-
-async function getBrivoToken() {
-  // Return cached token if still valid (with 30 second buffer)
-  if (brivoToken && brivoTokenExpiry && Date.now() < brivoTokenExpiry - 30000) {
-    return brivoToken;
-  }
-
-  if (!BRIVO_CLIENT_ID || !BRIVO_CLIENT_SECRET || !BRIVO_USERNAME || !BRIVO_PASSWORD || !BRIVO_API_KEY) {
-    logger.warn('[Brivo] Missing credentials (need CLIENT_ID, CLIENT_SECRET, USERNAME, PASSWORD, and API_KEY) - integration disabled');
-    return null;
-  }
-
-  try {
-    // Create Basic auth header from client credentials
-    const clientCredentials = Buffer.from(`${BRIVO_CLIENT_ID}:${BRIVO_CLIENT_SECRET}`).toString('base64');
-
-    const params = new URLSearchParams();
-    params.append('grant_type', 'password');
-    params.append('username', BRIVO_USERNAME);
-    params.append('password', BRIVO_PASSWORD);
-
-    const response = await fetch(BRIVO_AUTH_URL, {
-      method: 'POST',
-      headers: {
-        'Authorization': `Basic ${clientCredentials}`,
-        'Content-Type': 'application/x-www-form-urlencoded',
-        'api-key': BRIVO_API_KEY
-      },
-      body: params.toString()
-    });
-
-    if (!response.ok) {
-      const errorText = await response.text();
-      logger.error('[Brivo] Auth failed:', response.status + ' ' + errorText);
-      return null;
-    }
-
-    const data = await response.json();
-    brivoToken = data.access_token;
-    brivoRefreshToken = data.refresh_token;
-    // Token expires in 60 seconds according to docs
-    brivoTokenExpiry = Date.now() + (data.expires_in || 60) * 1000;
-
-    logger.info('[Brivo] Token refreshed successfully');
-    return brivoToken;
-  } catch (error) {
-    logger.error('[Brivo] Auth error:', error.message);
-    return null;
-  }
-}
-
-async function refreshBrivoToken() {
-  if (!brivoRefreshToken) {
-    return getBrivoToken();
-  }
-
-  try {
-    const clientCredentials = Buffer.from(`${BRIVO_CLIENT_ID}:${BRIVO_CLIENT_SECRET}`).toString('base64');
-
-    const params = new URLSearchParams();
-    params.append('grant_type', 'refresh_token');
-    params.append('refresh_token', brivoRefreshToken);
-
-    const response = await fetch(BRIVO_AUTH_URL, {
-      method: 'POST',
-      headers: {
-        'Authorization': `Basic ${clientCredentials}`,
-        'Content-Type': 'application/x-www-form-urlencoded',
-        'api-key': BRIVO_API_KEY
-      },
-      body: params.toString()
-    });
-
-    if (!response.ok) {
-      logger.warn('[Brivo] Refresh token failed, getting new token');
-      return getBrivoToken();
-    }
-
-    const data = await response.json();
-    brivoToken = data.access_token;
-    brivoRefreshToken = data.refresh_token || brivoRefreshToken;
-    brivoTokenExpiry = Date.now() + (data.expires_in || 60) * 1000;
-
-    return brivoToken;
-  } catch (error) {
-    logger.error('[Brivo] Refresh error:', error.message);
-    return getBrivoToken();
-  }
-}
-
-async function brivoApiRequest(endpoint, options = {}) {
-  const token = await getBrivoToken();
-  if (!token) {
-    throw new Error('Brivo authentication failed');
-  }
-
-  const url = `${BRIVO_API_URL}${endpoint}`;
-  const response = await fetch(url, {
-    ...options,
-    headers: {
-      'Authorization': `Bearer ${token}`,
-      'Content-Type': 'application/json',
-      'api-key': BRIVO_API_KEY,
-      ...options.headers
-    }
-  });
-
-  if (response.status === 401) {
-    // Token expired, try refresh
-    const newToken = await refreshBrivoToken();
-    if (!newToken) {
-      throw new Error('Brivo re-authentication failed');
-    }
-
-    return fetch(url, {
-      ...options,
-      headers: {
-        'Authorization': `Bearer ${newToken}`,
-        'Content-Type': 'application/json',
-        'api-key': BRIVO_API_KEY,
-        ...options.headers
-      }
-    });
-  }
-
-  return response;
-}
-
-// Cached door data
-let brivoDoors = [];
-let brivoDoorsLastFetch = 0;
-const BRIVO_CACHE_TTL = 60000; // 1 minute cache
-
-async function fetchBrivoDoors() {
-  // Return cached data if fresh
-  if (brivoDoors.length > 0 && Date.now() - brivoDoorsLastFetch < BRIVO_CACHE_TTL) {
-    return brivoDoors;
-  }
-
-  try {
-    const response = await brivoApiRequest('/access-points?pageSize=200');
-
-    if (!response.ok) {
-      const errorText = await response.text();
-      logger.error('[Brivo] Failed to fetch doors:', response.status + ' ' + errorText);
-      return brivoDoors; // Return cached data on error
-    }
-
-    const data = await response.json();
-    let allDoors = data.data || [];
-
-    // Filter doors by site name (Outbrain Israel)
-    if (BRIVO_SITE_FILTER) {
-      allDoors = allDoors.filter(door => {
-        // Check site name in various possible fields
-        const siteName = door.siteName || door.site?.name || door.location || '';
-        return siteName.toLowerCase().includes(BRIVO_SITE_FILTER.toLowerCase());
-      });
-    }
-
-    // Parse floor number from door name (format: <number>FL <name>)
-    brivoDoors = allDoors.map(door => {
-      const name = door.name || '';
-      const floorMatch = name.match(/^(\d+)FL\s+(.+)$/i);
-      return {
-        ...door,
-        floor: floorMatch ? parseInt(floorMatch[1]) : 0,
-        displayName: floorMatch ? floorMatch[2] : name,
-        floorLabel: floorMatch ? `${floorMatch[1]}FL` : ''
-      };
-    }).sort((a, b) => {
-      // Sort by floor number, then by name
-      if (a.floor !== b.floor) return a.floor - b.floor;
-      return a.displayName.localeCompare(b.displayName);
-    });
-
-    brivoDoorsLastFetch = Date.now();
-
-    logger.info(`[Brivo] Fetched ${brivoDoors.length} access points for ${BRIVO_SITE_FILTER}`);
-    return brivoDoors;
-  } catch (error) {
-    logger.error('[Brivo] Fetch doors error:', error.message);
-    return brivoDoors;
-  }
-}
-
-async function getBrivoDoorStatus(accessPointId) {
-  try {
-    const response = await brivoApiRequest(`/device-status/${accessPointId}`);
-
-    if (!response.ok) {
-      logger.error('[Brivo] Failed to get door status:', response.status);
-      return null;
-    }
-
-    return await response.json();
-  } catch (error) {
-    logger.error('[Brivo] Door status error:', error.message);
-    return null;
-  }
-}
-
-async function unlockBrivoDoor(accessPointId) {
-  try {
-    const response = await brivoApiRequest(`/access-points/${accessPointId}/unlock`, {
-      method: 'POST',
-      body: JSON.stringify({})
-    });
-
-    // 204 No Content is success
-    if (response.status === 204 || response.ok) {
-      logger.info(`[Brivo] Door ${accessPointId} unlocked successfully`);
-      auditLog('BRIVO_DOOR_UNLOCK', { accessPointId, success: true });
-      return { success: true };
-    }
-
-    const errorText = await response.text();
-    logger.error('[Brivo] Unlock failed:', response.status + ' ' + errorText);
-    auditLog('BRIVO_DOOR_UNLOCK', { accessPointId, success: false, error: errorText });
-    return { success: false, error: errorText };
-  } catch (error) {
-    logger.error('[Brivo] Unlock error:', error.message);
-    auditLog('BRIVO_DOOR_UNLOCK', { accessPointId, success: false, error: error.message });
-    return { success: false, error: error.message };
-  }
-}
-
 // ==================== AUTH ROUTES ====================
 
 // Login
@@ -5075,171 +4832,6 @@ app.get('/api/poly-lens/by-floor', authMiddleware, async (req, res) => {
     lastFetch: polyLensLastFetch,
     floors
   });
-});
-
-// ==================== BRIVO ACCESS CONTROL ENDPOINTS ====================
-
-// Get all Brivo access points (doors)
-app.get('/api/brivo/doors', authMiddleware, async (req, res) => {
-  try {
-    const doors = await fetchBrivoDoors();
-
-    if (!doors || doors.length === 0) {
-      return res.json({
-        success: true,
-        configured: !!(BRIVO_CLIENT_ID && BRIVO_USERNAME),
-        message: BRIVO_CLIENT_ID ? 'No doors found or authentication failed' : 'Brivo not configured',
-        doors: []
-      });
-    }
-
-    res.json({
-      success: true,
-      configured: true,
-      doorCount: doors.length,
-      lastFetch: brivoDoorsLastFetch,
-      doors: doors.map(d => ({
-        id: d.id,
-        name: d.name,
-        siteId: d.siteId,
-        siteName: d.siteName,
-        controlPanelId: d.controlPanelId,
-        activationEnabled: d.activationEnabled,
-        twoFactorEnabled: d.twoFactorEnabled
-      }))
-    });
-  } catch (error) {
-    logger.error('[Brivo] Doors endpoint error:', error.message);
-    res.status(500).json({ success: false, error: error.message });
-  }
-});
-
-// Get status of a specific door
-app.get('/api/brivo/doors/:id/status', authMiddleware, async (req, res) => {
-  try {
-    const doorId = parseInt(req.params.id);
-    if (isNaN(doorId)) {
-      return res.status(400).json({ success: false, error: 'Invalid door ID' });
-    }
-
-    const status = await getBrivoDoorStatus(doorId);
-
-    if (!status) {
-      return res.status(404).json({ success: false, error: 'Door not found or status unavailable' });
-    }
-
-    res.json({
-      success: true,
-      door: {
-        id: doorId,
-        name: status.accessPointName,
-        state: status.accessPointState,
-        scheduledState: status.accessPointScheduledState,
-        inputState: status.accessPointInputState,
-        statusUpdated: status.statusUpdated,
-        siteName: status.siteName,
-        panelName: status.panelName
-      }
-    });
-  } catch (error) {
-    logger.error('[Brivo] Door status error:', error.message);
-    res.status(500).json({ success: false, error: error.message });
-  }
-});
-
-// Unlock a door (requires admin role)
-app.post('/api/brivo/doors/:id/unlock', authMiddleware, async (req, res) => {
-  try {
-    // Check if user has admin role
-    const user = db.prepare('SELECT role FROM users WHERE id = ?').get(req.userId);
-    if (!user || user.role !== 'admin') {
-      auditLog('BRIVO_UNLOCK_DENIED', {
-        userId: req.userId,
-        doorId: req.params.id,
-        reason: 'Insufficient permissions'
-      });
-      return res.status(403).json({ success: false, error: 'Admin access required to unlock doors' });
-    }
-
-    const doorId = parseInt(req.params.id);
-    if (isNaN(doorId)) {
-      return res.status(400).json({ success: false, error: 'Invalid door ID' });
-    }
-
-    // Get door name for audit log
-    const doors = await fetchBrivoDoors();
-    const door = doors.find(d => d.id === doorId);
-    const doorName = door?.name || `Door ${doorId}`;
-
-    const result = await unlockBrivoDoor(doorId);
-
-    if (result.success) {
-      // Get username for audit
-      const userInfo = db.prepare('SELECT username FROM users WHERE id = ?').get(req.userId);
-      auditLog('BRIVO_DOOR_UNLOCKED', {
-        userId: req.userId,
-        username: userInfo?.username,
-        doorId,
-        doorName
-      });
-
-      res.json({
-        success: true,
-        message: `Door "${doorName}" unlocked successfully`,
-        doorId,
-        doorName
-      });
-    } else {
-      res.status(400).json({
-        success: false,
-        error: result.error || 'Failed to unlock door'
-      });
-    }
-  } catch (error) {
-    logger.error('[Brivo] Unlock endpoint error:', error.message);
-    res.status(500).json({ success: false, error: error.message });
-  }
-});
-
-// Get Brivo integration status
-app.get('/api/brivo/status', authMiddleware, async (req, res) => {
-  const hasOAuth = !!(BRIVO_CLIENT_ID && BRIVO_CLIENT_SECRET && BRIVO_USERNAME && BRIVO_PASSWORD);
-  const hasApiKey = !!BRIVO_API_KEY;
-  const configured = hasOAuth && hasApiKey;
-
-  if (!configured) {
-    return res.json({
-      success: true,
-      configured: false,
-      hasOAuth,
-      hasApiKey,
-      message: !hasApiKey
-        ? 'Brivo API Key required - request from brivoapi@brivo.com or find in developer portal at brivo.com/apps/mykeys'
-        : 'Brivo OAuth credentials not configured'
-    });
-  }
-
-  try {
-    // Test authentication
-    const token = await getBrivoToken();
-    const authenticated = !!token;
-
-    res.json({
-      success: true,
-      configured: true,
-      authenticated,
-      siteFilter: BRIVO_SITE_FILTER,
-      doorsCount: brivoDoors.length,
-      lastFetch: brivoDoorsLastFetch
-    });
-  } catch (error) {
-    res.json({
-      success: true,
-      configured: true,
-      authenticated: false,
-      error: error.message
-    });
-  }
 });
 
 // ==================== ZOOM ROOMS ENDPOINTS ====================
@@ -8253,7 +7845,7 @@ function buildTopologyJson() {
   MIKROTIK_DEVICES.forEach(d => { deviceConfig[d.ip] = d; });
 
   // Known backbone IPs — always assign to floor 5
-  const BACKBONE_IPS = new Set([RUCKUS_BACKBONE_IP, '192.168.30.251']);
+  const BACKBONE_IPS = new Set(SNMP_DEVICES.filter(d => d.role === 'backbone').map(d => d.ip));
 
   const nodes = [];
   const links = [];
@@ -8303,10 +7895,9 @@ function buildTopologyJson() {
     else if ((n.neighbor_identity || '').toLowerCase().includes('axis') || (n.system_description || '').toLowerCase().includes('axis')) continue; // Skip cameras
     else if (n.neighbor_platform === 'MikroTik' || (caps.includes('bridge') && caps.includes('router'))) deviceType = 'switch';
 
-    // Skip 192.168.88.x addresses — these are VLAN management IPs on existing switches, not separate devices
-    if (neighborIP && neighborIP.startsWith('192.168.88.')) continue;
-    // Skip 192.168.32.x addresses — these are VLAN interface IPs on managed switches (e.g. 192.168.32.240 is a duplicate of 192.168.30.240)
-    if (neighborIP && neighborIP.startsWith('192.168.32.')) continue;
+    // Skip VLAN management IPs on existing switches, not separate devices
+    const SKIP_SUBNETS = (process.env.SKIP_SUBNETS || '').split(',').filter(Boolean);
+    if (neighborIP && SKIP_SUBNETS.some(s => neighborIP.startsWith(s))) continue;
 
     const nodeId = neighborIP || neighborMAC;
     if (!nodeId) continue;
@@ -8689,25 +8280,15 @@ setInterval(runDatabaseCleanup, 6 * 60 * 60 * 1000);
 
 // ==================== MIKROTIK TOPOLOGY ====================
 
-const MIKROTIK_DEVICES = [
-  { ip: '192.168.30.239', floor: '1', role: 'switch' },
-  { ip: '192.168.30.246', floor: '1', role: 'switch' },
-  { ip: '192.168.30.247', floor: '1', role: 'switch' },
-  { ip: '192.168.30.243', floor: '2', role: 'switch' },
-  { ip: '192.168.30.245', floor: '2', role: 'switch' },
-  { ip: '192.168.30.240', floor: '3', role: 'switch' },
-  { ip: '192.168.30.242', floor: '3', role: 'switch' }
-];
+// Load device config from env (JSON) or fall back to empty
+const MIKROTIK_DEVICES = JSON.parse(process.env.MIKROTIK_DEVICES || '[]');
 
 // Ruckus backbone switch (SNMP)
 const RUCKUS_SNMP_COMMUNITY = process.env.RUCKUS_SNMP_COMMUNITY || '';
-const RUCKUS_BACKBONE_IP = process.env.RUCKUS_BACKBONE_IP || '192.168.30.250';
+const RUCKUS_BACKBONE_IP = process.env.RUCKUS_BACKBONE_IP || '';
 
-// All SNMP-polled backbone/infrastructure devices on Floor 5
-const SNMP_DEVICES = [
-  { ip: '192.168.30.250', floor: '5', role: 'backbone' },
-  { ip: '192.168.30.251', floor: '5', role: 'backbone' }
-];
+// Load SNMP device config from env (JSON) or fall back to empty
+const SNMP_DEVICES = JSON.parse(process.env.SNMP_DEVICES || '[]');
 
 async function queryMikroTikDevice(ip) {
   if (!MIKROTIK_USER) return null;
@@ -9000,7 +8581,7 @@ async function fetchMikroTikTopology() {
     try {
       const arpFile = fs.readFileSync(path.join(__dirname, 'data', 'host-arp.txt'), 'utf8');
       for (const line of arpFile.split('\n')) {
-        // Format: "? (192.168.24.66) at 0:e0:db:7e:22:70 on en0 ..."
+        // Format: "? (x.x.x.x) at aa:bb:cc:dd:ee:ff on en0 ..."
         const match = line.match(/\((\d+\.\d+\.\d+\.\d+)\)\s+at\s+([0-9a-f:]+)/i);
         if (match && match[2] !== '(incomplete)') {
           // Normalize MAC — macOS ARP uses short form (0:e0:db) not (00:e0:db)

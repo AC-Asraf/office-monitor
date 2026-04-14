@@ -11,6 +11,19 @@
 # Temp files
 # Runtime data (contains internal IPs/MACs)
 data/netmap.json
+data/host-arp.txt
+data/topology-data.json
+data/netmap7x.json
+
+# Scripts with internal IPs
+refresh-arp.sh
+
+# Reports (may contain internal data)
+*HEALTH*REPORT*
+*HEALTH_CHECK*
+
+# Archive (not part of app)
+archive/
 
 *.db
 *.db-journal

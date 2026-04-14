@@ -9,6 +9,9 @@
 # OS files
 # PM2
 # Temp files
+# Runtime data (contains internal IPs/MACs)
+data/netmap.json
+
 *.db
 *.db-journal
 *.db-shm

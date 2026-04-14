@@ -15,17 +15,8 @@ const fs = require('fs');
 const { RouterOSAPI } = require('node-routeros');
 
 // Load MikroTik credentials
-const mikrotikEnv = {};
-try {
-  const envContent = fs.readFileSync(path.join(__dirname, '.env.mikrotik'), 'utf8');
-  envContent.split('\n').forEach(line => {
-    const [key, ...val] = line.split('=');
-    if (key && val.length) mikrotikEnv[key.trim()] = val.join('=').trim();
-  });
-} catch (e) { /* MikroTik env not configured */ }
-
-const MIKROTIK_USER = mikrotikEnv.MIKROTIK_USER || '';
-const MIKROTIK_PASS = mikrotikEnv.MIKROTIK_PASS || '';
+const MIKROTIK_USER = process.env.MIKROTIK_USER || '';
+const MIKROTIK_PASS = process.env.MIKROTIK_PASS || '';
 
 // ==================== GLOBAL ERROR HANDLERS ====================
 // Catch uncaught exceptions to prevent silent crashes
@@ -8709,16 +8700,8 @@ const MIKROTIK_DEVICES = [
 ];
 
 // Ruckus backbone switch (SNMP)
-const ruckusEnv = {};
-try {
-  const envContent = fs.readFileSync(path.join(__dirname, '.env.mikrotik-router'), 'utf8');
-  envContent.split('\n').forEach(line => {
-    const [key, ...val] = line.split('=');
-    if (key && val.length) ruckusEnv[key.trim()] = val.join('=').trim();
-  });
-} catch (e) { /* Ruckus env not configured */ }
-const RUCKUS_SNMP_COMMUNITY = ruckusEnv.RUCKUS_SNMP_COMMUNITY || '';
-const RUCKUS_BACKBONE_IP = ruckusEnv.RUCKUS_BACKBONE_IP || '192.168.30.250';
+const RUCKUS_SNMP_COMMUNITY = process.env.RUCKUS_SNMP_COMMUNITY || '';
+const RUCKUS_BACKBONE_IP = process.env.RUCKUS_BACKBONE_IP || '192.168.30.250';
 
 // All SNMP-polled backbone/infrastructure devices on Floor 5
 const SNMP_DEVICES = [

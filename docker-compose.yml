@@ -10,10 +10,8 @@ services:
       # Persist database and logs
       - ./data:/app/data
       - ./logs:/app/logs
-      # Mount .env files for configuration
+      # Mount .env file for configuration
       - ./.env:/app/.env:ro
-      - ./.env.mikrotik:/app/.env.mikrotik:ro
-      - ./.env.mikrotik-router:/app/.env.mikrotik-router:ro
     environment:
       - NODE_ENV=production
       - PORT=3002
